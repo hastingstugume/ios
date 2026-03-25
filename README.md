@@ -75,7 +75,7 @@ docker-compose.yml
 ### 1. Clone and install
 
 ```bash
-git clone <your-repo>
+git clone https://github.com/hastingstugume/ios.git
 cd internet-opportunity-scanner
 cp .env.example .env
 yarn install
