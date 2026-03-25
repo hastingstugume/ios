@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { signalsApi, keywordsApi, sourcesApi } from '@/lib/api';
 import { SignalCard } from '@/components/signals/SignalCard';
 import { CATEGORY_META } from '@/lib/utils';
-import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, Zap } from 'lucide-react';
+import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, Zap, Bookmark, Target, Clock } from 'lucide-react';
 
 const CATEGORIES = [
   { value: '', label: 'All categories' },
@@ -35,10 +35,22 @@ function Select({ value, onChange, options, className = '' }: {
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`bg-secondary border border-border text-sm text-foreground rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/40 ${className}`}
+      className={`bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 ${className}`}
     >
       {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
+  );
+}
+
+function StatChip({ label, value, icon: Icon }: { label: string; value: number; icon: any }) {
+  return (
+    <div className="bg-secondary border border-border rounded-lg px-3 py-2 min-w-[140px]">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wide">
+        <Icon className="w-3.5 h-3.5 text-primary" />
+        {label}
+      </div>
+      <p className="text-lg font-semibold text-foreground mt-1">{value}</p>
+    </div>
   );
 }
 
@@ -85,58 +97,63 @@ export default function FeedPage() {
   const activeFilterCount = [filters.category, filters.status, filters.minConfidence, filters.sourceId, filters.keywordId]
     .filter(Boolean).length;
 
+  const signalCount = data?.meta?.total ?? 0;
+  const savedCount = data?.data?.filter((signal) => signal.status === 'SAVED').length ?? 0;
+  const highConfidenceCount = data?.data?.filter((signal) => (signal.confidenceScore ?? 0) >= 85).length ?? 0;
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-border bg-card/30 backdrop-blur-sm sticky top-0 z-10">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-primary" />
-            <h1 className="text-base font-semibold text-foreground">Opportunity Feed</h1>
-            {data?.meta?.total !== undefined && (
-              <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
-                {data.meta.total.toLocaleString()} signals
-              </span>
-            )}
-            {isFetching && <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />}
+    <div className="page-shell animate-fade-in">
+      <div className="page-hero space-y-5">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-primary" />
+              <h1 className="text-xl font-semibold text-foreground">Opportunity Feed</h1>
+              {isFetching && <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />}
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">Review the strongest internet demand signals and move promising leads into action.</p>
           </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+            className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg border transition-colors ${
               showFilters || activeFilterCount > 0
-                ? 'bg-primary/10 border-primary/30 text-primary'
-                : 'border-border text-muted-foreground hover:text-foreground hover:border-border/80'
+                ? 'bg-primary/10 border-primary/20 text-primary'
+                : 'border-border text-muted-foreground hover:text-foreground hover:bg-accent'
             }`}
           >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <SlidersHorizontal className="w-4 h-4" />
             Filters
             {activeFilterCount > 0 && (
-              <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-bold">
+              <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[11px] flex items-center justify-center font-bold">
                 {activeFilterCount}
               </span>
             )}
           </button>
         </div>
 
-        {/* Search */}
+        <div className="flex flex-wrap gap-3">
+          <StatChip label="Signals" value={signalCount} icon={Clock} />
+          <StatChip label="High Confidence" value={highConfidenceCount} icon={Target} />
+          <StatChip label="Saved" value={savedCount} icon={Bookmark} />
+        </div>
+
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             value={filters.search}
             onChange={(e) => setFilter('search', e.target.value)}
             placeholder="Search signals…"
-            className="w-full bg-secondary border border-border rounded-lg pl-9 pr-4 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-all"
+            className="w-full bg-secondary border border-border rounded-lg pl-10 pr-10 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
           />
           {filters.search && (
             <button onClick={() => setFilter('search', '')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        {/* Advanced filters */}
         {showFilters && (
-          <div className="mt-3 flex flex-wrap gap-2 animate-fade-in">
+          <div className="flex flex-wrap gap-2 pt-1">
             <Select value={filters.category} onChange={(v) => setFilter('category', v)} options={CATEGORIES} />
             <Select value={filters.status} onChange={(v) => setFilter('status', v)} options={STATUSES} />
             <Select value={filters.minConfidence} onChange={(v) => setFilter('minConfidence', v)} options={CONFIDENCE_OPTIONS} />
@@ -155,69 +172,66 @@ export default function FeedPage() {
                 onClick={() => setFilters({ search: '', category: '', status: '', minConfidence: '', sourceId: '', keywordId: '', page: 1 })}
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-lg hover:bg-accent transition-colors"
               >
-                <X className="w-3 h-3" /> Clear all
+                <X className="w-3 h-3" />
+                Clear all
               </button>
             )}
           </div>
         )}
       </div>
 
-      {/* Feed */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
-        {isLoading ? (
-          <div className="grid gap-3">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-52 bg-card border border-border rounded-xl animate-pulse" />
-            ))}
-          </div>
-        ) : !data?.data?.length ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <Zap className="w-10 h-10 text-muted-foreground/30 mb-4" />
-            <h3 className="text-base font-medium text-muted-foreground mb-1">No signals found</h3>
-            <p className="text-sm text-muted-foreground/60 max-w-xs">
-              Try adjusting your filters or add more keywords and sources to discover opportunities.
-            </p>
-            {activeFilterCount > 0 && (
-              <button
-                onClick={() => setFilters({ search: '', category: '', status: '', minConfidence: '', sourceId: '', keywordId: '', page: 1 })}
-                className="mt-4 text-sm text-primary hover:underline"
-              >
-                Clear filters
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="grid gap-3 max-w-3xl">
-            {data.data.map((signal) => (
-              <SignalCard key={signal.id} signal={signal} orgId={currentOrgId!} queryKey={queryKey} />
-            ))}
-          </div>
-        )}
+      {isLoading ? (
+        <div className="grid gap-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-56 bg-card border border-border rounded-xl animate-pulse" />
+          ))}
+        </div>
+      ) : !data?.data?.length ? (
+        <div className="section-card px-6 py-16 text-center">
+          <Zap className="w-10 h-10 text-muted-foreground/30 mx-auto mb-4" />
+          <h3 className="text-base font-medium text-foreground mb-1">No signals found</h3>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">
+            Try adjusting your filters or add more keywords and sources to discover opportunities.
+          </p>
+          {activeFilterCount > 0 && (
+            <button
+              onClick={() => setFilters({ search: '', category: '', status: '', minConfidence: '', sourceId: '', keywordId: '', page: 1 })}
+              className="mt-4 text-sm text-primary hover:underline"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {data.data.map((signal) => (
+            <SignalCard key={signal.id} signal={signal} orgId={currentOrgId!} queryKey={queryKey} />
+          ))}
+        </div>
+      )}
 
-        {/* Pagination */}
-        {data?.meta && data.meta.totalPages > 1 && (
-          <div className="flex items-center justify-center gap-3 mt-6 pb-4">
-            <button
-              disabled={filters.page <= 1}
-              onClick={() => setFilter('page', filters.page - 1)}
-              className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="text-sm text-muted-foreground">
-              Page <span className="text-foreground font-medium">{data.meta.page}</span> of{' '}
-              <span className="text-foreground font-medium">{data.meta.totalPages}</span>
-            </span>
-            <button
-              disabled={filters.page >= data.meta.totalPages}
-              onClick={() => setFilter('page', filters.page + 1)}
-              className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-      </div>
+      {data?.meta && data.meta.totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <button
+            disabled={filters.page <= 1}
+            onClick={() => setFilter('page', filters.page - 1)}
+            className="p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="text-sm text-muted-foreground">
+            Page <span className="text-foreground font-medium">{data.meta.page}</span> of{' '}
+            <span className="text-foreground font-medium">{data.meta.totalPages}</span>
+          </span>
+          <button
+            disabled={filters.page >= data.meta.totalPages}
+            onClick={() => setFilter('page', filters.page + 1)}
+            className="p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

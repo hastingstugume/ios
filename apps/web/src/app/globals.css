@@ -49,4 +49,13 @@
   .score-ring {
     background: conic-gradient(hsl(var(--primary)) var(--score, 0%), hsl(var(--border)) 0%);
   }
+  .page-shell {
+    @apply max-w-7xl p-6 space-y-6;
+  }
+  .page-hero {
+    @apply bg-card border border-border rounded-xl p-6;
+  }
+  .section-card {
+    @apply bg-card border border-border rounded-xl;
+  }
 }

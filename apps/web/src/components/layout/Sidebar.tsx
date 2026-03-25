@@ -3,10 +3,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
-import {
-  Radar, LayoutDashboard, Zap, Tag, Database,
-  Bell, Settings, LogOut, ChevronDown, Building2
-} from 'lucide-react';
+import { Radar, LayoutDashboard, Zap, Tag, Database, Bell, Settings, LogOut, ChevronDown, Building2 } from 'lucide-react';
 
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -23,32 +20,33 @@ export function Sidebar() {
 
   return (
     <aside className="w-56 shrink-0 flex flex-col bg-card border-r border-border h-screen sticky top-0">
-      {/* Logo */}
       <div className="px-4 py-4 border-b border-border">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-primary/15 border border-primary/25 flex items-center justify-center">
-            <Radar className="w-3.5 h-3.5 text-primary" />
+          <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+            <Radar className="w-4 h-4 text-primary" />
           </div>
-          <span className="text-sm font-semibold text-foreground leading-tight">
-            Opportunity<br />Scanner
-          </span>
+          <div>
+            <p className="text-sm font-semibold text-foreground leading-tight">Opportunity</p>
+            <p className="text-sm font-semibold text-foreground leading-tight">Scanner</p>
+          </div>
         </div>
       </div>
 
-      {/* Org selector */}
       {currentOrg && (
         <div className="px-3 py-2.5 border-b border-border">
           <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent transition-colors group">
             <div className="w-5 h-5 rounded bg-primary/20 flex items-center justify-center shrink-0">
               <Building2 className="w-3 h-3 text-primary" />
             </div>
-            <span className="text-xs font-medium text-foreground truncate flex-1 text-left">{currentOrg.name}</span>
+            <div className="min-w-0 flex-1 text-left">
+              <span className="block text-xs font-medium text-foreground truncate">{currentOrg.name}</span>
+              <span className="block text-[10px] text-muted-foreground truncate">{currentOrg.plan} workspace</span>
+            </div>
             <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
           </button>
         </div>
       )}
 
-      {/* Nav */}
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
         {NAV.map(({ href, label, icon: Icon, badge }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
@@ -67,7 +65,7 @@ export function Sidebar() {
               <span className="flex-1">{label}</span>
               {badge === 'live' && (
                 <span className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse-slow" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                 </span>
               )}
               {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-r-full" />}
@@ -76,10 +74,9 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* User */}
       <div className="px-3 py-3 border-t border-border">
         <div className="flex items-center gap-2.5 mb-2">
-          <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0 border border-primary/20">
             <span className="text-xs font-semibold text-primary">
               {user?.name?.charAt(0) || user?.email?.charAt(0) || '?'}
             </span>
