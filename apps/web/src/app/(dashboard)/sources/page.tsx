@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { sourcesApi } from '@/lib/api';
 import { SOURCE_TYPE_META, formatDate } from '@/lib/utils';
-import { Database, Plus, Trash2, PauseCircle, PlayCircle, AlertCircle, CheckCircle2, X } from 'lucide-react';
+import { Database, Plus, Trash2, PauseCircle, PlayCircle, AlertCircle, CheckCircle2, X, Search } from 'lucide-react';
 
 const SOURCE_TYPES = [
   { value: 'REDDIT', label: 'Reddit Subreddit', fields: [{ key: 'subreddit', label: 'Subreddit name', placeholder: 'entrepreneur' }] },
@@ -17,6 +17,7 @@ export default function SourcesPage() {
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: '', type: 'REDDIT', subreddit: '', url: '' });
+  const [search, setSearch] = useState('');
 
   const { data: sources = [], isLoading } = useQuery({
     queryKey: ['sources', currentOrgId],
@@ -45,115 +46,167 @@ export default function SourcesPage() {
   });
 
   const selectedType = SOURCE_TYPES.find((t) => t.value === form.type)!;
+  const filteredSources = sources.filter((src) => {
+    const q = search.toLowerCase();
+    const configText = JSON.stringify(src.config || {}).toLowerCase();
+    return !q || src.name.toLowerCase().includes(q) || src.type.toLowerCase().includes(q) || configText.includes(q);
+  });
+  const activeSources = sources.filter((src) => src.status === 'ACTIVE').length;
+  const totalSignals = sources.reduce((sum, src) => sum + (src._count?.signals ?? 0), 0);
+  const errorSources = sources.filter((src) => src.status === 'ERROR').length;
 
   return (
-    <div className="p-6 max-w-2xl space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Sources</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Configure where to discover signals</p>
+    <div className="page-shell space-y-6 animate-fade-in">
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-4">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">Sources</h1>
+            <p className="mt-2 text-base text-muted-foreground">Configure where to discover signals.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{activeSources}</span> active
+            </div>
+            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{totalSignals}</span> total signals
+            </div>
+            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{errorSources}</span> need attention
+            </div>
+          </div>
         </div>
         <button
           onClick={() => setAdding(!adding)}
-          className="flex items-center gap-1.5 bg-primary text-primary-foreground text-sm px-3 py-1.5 rounded-lg hover:bg-primary/90 transition-colors font-medium"
+          className="inline-flex items-center gap-2 self-start rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
           <Plus className="w-4 h-4" />
           Add source
         </button>
-      </div>
+      </section>
 
-      {/* Add form */}
-      {adding && (
-        <div className="bg-card border border-primary/20 rounded-xl p-4 space-y-3 animate-fade-in">
-          <div className="flex items-center justify-between mb-1">
-            <h3 className="text-sm font-semibold text-foreground">New source</h3>
-            <button onClick={() => setAdding(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
+      <section className="section-card p-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative max-w-md flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by source name or config..."
+              className="w-full rounded-lg border border-border bg-secondary py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <p className="text-sm text-muted-foreground">Keep source names clear so the feed stays easy to scan.</p>
+        </div>
+      </section>
+
+      {adding && (
+        <div className="section-card space-y-4 p-5 animate-fade-in">
+          <div className="mb-1 flex items-center justify-between">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Source type</label>
+              <h3 className="text-lg font-semibold text-foreground">New source</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Bring in fresh conversations from focused communities and feeds.</p>
+            </div>
+            <button onClick={() => setAdding(false)} className="rounded-lg border border-border p-2 text-muted-foreground hover:bg-accent hover:text-foreground">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Source type</label>
               <select
                 value={form.type}
                 onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-                className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+                className="w-full rounded-lg border border-border bg-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 {SOURCE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Display name</label>
-              <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="e.g. r/entrepreneur" className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40" />
+              <label className="mb-1 block text-xs text-muted-foreground">Display name</label>
+              <input
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="e.g. r/entrepreneur"
+                className="w-full rounded-lg border border-border bg-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              />
             </div>
           </div>
           {selectedType.fields.map((field) => (
             <div key={field.key}>
-              <label className="text-xs text-muted-foreground mb-1 block">{field.label}</label>
+              <label className="mb-1 block text-xs text-muted-foreground">{field.label}</label>
               <input
                 value={form[field.key as keyof typeof form] as string}
                 onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
                 placeholder={field.placeholder}
-                className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+                className="w-full rounded-lg border border-border bg-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
           ))}
           <div className="flex gap-2">
             <button disabled={!form.name || create.isPending} onClick={() => create.mutate()}
-              className="bg-primary text-primary-foreground text-sm px-4 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-40 transition-colors">
+              className="rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40">
               {create.isPending ? 'Adding…' : 'Add source'}
             </button>
-            <button onClick={() => setAdding(false)} className="text-sm text-muted-foreground hover:text-foreground px-4 py-2 rounded-lg hover:bg-accent transition-colors">Cancel</button>
+            <button onClick={() => setAdding(false)} className="rounded-xl px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">Cancel</button>
           </div>
         </div>
       )}
 
-      {/* Sources list */}
       {isLoading ? (
-        <div className="space-y-2">{[...Array(3)].map((_, i) => <div key={i} className="h-20 bg-card border border-border rounded-xl animate-pulse" />)}</div>
-      ) : !sources.length ? (
-        <div className="bg-card border border-border rounded-xl p-10 text-center">
-          <Database className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">No sources yet — add Reddit subreddits or RSS feeds.</p>
+        <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-28 rounded-xl border border-border bg-card animate-pulse" />)}</div>
+      ) : !filteredSources.length ? (
+        <div className="section-card p-10 text-center">
+          <Database className="mx-auto mb-3 h-8 w-8 text-muted-foreground/30" />
+          <p className="text-sm text-muted-foreground">No sources match this search.</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {sources.map((src) => {
+        <div className="grid gap-4 lg:grid-cols-2">
+          {filteredSources.map((src) => {
             const typeMeta = SOURCE_TYPE_META[src.type] || { label: src.type, icon: '🔗' };
+            const configSummary = src.type === 'REDDIT'
+              ? `r/${src.config?.subreddit || 'unknown'}`
+              : src.type === 'RSS'
+                ? src.config?.url || 'Feed URL not set'
+                : 'Manual source';
+
             return (
-              <div key={src.id} className="group flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3 hover:border-border/80 transition-colors">
-                <span className="text-xl">{typeMeta.icon}</span>
-                <div className="flex-1 min-w-0">
+              <div key={src.id} className="section-card px-5 py-5">
+                <div className="flex items-start gap-4">
+                  <span className="mt-0.5 flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-secondary text-xl shrink-0">{typeMeta.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`text-lg font-semibold ${src.status === 'PAUSED' ? 'text-muted-foreground' : 'text-foreground'}`}>{src.name}</span>
+                      <span className="rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] font-medium text-muted-foreground">{typeMeta.label}</span>
+                      {src._count?.signals ? (
+                        <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">{src._count.signals} signals</span>
+                      ) : null}
+                    </div>
+                    <p className="mt-2 break-all text-sm text-muted-foreground">{configSummary}</p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {src.status === 'ERROR' ? (
+                        <span className="flex items-center gap-1.5 rounded-full border border-destructive/20 bg-destructive/10 px-3 py-1.5 text-xs text-destructive"><AlertCircle className="w-3.5 h-3.5" />{src.errorMessage?.slice(0, 80)}</span>
+                      ) : src.status === 'ACTIVE' ? (
+                        <span className="flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs text-emerald-300"><CheckCircle2 className="w-3.5 h-3.5" />Active · Last fetch {formatDate(src.lastFetchedAt)}</span>
+                      ) : (
+                        <span className="rounded-full border border-border bg-secondary px-3 py-1.5 text-xs text-muted-foreground">Paused</span>
+                      )}
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2">
-                    <span className={`text-sm font-medium ${src.status === 'PAUSED' ? 'text-muted-foreground' : 'text-foreground'}`}>{src.name}</span>
-                    <span className="text-[10px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">{typeMeta.label}</span>
-                    {src._count?.signals ? (
-                      <span className="text-[10px] bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded">{src._count.signals} signals</span>
-                    ) : null}
+                    <button
+                      onClick={() => toggleStatus.mutate({ id: src.id, status: src.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE' })}
+                      className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      title={src.status === 'ACTIVE' ? 'Pause' : 'Resume'}
+                    >
+                      {src.status === 'ACTIVE' ? <PauseCircle className="w-5 h-5" /> : <PlayCircle className="w-5 h-5 text-green-400" />}
+                    </button>
+                    <button
+                      onClick={() => confirm('Delete this source and all its signals?') && remove.mutate(src.id)}
+                      className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    {src.status === 'ERROR' ? (
-                      <span className="flex items-center gap-1 text-[10px] text-destructive"><AlertCircle className="w-3 h-3" />{src.errorMessage?.slice(0, 60)}</span>
-                    ) : src.status === 'ACTIVE' ? (
-                      <span className="flex items-center gap-1 text-[10px] text-green-400"><CheckCircle2 className="w-3 h-3" />Active · Last fetch {formatDate(src.lastFetchedAt)}</span>
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground">Paused</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => toggleStatus.mutate({ id: src.id, status: src.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE' })}
-                    className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent transition-colors"
-                    title={src.status === 'ACTIVE' ? 'Pause' : 'Resume'}
-                  >
-                    {src.status === 'ACTIVE' ? <PauseCircle className="w-4 h-4" /> : <PlayCircle className="w-4 h-4 text-green-400" />}
-                  </button>
-                  <button
-                    onClick={() => confirm('Delete this source and all its signals?') && remove.mutate(src.id)}
-                    className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-destructive/10 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
                 </div>
               </div>
             );
