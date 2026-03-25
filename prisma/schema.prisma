@@ -1,0 +1,289 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  OWNER
+  ADMIN
+  ANALYST
+  VIEWER
+}
+
+enum SignalCategory {
+  BUYING_INTENT
+  RECOMMENDATION_REQUEST
+  PAIN_COMPLAINT
+  HIRING_SIGNAL
+  PARTNERSHIP_INQUIRY
+  MARKET_TREND
+  OTHER
+}
+
+enum SignalStatus {
+  NEW
+  SAVED
+  IGNORED
+  BOOKMARKED
+}
+
+enum SourceType {
+  REDDIT
+  RSS
+  MANUAL
+  TWITTER
+}
+
+enum SourceStatus {
+  ACTIVE
+  PAUSED
+  ERROR
+}
+
+enum AlertFrequency {
+  IMMEDIATE
+  HOURLY
+  DAILY
+  WEEKLY
+}
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  INVITE_SENT
+  MEMBER_REMOVED
+  ALERT_CREATED
+  ALERT_UPDATED
+  ALERT_DELETED
+  SOURCE_CREATED
+  SOURCE_UPDATED
+  SOURCE_DELETED
+  KEYWORD_CREATED
+  KEYWORD_DELETED
+  SIGNAL_SAVED
+  SIGNAL_IGNORED
+  SIGNAL_BOOKMARKED
+  ORG_SETTINGS_UPDATED
+}
+
+// ─── Org & Users ─────────────────────────────────────────────────────────────
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  logoUrl     String?
+  plan        String   @default("free")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     OrganizationMember[]
+  invitations Invitation[]
+  keywords    Keyword[]
+  sources     Source[]
+  signals     Signal[]
+  alertRules  AlertRule[]
+  auditLogs   AuditLog[]
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String?
+  name          String?
+  avatarUrl     String?
+  emailVerified Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  memberships   OrganizationMember[]
+  sessions      Session[]
+  annotations   SignalAnnotation[]
+  auditLogs     AuditLog[]
+}
+
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String
+  role           UserRole     @default(ANALYST)
+  joinedAt       DateTime     @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+}
+
+model Invitation {
+  id             String       @id @default(cuid())
+  organizationId String
+  email          String
+  role           UserRole     @default(ANALYST)
+  token          String       @unique @default(cuid())
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime     @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([token])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique @default(cuid())
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  ipAddress String?
+  userAgent String?
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+// ─── Keywords & Sources ───────────────────────────────────────────────────────
+
+model Keyword {
+  id             String       @id @default(cuid())
+  organizationId String
+  phrase         String
+  description    String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  signalKeywords SignalKeyword[]
+
+  @@index([organizationId])
+}
+
+model Source {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  type           SourceType
+  status         SourceStatus @default(ACTIVE)
+  config         Json         // {subreddit, rss_url, etc.}
+  lastFetchedAt  DateTime?
+  errorMessage   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  signals        Signal[]
+
+  @@index([organizationId])
+}
+
+// ─── Signals ─────────────────────────────────────────────────────────────────
+
+model Signal {
+  id               String          @id @default(cuid())
+  organizationId   String
+  sourceId         String
+  externalId       String          // original post id
+  sourceUrl        String
+  authorHandle     String?
+  originalTitle    String?
+  originalText     String
+  normalizedText   String?
+  publishedAt      DateTime?
+  fetchedAt        DateTime        @default(now())
+
+  // Classification
+  category         SignalCategory? @default(OTHER)
+  confidenceScore  Int?            @default(0)
+  whyItMatters     String?
+  suggestedOutreach String?
+  classifiedAt     DateTime?
+  classificationRaw Json?
+
+  // User actions
+  status           SignalStatus    @default(NEW)
+  updatedAt        DateTime        @updatedAt
+
+  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  source           Source          @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  keywords         SignalKeyword[]
+  annotations      SignalAnnotation[]
+
+  @@unique([organizationId, sourceId, externalId])
+  @@index([organizationId, status])
+  @@index([organizationId, category])
+  @@index([organizationId, confidenceScore])
+  @@index([organizationId, fetchedAt])
+}
+
+model SignalKeyword {
+  signalId  String
+  keywordId String
+
+  signal    Signal  @relation(fields: [signalId], references: [id], onDelete: Cascade)
+  keyword   Keyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@id([signalId, keywordId])
+}
+
+model SignalAnnotation {
+  id        String   @id @default(cuid())
+  signalId  String
+  userId    String
+  note      String
+  createdAt DateTime @default(now())
+
+  signal    Signal   @relation(fields: [signalId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([signalId])
+}
+
+// ─── Alerts ───────────────────────────────────────────────────────────────────
+
+model AlertRule {
+  id              String         @id @default(cuid())
+  organizationId  String
+  name            String
+  isActive        Boolean        @default(true)
+  minConfidence   Int            @default(70)
+  categories      SignalCategory[]
+  keywordIds      String[]
+  frequency       AlertFrequency @default(DAILY)
+  emailRecipients String[]
+  lastTriggeredAt DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+// ─── Audit ────────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id             String      @id @default(cuid())
+  organizationId String
+  userId         String?
+  action         AuditAction
+  metadata       Json?
+  ipAddress      String?
+  createdAt      DateTime    @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, createdAt])
+}
