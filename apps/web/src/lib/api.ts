@@ -23,10 +23,12 @@ export const api = {
 // Typed API helpers
 export const authApi = {
   login: (email: string, password: string) => api.post('/auth/login', { email, password }),
-  register: (data: { email: string; password: string; name: string; organizationName: string }) =>
+  register: (data: { email: string; password: string; name: string; organizationName?: string; invitationToken?: string }) =>
     api.post('/auth/register', data),
   logout: () => api.post('/auth/logout', {}),
   me: () => api.get<{ user: User; memberships: Membership[] }>('/auth/me'),
+  updateMe: (data: { name: string }) => api.patch<User>('/auth/me', data),
+  changePassword: (data: { currentPassword: string; newPassword: string }) => api.patch('/auth/password', data),
 };
 
 export const signalsApi = {
@@ -65,10 +67,44 @@ export const alertsApi = {
   delete: (orgId: string, id: string) => api.delete(`/orgs/${orgId}/alerts/${id}`),
 };
 
+export const organizationsApi = {
+  get: (orgId: string) => api.get<OrganizationDetail>(`/orgs/${orgId}`),
+  update: (orgId: string, data: { name?: string; logoUrl?: string }) => api.patch<Organization>(`/orgs/${orgId}`, data),
+  members: (orgId: string) => api.get<{ members: OrganizationMember[]; invitations: Invitation[] }>(`/orgs/${orgId}/members`),
+  inviteMember: (orgId: string, data: { email: string; role: string }) => api.post(`/orgs/${orgId}/members`, data),
+  updateMember: (orgId: string, memberId: string, data: { role: string }) => api.patch(`/orgs/${orgId}/members/${memberId}`, data),
+  removeMember: (orgId: string, memberId: string) => api.delete(`/orgs/${orgId}/members/${memberId}`),
+  auditLog: (orgId: string, page = 1, limit = 20) =>
+    api.get<PaginatedResponse<AuditLog>>(`/orgs/${orgId}/audit-log?page=${page}&limit=${limit}`),
+};
+
+export const publicApi = {
+  landing: () => api.get<LandingData>('/public/landing'),
+};
+
 // Types
 export interface User { id: string; email: string; name: string | null; avatarUrl: string | null; }
-export interface Membership { id: string; role: string; organization: Organization; }
+export interface Membership { id: string; role: string; organization: Organization; joinedAt?: string; }
 export interface Organization { id: string; name: string; slug: string; plan: string; }
+export interface OrganizationMember {
+  id: string;
+  role: string;
+  joinedAt: string;
+  userId: string;
+  user: Pick<User, 'id' | 'name' | 'email' | 'avatarUrl'> & { createdAt?: string };
+}
+export interface Invitation {
+  id: string;
+  email: string;
+  role: string;
+  token: string;
+  expiresAt: string;
+  createdAt: string;
+}
+export interface OrganizationDetail extends Organization {
+  logoUrl?: string | null;
+  members: OrganizationMember[];
+}
 export interface Signal {
   id: string; organizationId: string; sourceId: string; externalId: string;
   sourceUrl: string; authorHandle: string | null; originalTitle: string | null;
@@ -82,6 +118,29 @@ export interface Signal {
 }
 export interface Keyword { id: string; phrase: string; description: string | null; isActive: boolean; _count?: { signalKeywords: number }; }
 export interface Source { id: string; name: string; type: string; status: string; config: any; lastFetchedAt: string | null; errorMessage: string | null; _count?: { signals: number }; }
-export interface AlertRule { id: string; name: string; isActive: boolean; minConfidence: number; categories: string[]; frequency: string; emailRecipients: string[]; lastTriggeredAt: string | null; }
+export interface AlertRule { id: string; name: string; isActive: boolean; minConfidence: number; categories: string[]; keywordIds: string[]; frequency: string; emailRecipients: string[]; lastTriggeredAt: string | null; }
 export interface Annotation { id: string; note: string; createdAt: string; user: Pick<User, 'id' | 'name' | 'avatarUrl'>; }
 export interface PaginatedResponse<T> { data: T[]; meta: { total: number; page: number; limit: number; totalPages: number; }; }
+export interface AuditLog {
+  id: string;
+  action: string;
+  createdAt: string;
+  metadata?: Record<string, any> | null;
+  user?: Pick<User, 'id' | 'name' | 'email'> | null;
+}
+export interface LandingData {
+  stats: {
+    activeSources: number;
+    trackedKeywords: number;
+    highConfidenceSignals: number;
+    activeAlerts: number;
+  };
+  signals: Array<{
+    id: string;
+    score: number;
+    category: string;
+    source: string;
+    title: string;
+    status: string;
+  }>;
+}

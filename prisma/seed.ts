@@ -53,6 +53,16 @@ async function main() {
     },
   });
 
+  const secondOrg = await prisma.organization.upsert({
+    where: { slug: 'northstar-advisory' },
+    update: {},
+    create: {
+      name: 'Northstar Advisory',
+      slug: 'northstar-advisory',
+      plan: 'starter',
+    },
+  });
+
   // ── Members ───────────────────────────────────────────────────────────────
   await prisma.organizationMember.upsert({
     where: { organizationId_userId: { organizationId: org.id, userId: alice.id } },
@@ -68,6 +78,23 @@ async function main() {
     where: { organizationId_userId: { organizationId: org.id, userId: carol.id } },
     update: {},
     create: { organizationId: org.id, userId: carol.id, role: UserRole.ANALYST },
+  });
+  await prisma.organizationMember.upsert({
+    where: { organizationId_userId: { organizationId: secondOrg.id, userId: alice.id } },
+    update: {},
+    create: { organizationId: secondOrg.id, userId: alice.id, role: UserRole.ADMIN },
+  });
+
+  await prisma.invitation.upsert({
+    where: { token: 'invite-demo-northstar' },
+    update: {},
+    create: {
+      organizationId: secondOrg.id,
+      email: 'newhire@northstar.io',
+      role: UserRole.ANALYST,
+      token: 'invite-demo-northstar',
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
+    },
   });
 
   // ── Session for Alice ─────────────────────────────────────────────────────

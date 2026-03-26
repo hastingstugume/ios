@@ -15,6 +15,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { IngestionModule } from './ingestion/ingestion.module';
 import { ClassificationModule } from './classification/classification.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { PublicModule } from './public/public.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     IngestionModule,
     ClassificationModule,
     NotificationsModule,
+    PublicModule,
   ],
 })
 export class AppModule {}

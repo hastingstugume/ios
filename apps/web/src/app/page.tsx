@@ -1,17 +1,9 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-
-const LIVE_SIGNALS = [
-  { score: 94, label: 'BUYING_INTENT',   source: 'r/entrepreneur',  text: 'Looking for AI automation agency, $20-50k budget available…', color: '#22c55e' },
-  { score: 88, label: 'BUYING_INTENT',   source: 'Founder forum',   text: 'Growth team looking for a retained partner to improve conversions…', color: '#22c55e' },
-  { score: 91, label: 'BUYING_INTENT',   source: 'Ops community',   text: 'Need outside support for a time-sensitive systems migration this month…', color: '#22c55e' },
-  { score: 78, label: 'RECOMMENDATION',  source: 'Buyer thread',    text: 'Comparing vendors and open to expert guidance before deciding…', color: '#3b82f6' },
-  { score: 85, label: 'PAIN_COMPLAINT',  source: 'r/entrepreneur',  text: 'Internal processes are slowing delivery and the team needs help…', color: '#f59e0b' },
-  { score: 72, label: 'HIRING_SIGNAL',   source: 'Ops community',   text: 'Open to interim specialist support while searching for a permanent hire…', color: '#a78bfa' },
-  { score: 69, label: 'RECOMMENDATION',  source: 'Buyer thread',    text: 'Looking for a short expert review before committing budget…', color: '#3b82f6' },
-  { score: 82, label: 'BUYING_INTENT',   source: 'r/SaaS',          text: 'Scaling to 500 customers, need proper infrastructure help…', color: '#22c55e' },
-];
+import { useQuery } from '@tanstack/react-query';
+import { publicApi } from '@/lib/api';
+import { CATEGORY_META } from '@/lib/utils';
 
 const STEPS = [
   { n: '01', title: 'Source capture',   desc: 'Relevant conversations and posts are collected automatically throughout the day' },
@@ -28,13 +20,6 @@ const FEATURES = [
   { icon: '◉', title: 'Pipeline Management',         desc: 'Save, bookmark, ignore, and annotate signals so your team can move from discovery to follow-up with less friction.' },
   { icon: '◫', title: 'Team Workspaces',             desc: 'Keep opportunities organized for your team with shared visibility and cleaner collaboration.' },
   { icon: '◐', title: 'Flexible for Growth',         desc: 'Start with a simple workflow today and expand your process as your team handles more demand.' },
-];
-
-const STATS = [
-  { value: '30 min', label: 'scan interval' },
-  { value: '0–100',  label: 'confidence score' },
-  { value: '7',      label: 'signal categories' },
-  { value: '∞',      label: 'sources per org' },
 ];
 
 const PRICING = [
@@ -64,33 +49,45 @@ const PRICING = [
   },
 ];
 
-function TickerRow({ signal, visible }: { signal: typeof LIVE_SIGNALS[0]; visible: boolean }) {
+function getSignalColor(category: string) {
+  const meta = CATEGORY_META[category] || CATEGORY_META.OTHER;
+  if (meta.color.includes('green')) return '#22c55e';
+  if (meta.color.includes('blue')) return '#3b82f6';
+  if (meta.color.includes('amber')) return '#f59e0b';
+  if (meta.color.includes('purple')) return '#a78bfa';
+  if (meta.color.includes('cyan')) return '#22d3ee';
+  return '#94a3b8';
+}
+
+function TickerRow({ signal, visible }: { signal: { score: number; category: string; source: string; title: string }; visible: boolean }) {
+  const color = getSignalColor(signal.category);
+  const label = CATEGORY_META[signal.category]?.label || signal.category.replaceAll('_', ' ');
   return (
     <tr style={{
       opacity: visible ? 1 : 0,
       transform: visible ? 'translateX(0)' : 'translateX(-10px)',
       transition: 'opacity 0.4s ease, transform 0.4s ease',
     }}>
-      <td style={{ padding: '9px 18px', color: signal.color, fontWeight: 500, fontSize: 15, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+      <td style={{ padding: '9px 18px', color, fontWeight: 500, fontSize: 15, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
         {signal.score}
       </td>
       <td style={{ padding: '9px 8px' }}>
         <span style={{
           fontSize: 9, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
           padding: '3px 7px', borderRadius: 4, whiteSpace: 'nowrap',
-          color: signal.color, background: signal.color + '14', border: `1px solid ${signal.color}38`,
+          color, background: color + '14', border: `1px solid ${color}38`,
         }}>
-          {signal.label.replace('_', ' ')}
+          {label}
         </span>
       </td>
       <td style={{ padding: '9px 8px', fontSize: 11, color: '#64748b', whiteSpace: 'nowrap' }}>
         {signal.source}
       </td>
       <td style={{ padding: '9px 8px 9px 18px', fontSize: 12, color: '#94a3b8', overflow: 'hidden', maxWidth: 0, width: '100%' }}>
-        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{signal.text}</div>
+        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{signal.title}</div>
       </td>
       <td style={{ padding: '9px 18px 9px 0', textAlign: 'right' }}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: signal.color, display: 'inline-block' }} />
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, display: 'inline-block' }} />
       </td>
     </tr>
   );
@@ -99,17 +96,29 @@ function TickerRow({ signal, visible }: { signal: typeof LIVE_SIGNALS[0]; visibl
 export default function LandingPage() {
   const [tick, setTick] = useState(0);
   const [rowsVisible, setRowsVisible] = useState<boolean[]>([]);
+  const { data } = useQuery({
+    queryKey: ['public', 'landing'],
+    queryFn: publicApi.landing,
+    staleTime: 60_000,
+  });
+  const liveSignals = data?.signals || [];
+  const stats = [
+    { value: data ? String(data.stats.activeSources) : '—', label: 'active sources' },
+    { value: data ? String(data.stats.trackedKeywords) : '—', label: 'tracked keywords' },
+    { value: data ? String(data.stats.highConfidenceSignals) : '—', label: 'high-confidence signals' },
+    { value: data ? String(data.stats.activeAlerts) : '—', label: 'active alert rules' },
+  ];
 
   useEffect(() => {
     // stagger row reveals
     const timers: NodeJS.Timeout[] = [];
-    LIVE_SIGNALS.slice(0, 6).forEach((_, i) => {
+    liveSignals.slice(0, 6).forEach((_, i) => {
       timers.push(setTimeout(() => {
         setRowsVisible((prev) => { const next = [...prev]; next[i] = true; return next; });
       }, i * 100));
     });
     return () => timers.forEach(clearTimeout);
-  }, [tick]);
+  }, [tick, liveSignals]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -119,7 +128,9 @@ export default function LandingPage() {
     return () => clearInterval(id);
   }, []);
 
-  const signals = [...LIVE_SIGNALS.slice(tick % LIVE_SIGNALS.length), ...LIVE_SIGNALS].slice(0, 6);
+  const signals = liveSignals.length
+    ? [...liveSignals.slice(tick % liveSignals.length), ...liveSignals].slice(0, 6)
+    : [];
 
   return (
     <>
@@ -165,7 +176,7 @@ export default function LandingPage() {
             fontSize: 14, color: '#22d3ee',
           }}>◈</div>
           <span style={{ fontFamily: 'var(--font-syne), sans-serif', fontWeight: 700, fontSize: 15, color: '#e2e8f0', letterSpacing: -0.3 }}>
-            IOS
+            Opportunity Scanner
           </span>
         </a>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -248,7 +259,7 @@ export default function LandingPage() {
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform='translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow='0 10px 48px rgba(14,165,233,0.45)'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform='translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow='0 0 36px rgba(14,165,233,0.35)'; }}
           >
-            Start scanning free →
+            Get started →
           </Link>
           <Link href="/login" style={{
             color: '#94a3b8', textDecoration: 'none', fontSize: 13,
@@ -258,7 +269,7 @@ export default function LandingPage() {
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color='#e2e8f0'; (e.currentTarget as HTMLElement).style.borderColor='rgba(255,255,255,0.22)'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color='#94a3b8'; (e.currentTarget as HTMLElement).style.borderColor='rgba(255,255,255,0.12)'; }}
           >
-            View demo workspace
+            Sign in
           </Link>
         </div>
 
@@ -284,7 +295,7 @@ export default function LandingPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#22c55e', letterSpacing: '0.05em' }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', animation: 'pulseDot 1.5s infinite', display: 'inline-block' }} />
-              SCANNING
+              DEMO DATA
             </div>
           </div>
 
@@ -305,9 +316,15 @@ export default function LandingPage() {
               </tr>
             </thead>
             <tbody>
-              {signals.map((sig, i) => (
-                <TickerRow key={`${tick}-${i}`} signal={sig} visible={!!rowsVisible[i]} />
-              ))}
+              {signals.length ? signals.map((sig, i) => (
+                <TickerRow key={`${sig.id}-${tick}-${i}`} signal={sig} visible={!!rowsVisible[i]} />
+              )) : (
+                <tr>
+                  <td colSpan={5} style={{ padding: '28px 18px', fontSize: 12, color: '#64748b', textAlign: 'center' }}>
+                    Loading demo-backed signal preview…
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -315,10 +332,10 @@ export default function LandingPage() {
 
       {/* ─── STATS BAR ─────────────────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'center', borderTop: '1px solid rgba(255,255,255,0.07)', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.015)' }}>
-        {STATS.map((s, i) => (
+        {stats.map((s, i) => (
           <div key={s.label} style={{
             flex: 1, maxWidth: 200, padding: '22px 24px', textAlign: 'center',
-            borderRight: i < STATS.length - 1 ? '1px solid rgba(255,255,255,0.07)' : 'none',
+            borderRight: i < stats.length - 1 ? '1px solid rgba(255,255,255,0.07)' : 'none',
           }}>
             <div style={{ fontFamily: 'var(--font-syne), sans-serif', fontSize: 30, fontWeight: 800, letterSpacing: -1.2, color: '#e2e8f0' }}>{s.value}</div>
             <div style={{ fontSize: 11, color: '#475569', marginTop: 4, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{s.label}</div>
@@ -386,7 +403,7 @@ export default function LandingPage() {
           Simple plans for teams<br />tracking buyer intent
         </h2>
         <p style={{ color: '#94a3b8', fontSize: 15, maxWidth: 560, lineHeight: 1.75 }}>
-          Start small, scale source coverage as your workflow matures, and move to a custom setup when your team needs deeper support.
+          These plans describe how teams typically adopt the product today. Billing automation is not yet self-serve inside the app.
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 1, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 18, overflow: 'hidden', marginTop: 52 }}>
@@ -444,7 +461,7 @@ export default function LandingPage() {
                 fontFamily: 'var(--font-syne), sans-serif', fontSize: 13, fontWeight: 600,
                 padding: '12px 18px', borderRadius: 10,
               }}>
-                {plan.price === 'Custom' ? 'Talk to us' : 'Start with ' + plan.tier}
+                Get started
               </Link>
             </div>
           ))}
@@ -475,13 +492,13 @@ export default function LandingPage() {
               fontFamily: 'var(--font-syne), sans-serif', fontSize: 14, fontWeight: 600, padding: '12px 28px',
               borderRadius: 9, boxShadow: '0 0 36px rgba(14,165,233,0.3)',
             }}>
-              Create free workspace →
+              Get started →
             </Link>
             <Link href="/login" style={{
               color: '#94a3b8', textDecoration: 'none', fontSize: 13,
               padding: '12px 22px', borderRadius: 9, border: '1px solid rgba(255,255,255,0.12)',
             }}>
-              Log into demo
+              Sign in
             </Link>
           </div>
         </div>
