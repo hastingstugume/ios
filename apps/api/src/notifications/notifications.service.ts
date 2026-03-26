@@ -1,25 +1,57 @@
-// notifications.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
+import sgMail from '@sendgrid/mail';
+
+type EmailPayload = {
+  to: string | string[];
+  subject: string;
+  html: string;
+};
 
 @Injectable()
 export class NotificationsService {
-  private transporter: nodemailer.Transporter;
   private readonly logger = new Logger(NotificationsService.name);
-  private from: string;
+  private readonly apiKey?: string;
+  private readonly fromEmail: string;
+  private readonly fromName: string;
 
   constructor(private config: ConfigService) {
-    this.from = config.get('SMTP_FROM', 'noreply@opportunity-scanner.io');
-    this.transporter = nodemailer.createTransport({
-      host: config.get('SMTP_HOST', 'localhost'),
-      port: config.get('SMTP_PORT', 1025),
-      secure: config.get('SMTP_SECURE', false),
-      auth: config.get('SMTP_USER') ? {
-        user: config.get('SMTP_USER'),
-        pass: config.get('SMTP_PASS'),
-      } : undefined,
-    });
+    this.apiKey = this.config.get<string>('SENDGRID_API_KEY')?.trim();
+    this.fromEmail = this.config.get<string>('SENDGRID_FROM_EMAIL', 'noreply@opportunity-scanner.io');
+    this.fromName = this.config.get<string>('SENDGRID_FROM_NAME', 'Internet Opportunity Scanner');
+
+    if (this.apiKey) {
+      sgMail.setApiKey(this.apiKey);
+    } else {
+      this.logger.warn('SENDGRID_API_KEY is not configured. Email delivery is disabled.');
+    }
+  }
+
+  private appUrl(path = '') {
+    const baseUrl = this.config.get('FRONTEND_URL', 'http://localhost:3000');
+    return `${baseUrl}${path}`;
+  }
+
+  private async sendEmail({ to, subject, html }: EmailPayload) {
+    if (!this.apiKey) {
+      this.logger.warn(`Skipping email "${subject}" because SendGrid is not configured.`);
+      return;
+    }
+
+    try {
+      await sgMail.send({
+        to,
+        from: {
+          email: this.fromEmail,
+          name: this.fromName,
+        },
+        subject,
+        html,
+      });
+    } catch (error) {
+      const err = error as { response?: { body?: unknown } };
+      this.logger.error(`Failed to send email "${subject}"`, err.response?.body ?? error);
+    }
   }
 
   async sendAlertEmail(recipients: string[], ruleName: string, signal: any) {
@@ -45,16 +77,12 @@ export class NotificationsService {
             <p style="color: #bbf7d0; font-size: 13px; margin: 0;"><strong>Suggested outreach:</strong> ${signal.suggestedOutreach}</p>
           </div>` : ''}
           <a href="${signal.sourceUrl}" style="display: inline-block; background: #3b82f6; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-size: 14px; margin-right: 8px;">View Original Post</a>
-          <a href="${this.config.get('FRONTEND_URL', 'http://localhost:3000')}" style="display: inline-block; background: #1e293b; border: 1px solid #334155; color: #94a3b8; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-size: 14px;">Open Dashboard</a>
+          <a href="${this.appUrl()}" style="display: inline-block; background: #1e293b; border: 1px solid #334155; color: #94a3b8; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-size: 14px;">Open Dashboard</a>
         </div>
       </div>
     `;
 
-    try {
-      await this.transporter.sendMail({ from: this.from, to: recipients.join(','), subject, html });
-    } catch (err) {
-      this.logger.error('Failed to send alert email', err);
-    }
+    await this.sendEmail({ to: recipients, subject, html });
   }
 
   async sendWelcomeEmail(email: string, name: string) {
@@ -62,13 +90,71 @@ export class NotificationsService {
       <div style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; background: #0f172a; padding: 32px; border-radius: 8px;">
         <h1 style="color: #f8fafc; font-size: 22px;">Welcome to Internet Opportunity Scanner</h1>
         <p style="color: #94a3b8; line-height: 1.6;">Hi ${name}, your account is ready. Start by adding keywords to monitor and connecting your first source.</p>
-        <a href="${this.config.get('FRONTEND_URL', 'http://localhost:3000')}" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-size: 15px; margin-top: 16px;">Get Started</a>
+        <a href="${this.appUrl()}" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-size: 15px; margin-top: 16px;">Get Started</a>
       </div>
     `;
-    try {
-      await this.transporter.sendMail({ from: this.from, to: email, subject: 'Welcome to Internet Opportunity Scanner', html });
-    } catch (err) {
-      this.logger.error('Failed to send welcome email', err);
-    }
+
+    await this.sendEmail({
+      to: email,
+      subject: 'Welcome to Internet Opportunity Scanner',
+      html,
+    });
+  }
+
+  async sendWorkspaceInvitationEmail(email: string, workspaceName: string, role: string, invitationToken: string) {
+    const inviteUrl = this.appUrl(`/register?invitationToken=${invitationToken}`);
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 640px; margin: 0 auto;">
+        <div style="background: #0f172a; padding: 28px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: #f8fafc; margin: 0; font-size: 22px;">You've been invited to ${workspaceName}</h1>
+          <p style="color: #94a3b8; margin: 10px 0 0; font-size: 14px; line-height: 1.6;">
+            Join the workspace to review signals, manage alerts, and collaborate with the rest of the team.
+          </p>
+        </div>
+        <div style="background: #111827; padding: 28px; border-radius: 0 0 12px 12px;">
+          <div style="background: #0f172a; border: 1px solid #1f2937; border-radius: 10px; padding: 16px; margin-bottom: 18px;">
+            <p style="margin: 0; color: #cbd5e1; font-size: 13px;"><strong>Workspace:</strong> ${workspaceName}</p>
+            <p style="margin: 8px 0 0; color: #cbd5e1; font-size: 13px;"><strong>Role:</strong> ${role}</p>
+          </div>
+          <a href="${inviteUrl}" style="display: inline-block; background: linear-gradient(135deg,#0ea5e9,#22d3ee); color: white; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 15px; font-weight: 600;">Accept invitation</a>
+          <p style="color: #64748b; font-size: 12px; margin: 18px 0 0; line-height: 1.6;">
+            If the button does not work, copy this link into your browser:<br />
+            <span style="color: #94a3b8;">${inviteUrl}</span>
+          </p>
+        </div>
+      </div>
+    `;
+
+    await this.sendEmail({
+      to: email,
+      subject: `Invitation to join ${workspaceName}`,
+      html,
+    });
+  }
+
+  async sendWorkspaceAccessGrantedEmail(email: string, workspaceName: string, role: string) {
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 640px; margin: 0 auto;">
+        <div style="background: #0f172a; padding: 28px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: #f8fafc; margin: 0; font-size: 22px;">You've been added to ${workspaceName}</h1>
+          <p style="color: #94a3b8; margin: 10px 0 0; font-size: 14px; line-height: 1.6;">
+            Your existing account can now access this workspace.
+          </p>
+        </div>
+        <div style="background: #111827; padding: 28px; border-radius: 0 0 12px 12px;">
+          <div style="background: #0f172a; border: 1px solid #1f2937; border-radius: 10px; padding: 16px; margin-bottom: 18px;">
+            <p style="margin: 0; color: #cbd5e1; font-size: 13px;"><strong>Workspace:</strong> ${workspaceName}</p>
+            <p style="margin: 8px 0 0; color: #cbd5e1; font-size: 13px;"><strong>Role:</strong> ${role}</p>
+          </div>
+          <a href="${this.appUrl('/login')}" style="display: inline-block; background: linear-gradient(135deg,#0ea5e9,#22d3ee); color: white; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 15px; font-weight: 600;">Sign in</a>
+        </div>
+      </div>
+    `;
+
+    await this.sendEmail({
+      to: email,
+      subject: `You now have access to ${workspaceName}`,
+      html,
+    });
   }
 }

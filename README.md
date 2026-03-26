@@ -47,7 +47,7 @@ Password: demo1234!
 ```
 apps/
   web/      → Next.js 14, App Router, TypeScript, Tailwind, shadcn-style
-  api/      → NestJS, TypeScript, Prisma, BullMQ, Nodemailer
+  api/      → NestJS, TypeScript, Prisma, BullMQ, SendGrid
   worker/   → Standalone worker monitor (main processing in api)
 packages/
   ui/       → Shared components (extend as needed)
@@ -85,7 +85,7 @@ yarn install
 
 ```bash
 yarn docker:up
-# Starts: PostgreSQL (5433 on host), Redis (6379), MailHog (1025/8025)
+# Starts: PostgreSQL (5433 on host) and Redis (6379)
 ```
 
 ### 3. Set up the database
@@ -116,7 +116,6 @@ yarn workspace @ios/web dev      # http://localhost:3000
 
 - **Frontend:** http://localhost:3000
 - **API docs (Swagger):** http://localhost:3001/api/docs
-- **MailHog (email preview):** http://localhost:8025
 
 ---
 
@@ -145,11 +144,10 @@ Without Reddit credentials, the demo seed data is used. Without an AI key, a key
 STORAGE_ENDPOINT=...
 STORAGE_ACCESS_KEY=...
 
-# Custom SMTP (default: MailHog in dev)
-SMTP_HOST=smtp.sendgrid.net
-SMTP_PORT=587
-SMTP_USER=apikey
-SMTP_PASS=your-sendgrid-key
+# SendGrid email delivery
+SENDGRID_API_KEY=SG.your-sendgrid-key
+SENDGRID_FROM_EMAIL=noreply@your-domain.com
+SENDGRID_FROM_NAME="Internet Opportunity Scanner"
 ```
 
 ---
@@ -238,7 +236,7 @@ If `AI_API_KEY` is not configured or unavailable, a keyword-count fallback class
 5. Posts are matched against org keywords — non-matching posts are discarded
 6. Matched posts are **classified** by AI + **scored**
 7. `Signal` records are created in Postgres
-8. `IMMEDIATE` alert rules are checked and emails dispatched via SMTP
+8. `IMMEDIATE` alert rules are checked and emails dispatched via SendGrid
 
 ---
 
