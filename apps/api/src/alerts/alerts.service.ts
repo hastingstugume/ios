@@ -75,11 +75,18 @@ export class AlertsService {
 
     const signal = await this.prisma.signal.findUnique({
       where: { id: signalId },
-      include: { source: { select: { name: true } } },
+      include: {
+        source: { select: { name: true } },
+        keywords: { select: { keywordId: true } },
+      },
     });
     if (!signal) return;
+    const signalKeywordIds = new Set(signal.keywords.map((item) => item.keywordId));
 
     for (const rule of rules) {
+      if (rule.keywordIds.length && !rule.keywordIds.some((keywordId) => signalKeywordIds.has(keywordId))) {
+        continue;
+      }
       await this.notifications.sendAlertEmail(rule.emailRecipients, rule.name, signal as any);
       await this.prisma.alertRule.update({
         where: { id: rule.id },

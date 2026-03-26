@@ -4,7 +4,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { sourcesApi } from '@/lib/api';
 import { SOURCE_TYPE_META, formatDate } from '@/lib/utils';
-import { Database, Plus, Trash2, PauseCircle, PlayCircle, AlertCircle, CheckCircle2, X, Search } from 'lucide-react';
+import { Database, Plus, Trash2, PauseCircle, PlayCircle, AlertCircle, CheckCircle2, Search } from 'lucide-react';
+import { Modal } from '@/components/ui/modal';
 
 const SOURCE_TYPES = [
   { value: 'REDDIT', label: 'Reddit Subreddit', fields: [{ key: 'subreddit', label: 'Subreddit name', placeholder: 'entrepreneur' }] },
@@ -16,6 +17,7 @@ export default function SourcesPage() {
   const { currentOrgId } = useAuth();
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', type: 'REDDIT', subreddit: '', url: '' });
   const [search, setSearch] = useState('');
 
@@ -33,6 +35,21 @@ export default function SourcesPage() {
       return sourcesApi.create(currentOrgId!, { name: form.name, type: form.type, config });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['sources', currentOrgId] }); setAdding(false); setForm({ name: '', type: 'REDDIT', subreddit: '', url: '' }); },
+  });
+
+  const updateSource = useMutation({
+    mutationFn: () => {
+      const typeInfo = SOURCE_TYPES.find((t) => t.value === form.type)!;
+      const config: Record<string, string> = {};
+      typeInfo.fields.forEach((f) => { if (form[f.key as keyof typeof form]) config[f.key] = form[f.key as keyof typeof form] as string; });
+      return sourcesApi.update(currentOrgId!, editingId!, { name: form.name, config });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sources', currentOrgId] });
+      setEditingId(null);
+      setAdding(false);
+      setForm({ name: '', type: 'REDDIT', subreddit: '', url: '' });
+    },
   });
 
   const toggleStatus = useMutation({
@@ -99,23 +116,20 @@ export default function SourcesPage() {
         </div>
       </section>
 
-      {adding && (
-        <div className="section-card space-y-4 p-5 animate-fade-in">
-          <div className="mb-1 flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-foreground">New source</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Bring in fresh conversations from focused communities and feeds.</p>
-            </div>
-            <button onClick={() => setAdding(false)} className="rounded-lg border border-border p-2 text-muted-foreground hover:bg-accent hover:text-foreground">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+      <Modal
+        open={adding || !!editingId}
+        onClose={() => { setAdding(false); setEditingId(null); setForm({ name: '', type: 'REDDIT', subreddit: '', url: '' }); }}
+        title={editingId ? 'Edit source' : 'New source'}
+        description="Connect a source without leaving the current list so you can keep reviewing what is already active."
+      >
+        <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs text-muted-foreground">Source type</label>
               <select
                 value={form.type}
                 onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+                disabled={!!editingId}
                 className="w-full rounded-lg border border-border bg-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 {SOURCE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -142,15 +156,16 @@ export default function SourcesPage() {
               />
             </div>
           ))}
+          {(create.error || updateSource.error) && <p className="text-sm text-destructive">{((create.error || updateSource.error) as Error).message}</p>}
           <div className="flex gap-2">
-            <button disabled={!form.name || create.isPending} onClick={() => create.mutate()}
+            <button disabled={!form.name || create.isPending || updateSource.isPending} onClick={() => editingId ? updateSource.mutate() : create.mutate()}
               className="rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40">
-              {create.isPending ? 'Adding…' : 'Add source'}
+              {create.isPending || updateSource.isPending ? (editingId ? 'Saving…' : 'Adding…') : (editingId ? 'Save source' : 'Add source')}
             </button>
-            <button onClick={() => setAdding(false)} className="rounded-xl px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">Cancel</button>
+            <button onClick={() => { setAdding(false); setEditingId(null); setForm({ name: '', type: 'REDDIT', subreddit: '', url: '' }); }} className="rounded-xl px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">Cancel</button>
           </div>
         </div>
-      )}
+      </Modal>
 
       {isLoading ? (
         <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-28 rounded-xl border border-border bg-card animate-pulse" />)}</div>
@@ -193,6 +208,21 @@ export default function SourcesPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingId(src.id);
+                        setAdding(false);
+                        setForm({
+                          name: src.name,
+                          type: src.type,
+                          subreddit: src.type === 'REDDIT' ? src.config?.subreddit || '' : '',
+                          url: src.type === 'RSS' ? src.config?.url || '' : '',
+                        });
+                      }}
+                      className="rounded-lg border border-border px-2.5 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      Edit
+                    </button>
                     <button
                       onClick={() => toggleStatus.mutate({ id: src.id, status: src.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE' })}
                       className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"

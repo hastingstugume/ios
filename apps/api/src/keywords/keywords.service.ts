@@ -28,6 +28,12 @@ export class KeywordsService {
   async update(orgId: string, id: string, data: { phrase?: string; description?: string; isActive?: boolean }) {
     const kw = await this.prisma.keyword.findFirst({ where: { id, organizationId: orgId } });
     if (!kw) throw new NotFoundException('Keyword not found');
+    if (data.phrase && data.phrase.toLowerCase() !== kw.phrase.toLowerCase()) {
+      const existing = await this.prisma.keyword.findFirst({
+        where: { organizationId: orgId, phrase: { equals: data.phrase, mode: 'insensitive' }, NOT: { id } },
+      });
+      if (existing) throw new ConflictException('Keyword already exists');
+    }
     return this.prisma.keyword.update({ where: { id }, data });
   }
 

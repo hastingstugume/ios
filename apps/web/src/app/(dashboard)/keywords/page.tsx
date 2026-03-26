@@ -3,12 +3,14 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { keywordsApi } from '@/lib/api';
-import { Tag, Plus, Trash2, ToggleLeft, ToggleRight, X, Search } from 'lucide-react';
+import { Tag, Plus, Trash2, ToggleLeft, ToggleRight, Search } from 'lucide-react';
+import { Modal } from '@/components/ui/modal';
 
 export default function KeywordsPage() {
   const { currentOrgId } = useAuth();
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [phrase, setPhrase] = useState('');
   const [desc, setDesc] = useState('');
   const [search, setSearch] = useState('');
@@ -33,6 +35,16 @@ export default function KeywordsPage() {
   const remove = useMutation({
     mutationFn: (id: string) => keywordsApi.delete(currentOrgId!, id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['keywords', currentOrgId] }),
+  });
+
+  const update = useMutation({
+    mutationFn: (id: string) => keywordsApi.update(currentOrgId!, id, { phrase: phrase.trim(), description: desc.trim() || undefined }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['keywords', currentOrgId] });
+      setEditingId(null);
+      setPhrase('');
+      setDesc('');
+    },
   });
 
   const filteredKeywords = keywords.filter((kw) => {
@@ -83,20 +95,19 @@ export default function KeywordsPage() {
         </div>
       </div>
 
-      {adding && (
-        <div className="section-card p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground">New keyword</h3>
-            <button onClick={() => setAdding(false)} className="text-muted-foreground hover:text-foreground">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+      <Modal
+        open={adding || !!editingId}
+        onClose={() => { setAdding(false); setEditingId(null); setPhrase(''); setDesc(''); }}
+        title={editingId ? 'Edit keyword' : 'New keyword'}
+        description="Create and refine the phrases that decide which conversations enter your opportunity feed."
+      >
+        <div className="space-y-3">
           <input
             value={phrase}
             onChange={(e) => setPhrase(e.target.value)}
             placeholder="e.g. AI automation agency"
             className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
-            onKeyDown={(e) => e.key === 'Enter' && phrase.trim() && create.mutate()}
+            onKeyDown={(e) => e.key === 'Enter' && phrase.trim() && (editingId ? update.mutate(editingId) : create.mutate())}
           />
           <input
             value={desc}
@@ -104,20 +115,21 @@ export default function KeywordsPage() {
             placeholder="Description (optional)"
             className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
           />
+          {(create.error || update.error) && <p className="text-sm text-destructive">{((create.error || update.error) as Error).message}</p>}
           <div className="flex gap-2">
             <button
-              disabled={!phrase.trim() || create.isPending}
-              onClick={() => phrase.trim() && create.mutate()}
+              disabled={!phrase.trim() || create.isPending || update.isPending}
+              onClick={() => phrase.trim() && (editingId ? update.mutate(editingId) : create.mutate())}
               className="bg-primary text-primary-foreground text-sm px-4 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-40 transition-colors"
             >
-              {create.isPending ? 'Adding…' : 'Add'}
+              {create.isPending || update.isPending ? (editingId ? 'Saving…' : 'Adding…') : (editingId ? 'Save changes' : 'Add keyword')}
             </button>
-            <button onClick={() => setAdding(false)} className="text-sm text-muted-foreground hover:text-foreground px-4 py-2 rounded-lg hover:bg-accent transition-colors">
+            <button onClick={() => { setAdding(false); setEditingId(null); setPhrase(''); setDesc(''); }} className="text-sm text-muted-foreground hover:text-foreground px-4 py-2 rounded-lg hover:bg-accent transition-colors">
               Cancel
             </button>
           </div>
         </div>
-      )}
+      </Modal>
 
       {isLoading ? (
         <div className="space-y-2">
@@ -155,6 +167,12 @@ export default function KeywordsPage() {
                   {kw.description && <p className="text-xs text-muted-foreground mt-1 leading-6">{kw.description}</p>}
                 </div>
                 <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => { setEditingId(kw.id); setAdding(false); setPhrase(kw.phrase); setDesc(kw.description || ''); }}
+                    className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent transition-colors text-xs"
+                  >
+                    Edit
+                  </button>
                   <button
                     onClick={() => toggle.mutate({ id: kw.id, isActive: !kw.isActive })}
                     className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent transition-colors"
