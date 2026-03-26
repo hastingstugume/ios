@@ -307,7 +307,6 @@ yarn workspace @ios/web start
 | Email | SendGrid, Resend, or AWS SES |
 | AI | OpenAI API or Groq (faster/cheaper) |
 
-The Docker Compose setup is development-only. For Kubernetes migration, each service (api, web, worker) can be containerized independently — the architecture was designed for this.
 
 ---
 
