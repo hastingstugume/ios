@@ -6,8 +6,10 @@ import { Providers } from './providers';
 const inter = Inter({ subsets: ['latin'], variable: '--font-geist-sans' });
 const dmMono = DM_Mono({ subsets: ['latin'], weight: ['300', '400', '500'], variable: '--font-dm-mono' });
 const syne = Space_Grotesk({ subsets: ['latin'], weight: ['400', '500', '700'], variable: '--font-syne' });
+const metadataBase = new URL(process.env.NEXT_PUBLIC_APP_URL || process.env.FRONTEND_URL || 'http://localhost:3000');
 
 export const metadata: Metadata = {
+  metadataBase,
   title: 'Internet Opportunity Scanner — Find B2B buying signals in real time',
   description: 'Discover real buying intent and demand signals from Reddit, RSS feeds, and developer communities.',
   openGraph: {

@@ -2,9 +2,9 @@
 import { useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
-import { signalsApi, keywordsApi, sourcesApi } from '@/lib/api';
+import { signalsApi, keywordsApi, sourcesApi, organizationsApi } from '@/lib/api';
 import { SignalCard } from '@/components/signals/SignalCard';
-import { CATEGORY_META } from '@/lib/utils';
+import { CATEGORY_META, STAGE_META } from '@/lib/utils';
 import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, Zap, Bookmark, Target, Clock } from 'lucide-react';
 
 const CATEGORIES = [
@@ -18,6 +18,11 @@ const STATUSES = [
   { value: 'SAVED', label: 'Saved' },
   { value: 'BOOKMARKED', label: 'Bookmarked' },
   { value: 'IGNORED', label: 'Ignored' },
+];
+
+const STAGES = [
+  { value: '', label: 'All stages' },
+  ...Object.entries(STAGE_META).map(([value, meta]) => ({ value, label: meta.label })),
 ];
 
 const CONFIDENCE_OPTIONS = [
@@ -57,8 +62,8 @@ function StatChip({ label, value, icon: Icon }: { label: string; value: number; 
 export default function FeedPage() {
   const { currentOrgId } = useAuth();
   const [filters, setFilters] = useState({
-    search: '', category: '', status: '', minConfidence: '',
-    sourceId: '', keywordId: '', page: 1,
+    search: '', category: '', status: '', stage: '', minConfidence: '',
+    sourceId: '', keywordId: '', assigneeId: '', page: 1,
   });
   const [showFilters, setShowFilters] = useState(false);
 
@@ -74,8 +79,10 @@ export default function FeedPage() {
       minConfidence: filters.minConfidence || undefined,
       category: filters.category || undefined,
       status: filters.status || undefined,
+      stage: filters.stage || undefined,
       sourceId: filters.sourceId || undefined,
       keywordId: filters.keywordId || undefined,
+      assigneeId: filters.assigneeId || undefined,
       search: filters.search || undefined,
     }),
     enabled: !!currentOrgId,
@@ -94,12 +101,19 @@ export default function FeedPage() {
     enabled: !!currentOrgId,
   });
 
-  const activeFilterCount = [filters.category, filters.status, filters.minConfidence, filters.sourceId, filters.keywordId]
+  const { data: memberData } = useQuery({
+    queryKey: ['org-members', currentOrgId],
+    queryFn: () => organizationsApi.members(currentOrgId!),
+    enabled: !!currentOrgId,
+  });
+
+  const activeFilterCount = [filters.category, filters.status, filters.stage, filters.minConfidence, filters.sourceId, filters.keywordId, filters.assigneeId]
     .filter(Boolean).length;
 
   const signalCount = data?.meta?.total ?? 0;
   const savedCount = data?.data?.filter((signal) => signal.status === 'SAVED').length ?? 0;
   const highConfidenceCount = data?.data?.filter((signal) => (signal.confidenceScore ?? 0) >= 85).length ?? 0;
+  const inProgressCount = data?.data?.filter((signal) => ['IN_PROGRESS', 'OUTREACH', 'QUALIFIED'].includes(signal.stage)).length ?? 0;
 
   return (
     <div className="page-shell animate-fade-in">
@@ -135,6 +149,7 @@ export default function FeedPage() {
           <StatChip label="Signals" value={signalCount} icon={Clock} />
           <StatChip label="High Confidence" value={highConfidenceCount} icon={Target} />
           <StatChip label="Saved" value={savedCount} icon={Bookmark} />
+          <StatChip label="Active Pipeline" value={inProgressCount} icon={Zap} />
         </div>
 
         <div className="relative">
@@ -156,6 +171,7 @@ export default function FeedPage() {
           <div className="flex flex-wrap gap-2 pt-1">
             <Select value={filters.category} onChange={(v) => setFilter('category', v)} options={CATEGORIES} />
             <Select value={filters.status} onChange={(v) => setFilter('status', v)} options={STATUSES} />
+            <Select value={filters.stage} onChange={(v) => setFilter('stage', v)} options={STAGES} />
             <Select value={filters.minConfidence} onChange={(v) => setFilter('minConfidence', v)} options={CONFIDENCE_OPTIONS} />
             <Select
               value={filters.sourceId}
@@ -167,9 +183,14 @@ export default function FeedPage() {
               onChange={(v) => setFilter('keywordId', v)}
               options={[{ value: '', label: 'All keywords' }, ...(keywords || []).map((k) => ({ value: k.id, label: k.phrase }))]}
             />
+            <Select
+              value={filters.assigneeId}
+              onChange={(v) => setFilter('assigneeId', v)}
+              options={[{ value: '', label: 'Any owner' }, ...((memberData?.members || []).map((member) => ({ value: member.userId, label: member.user.name || member.user.email })))]}
+            />
             {activeFilterCount > 0 && (
               <button
-                onClick={() => setFilters({ search: '', category: '', status: '', minConfidence: '', sourceId: '', keywordId: '', page: 1 })}
+                onClick={() => setFilters({ search: '', category: '', status: '', stage: '', minConfidence: '', sourceId: '', keywordId: '', assigneeId: '', page: 1 })}
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-lg hover:bg-accent transition-colors"
               >
                 <X className="w-3 h-3" />
@@ -195,7 +216,7 @@ export default function FeedPage() {
           </p>
           {activeFilterCount > 0 && (
             <button
-              onClick={() => setFilters({ search: '', category: '', status: '', minConfidence: '', sourceId: '', keywordId: '', page: 1 })}
+              onClick={() => setFilters({ search: '', category: '', status: '', stage: '', minConfidence: '', sourceId: '', keywordId: '', assigneeId: '', page: 1 })}
               className="mt-4 text-sm text-primary hover:underline"
             >
               Clear filters

@@ -36,6 +36,16 @@ export const STATUS_META: Record<string, { label: string; color: string }> = {
   IGNORED:    { label: 'Ignored',    color: 'text-slate-500' },
 };
 
+export const STAGE_META: Record<string, { label: string; color: string; bg: string }> = {
+  TO_REVIEW:   { label: 'To Review',   color: 'text-blue-400',   bg: 'bg-blue-400/10 border-blue-400/20' },
+  IN_PROGRESS: { label: 'In Progress', color: 'text-cyan-400',   bg: 'bg-cyan-400/10 border-cyan-400/20' },
+  OUTREACH:    { label: 'Outreach',    color: 'text-amber-400',  bg: 'bg-amber-400/10 border-amber-400/20' },
+  QUALIFIED:   { label: 'Qualified',   color: 'text-violet-400', bg: 'bg-violet-400/10 border-violet-400/20' },
+  WON:         { label: 'Won',         color: 'text-green-400',  bg: 'bg-green-400/10 border-green-400/20' },
+  LOST:        { label: 'Lost',        color: 'text-rose-400',   bg: 'bg-rose-400/10 border-rose-400/20' },
+  ARCHIVED:    { label: 'Archived',    color: 'text-slate-400',  bg: 'bg-slate-400/10 border-slate-400/20' },
+};
+
 export const SOURCE_TYPE_META: Record<string, { label: string; icon: string }> = {
   REDDIT:  { label: 'Reddit',  icon: '🤖' },
   RSS:     { label: 'RSS',     icon: '📡' },

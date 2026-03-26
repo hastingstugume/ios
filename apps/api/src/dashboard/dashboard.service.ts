@@ -17,7 +17,12 @@ export class DashboardService {
       newThisWeek,
       highConfidence,
       saved,
+      inProgress,
+      outreach,
+      qualified,
+      won,
       byCategory,
+      byStage,
       topSources,
       recentHigh,
       alertRules,
@@ -25,13 +30,29 @@ export class DashboardService {
       this.prisma.signal.count({ where: { organizationId: orgId } }),
       this.prisma.signal.count({ where: { organizationId: orgId, fetchedAt: { gte: oneDayAgo } } }),
       this.prisma.signal.count({ where: { organizationId: orgId, fetchedAt: { gte: sevenDaysAgo } } }),
-      this.prisma.signal.count({ where: { organizationId: orgId, confidenceScore: { gte: 80 }, status: 'NEW' } }),
+      this.prisma.signal.count({
+        where: {
+          organizationId: orgId,
+          confidenceScore: { gte: 80 },
+          stage: { in: ['TO_REVIEW', 'IN_PROGRESS', 'OUTREACH', 'QUALIFIED'] },
+        },
+      }),
       this.prisma.signal.count({ where: { organizationId: orgId, status: 'SAVED' } }),
+      this.prisma.signal.count({ where: { organizationId: orgId, stage: 'IN_PROGRESS' } }),
+      this.prisma.signal.count({ where: { organizationId: orgId, stage: 'OUTREACH' } }),
+      this.prisma.signal.count({ where: { organizationId: orgId, stage: 'QUALIFIED' } }),
+      this.prisma.signal.count({ where: { organizationId: orgId, stage: 'WON' } }),
       this.prisma.signal.groupBy({
         by: ['category'],
         where: { organizationId: orgId, fetchedAt: { gte: thirtyDaysAgo } },
         _count: { _all: true },
         orderBy: { _count: { category: 'desc' } },
+      }),
+      this.prisma.signal.groupBy({
+        by: ['stage'],
+        where: { organizationId: orgId },
+        _count: { _all: true },
+        orderBy: { _count: { stage: 'desc' } },
       }),
       this.prisma.signal.groupBy({
         by: ['sourceId'],
@@ -41,10 +62,17 @@ export class DashboardService {
         take: 5,
       }),
       this.prisma.signal.findMany({
-        where: { organizationId: orgId, confidenceScore: { gte: 80 }, status: 'NEW' },
+        where: {
+          organizationId: orgId,
+          confidenceScore: { gte: 80 },
+          stage: { in: ['TO_REVIEW', 'IN_PROGRESS', 'OUTREACH', 'QUALIFIED'] },
+        },
         orderBy: { fetchedAt: 'desc' },
         take: 5,
-        include: { source: { select: { name: true, type: true } } },
+        include: {
+          source: { select: { name: true, type: true } },
+          assignee: { select: { id: true, name: true, email: true } },
+        },
       }),
       this.prisma.alertRule.count({ where: { organizationId: orgId, isActive: true } }),
     ]);
@@ -68,8 +96,20 @@ export class DashboardService {
     `;
 
     return {
-      stats: { totalSignals, newToday, newThisWeek, highConfidence, saved, activeAlerts: alertRules },
+      stats: {
+        totalSignals,
+        newToday,
+        newThisWeek,
+        highConfidence,
+        saved,
+        inProgress,
+        outreach,
+        qualified,
+        won,
+        activeAlerts: alertRules,
+      },
       byCategory: byCategory.map((c) => ({ category: c.category, count: c._count._all })),
+      byStage: byStage.map((stage) => ({ stage: stage.stage, count: stage._count._all })),
       topSources: topSources.map((s) => ({
         source: sourceMap[s.sourceId],
         count: s._count._all,

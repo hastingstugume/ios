@@ -2,12 +2,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { dashboardApi } from '@/lib/api';
-import { CATEGORY_META, getConfidenceColor, formatDate } from '@/lib/utils';
+import { CATEGORY_META, STAGE_META, getConfidenceColor, formatDate } from '@/lib/utils';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import Link from 'next/link';
 import {
   Zap, TrendingUp, Star, Bell, ArrowUpRight,
-  Target, Clock, Bookmark
+  Target, Clock, Bookmark, Workflow, Send, Trophy
 } from 'lucide-react';
 
 function StatCard({ label, value, icon: Icon, sub, color = 'text-primary' }: {
@@ -68,9 +68,12 @@ export default function DashboardPage() {
         <StatCard label="New Today"      value={s.newToday ?? 0}      icon={Clock}      sub="signals discovered"         color="text-blue-400" />
         <StatCard label="This Week"      value={s.newThisWeek ?? 0}   icon={TrendingUp} sub="total signals"              color="text-purple-400" />
         <StatCard label="High Confidence" value={s.highConfidence ?? 0} icon={Target}    sub="score ≥ 80, actionable"     color="text-green-400" />
-        <StatCard label="Total Signals"  value={s.totalSignals ?? 0}  icon={Zap}        sub="all time"                   color="text-primary" />
-        <StatCard label="Saved"          value={s.saved ?? 0}         icon={Bookmark}   sub="in your pipeline"           color="text-amber-400" />
-        <StatCard label="Active Alerts"  value={s.activeAlerts ?? 0}  icon={Bell}       sub="notification rules"         color="text-cyan-400" />
+        <StatCard label="In Progress"    value={s.inProgress ?? 0}    icon={Workflow}   sub="actively being worked"      color="text-cyan-400" />
+        <StatCard label="Outreach"       value={s.outreach ?? 0}      icon={Send}       sub="ready for contact"          color="text-amber-400" />
+        <StatCard label="Qualified"      value={s.qualified ?? 0}     icon={Bookmark}   sub="worth pursuing"             color="text-violet-400" />
+        <StatCard label="Won"            value={s.won ?? 0}           icon={Trophy}     sub="closed opportunities"       color="text-green-400" />
+        <StatCard label="Active Alerts"  value={s.activeAlerts ?? 0}  icon={Bell}       sub="notification rules"         color="text-primary" />
+        <StatCard label="Total Signals"  value={s.totalSignals ?? 0}  icon={Zap}        sub="all time"                   color="text-slate-300" />
       </div>
 
       <div className="grid grid-cols-3 gap-4">
@@ -123,6 +126,24 @@ export default function DashboardPage() {
             })}
             {!data?.byCategory?.length && <p className="text-xs text-muted-foreground">No signals yet</p>}
           </div>
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl p-4">
+        <h2 className="text-sm font-semibold text-foreground mb-3">Pipeline Stages</h2>
+        <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          {(data?.byStage || []).map((item: any) => {
+            const meta = STAGE_META[item.stage] || STAGE_META.TO_REVIEW;
+            return (
+              <div key={item.stage} className="rounded-lg border border-border bg-secondary/50 px-3 py-3">
+                <span className={`inline-flex items-center text-[11px] font-semibold uppercase tracking-wide px-2 py-1 rounded border ${meta.bg} ${meta.color}`}>
+                  {meta.label}
+                </span>
+                <p className="mt-3 text-2xl font-semibold text-foreground">{item.count}</p>
+              </div>
+            );
+          })}
+          {!data?.byStage?.length && <p className="text-xs text-muted-foreground">No pipeline activity yet.</p>}
         </div>
       </div>
 

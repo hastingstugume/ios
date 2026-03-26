@@ -2,8 +2,8 @@
 import Link from 'next/link';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Signal, signalsApi } from '@/lib/api';
-import { CATEGORY_META, SOURCE_TYPE_META, getConfidenceColor, getConfidenceBg, formatDate, cn } from '@/lib/utils';
-import { Bookmark, EyeOff, Check, ExternalLink, MessageSquare, ChevronRight } from 'lucide-react';
+import { CATEGORY_META, SOURCE_TYPE_META, STAGE_META, getConfidenceColor, getConfidenceBg, formatDate, cn } from '@/lib/utils';
+import { Bookmark, EyeOff, Check, ExternalLink, MessageSquare, ChevronRight, UserRound, Workflow } from 'lucide-react';
 
 interface SignalCardProps {
   signal: Signal;
@@ -14,11 +14,23 @@ interface SignalCardProps {
 export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
   const qc = useQueryClient();
   const cat = CATEGORY_META[signal.category || 'OTHER'] || CATEGORY_META.OTHER;
+  const stage = STAGE_META[signal.stage] || STAGE_META.TO_REVIEW;
   const sourceType = SOURCE_TYPE_META[signal.source?.type || ''];
 
   const updateStatus = useMutation({
     mutationFn: (status: string) => signalsApi.updateStatus(orgId, signal.id, status),
-    onSuccess: () => qc.invalidateQueries({ queryKey }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey });
+      qc.invalidateQueries({ queryKey: ['dashboard', orgId] });
+    },
+  });
+
+  const updateWorkflow = useMutation({
+    mutationFn: (stage: string) => signalsApi.updateWorkflow(orgId, signal.id, { stage }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey });
+      qc.invalidateQueries({ queryKey: ['dashboard', orgId] });
+    },
   });
 
   const isIgnored = signal.status === 'IGNORED';
@@ -40,6 +52,9 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className={cn('inline-flex items-center text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded border', cat.bg, cat.color)}>
               {cat.label}
+            </span>
+            <span className={cn('inline-flex items-center text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded border', stage.bg, stage.color)}>
+              {stage.label}
             </span>
             {signal.source && (
               <span className="text-[11px] text-muted-foreground flex items-center gap-1">
@@ -75,11 +90,33 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
               ))}
             </div>
           )}
+
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <UserRound className="w-3.5 h-3.5" />
+              {signal.assignee?.name || signal.assignee?.email || 'Unassigned'}
+            </span>
+            {signal.nextStep ? (
+              <span className="inline-flex items-center gap-1">
+                <Workflow className="w-3.5 h-3.5" />
+                Next: {signal.nextStep}
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
 
       <div className="flex items-center justify-between px-4 py-3 border-t border-border/60">
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap">
+          <select
+            value={signal.stage}
+            onChange={(e) => updateWorkflow.mutate(e.target.value)}
+            className="mr-2 rounded-md border border-border bg-secondary px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+          >
+            {Object.entries(STAGE_META).map(([value, meta]) => (
+              <option key={value} value={value}>{meta.label}</option>
+            ))}
+          </select>
           <button
             onClick={() => updateStatus.mutate(signal.status === 'SAVED' ? 'NEW' : 'SAVED')}
             className={cn(

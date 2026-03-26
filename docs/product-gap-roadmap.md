@@ -21,9 +21,9 @@ This document is the source of truth for two things:
 |---|---|
 | Landing | Uses real backend-backed preview data through a public landing endpoint. Copy is aligned to shipped feed, alerts, workspace, and settings capabilities. |
 | Auth | Session-based login, logout, register, invited-user registration, profile update, and password change are implemented. |
-| Dashboard | Real summary metrics, trend chart, category breakdown, and recent high-confidence feed are implemented from backend data. |
-| Feed | Real signal listing, filtering, pagination, and status updates are implemented. |
-| Signals | Real detail view, annotations, why-it-matters, suggested outreach, and status actions are implemented. |
+| Dashboard | Real summary metrics, trend chart, category breakdown, pipeline-stage breakdown, and recent high-confidence feed are implemented from backend data. |
+| Feed | Real signal listing, filtering, pagination, status updates, stage filtering, owner filtering, and quick workflow stage updates are implemented. |
+| Signals | Real detail view, annotations, why-it-matters, suggested outreach, stage updates, owner assignment, next-step tracking, and close-state tracking are implemented. |
 | Keywords | Create, edit, pause/resume, delete, and search are implemented with backend persistence. |
 | Sources | Create, edit, pause/resume, delete, validation, and search are implemented with backend persistence. |
 | Alerts | Create, edit, pause/resume, delete, confidence/frequency rules, category targeting, keyword targeting, and last-trigger timestamps are implemented. |
@@ -40,7 +40,7 @@ This document is the source of truth for two things:
 | Confidence scoring | Signal model stores confidence score and dashboard/feed use it | Landing, feed, and details display real confidence | Yes | None |
 | Alert rules | Alerts support confidence, categories, keywords, recipients, and trigger timestamps | Alerts UI supports create/edit/toggle/delete with targeting | Yes | Add digest delivery UX later if needed |
 | Team workspaces | Organization members, invitations, membership roles, audit log, org switching exist | Sidebar switcher and settings admin UI are real | Yes | Invitation acceptance UX can be expanded further later |
-| Save and act on signals | Saved/bookmarked/ignored plus notes are implemented | Feed/detail UI supports these actions | Yes | Workflow stages remain intentionally deferred |
+| Save and act on signals | Saved/bookmarked/ignored, pipeline stages, assignment, next steps, and close-state tracking are implemented | Feed/detail UI supports real workflow updates backed by the API | Yes | Continue hardening with tests and QA |
 | Pricing and plans | Organization has a stored plan field, but no payment flow exists | Landing pricing is informational only; settings show active plan metadata | Partially | Keep pricing non-transactional until billing project starts |
 | Self-serve billing | No payment processor, subscription lifecycle, or invoice handling exists | No billing controls remain in signed-in UX | No claim made | Separate billing project required |
 
@@ -85,11 +85,18 @@ This document is the source of truth for two things:
 - Immediate alert evaluation respects both category and keyword targeting.
 - `lastTriggeredAt` remains visible in the UI when rules fire.
 
+### Signals and Workflow
+
+- Signals support `TO_REVIEW`, `IN_PROGRESS`, `OUTREACH`, `QUALIFIED`, `WON`, `LOST`, and `ARCHIVED`.
+- Signals can be assigned only to real members of the current workspace.
+- Signal detail supports a persisted next-step field.
+- Closed stages set close-state metadata and are reflected in dashboard metrics.
+
 ### Deferred
 
 - Billing and subscription automation
-- Rich pipeline stages beyond saved/bookmarked/ignored plus annotations
-- Invite email delivery and polished invitation acceptance flows beyond token-based registration
+- Invite email delivery hardening beyond the current SendGrid integration
+- Additional workflow automation such as reminders, SLAs, or stage-change notifications
 
 ## Commit Roadmap
 
@@ -120,7 +127,7 @@ This document is the source of truth for two things:
 
 ### Commit 7
 
-- Defer advanced pipeline stages and keep landing/signed-in messaging aligned to current saved/bookmarked/ignored workflow.
+- Deliver advanced signal workflow with stages, ownership, next steps, and dashboard alignment.
 
 ### Commit 8
 
@@ -140,4 +147,5 @@ This document is the source of truth for two things:
 - Role changes and removals are enforced by backend permissions.
 - Keyword and source edits persist and validate correctly.
 - Alert rules store categories and keywordIds and match against real signal data.
-- Landing page renders backend-sourced preview data and does not over-claim billing or advanced pipeline stages.
+- Landing page renders backend-sourced preview data and does not over-claim billing.
+- After schema changes, `yarn db:migrate` and `yarn db:generate` are run before TypeScript verification so Prisma types stay in sync with the code.

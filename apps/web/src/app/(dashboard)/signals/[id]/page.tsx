@@ -3,10 +3,9 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
-import { signalsApi } from '@/lib/api';
-import { CATEGORY_META, SOURCE_TYPE_META, getConfidenceColor, getConfidenceBg, formatDate, cn } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, Check, Bookmark, EyeOff, SendHorizonal, Lightbulb, FileText, Zap, User } from 'lucide-react';
-import Link from 'next/link';
+import { organizationsApi, signalsApi } from '@/lib/api';
+import { CATEGORY_META, SOURCE_TYPE_META, STAGE_META, getConfidenceColor, getConfidenceBg, formatDate, cn } from '@/lib/utils';
+import { ArrowLeft, ExternalLink, Check, Bookmark, EyeOff, SendHorizonal, Lightbulb, FileText, Zap, User, Workflow, UserRound, CalendarCheck } from 'lucide-react';
 
 export default function SignalDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -21,9 +20,29 @@ export default function SignalDetailPage() {
     enabled: !!currentOrgId && !!id,
   });
 
+  const { data: memberData } = useQuery({
+    queryKey: ['org-members', currentOrgId],
+    queryFn: () => organizationsApi.members(currentOrgId!),
+    enabled: !!currentOrgId,
+  });
+
   const updateStatus = useMutation({
     mutationFn: (status: string) => signalsApi.updateStatus(currentOrgId!, id, status),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['signal', currentOrgId, id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['signal', currentOrgId, id] });
+      qc.invalidateQueries({ queryKey: ['signals', currentOrgId] });
+      qc.invalidateQueries({ queryKey: ['dashboard', currentOrgId] });
+    },
+  });
+
+  const updateWorkflow = useMutation({
+    mutationFn: (data: { stage?: string; assigneeId?: string | null; nextStep?: string | null }) =>
+      signalsApi.updateWorkflow(currentOrgId!, id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['signal', currentOrgId, id] });
+      qc.invalidateQueries({ queryKey: ['signals', currentOrgId] });
+      qc.invalidateQueries({ queryKey: ['dashboard', currentOrgId] });
+    },
   });
 
   const addAnnotation = useMutation({
@@ -47,6 +66,7 @@ export default function SignalDetailPage() {
   );
 
   const cat = CATEGORY_META[signal.category || 'OTHER'] || CATEGORY_META.OTHER;
+  const stage = STAGE_META[signal.stage] || STAGE_META.TO_REVIEW;
   const sourceType = SOURCE_TYPE_META[signal.source?.type || ''];
 
   const actionBtn = (status: 'SAVED' | 'BOOKMARKED' | 'IGNORED', icon: any, label: string, activeClass: string) => {
@@ -81,6 +101,9 @@ export default function SignalDetailPage() {
             <span className={cn('inline-flex items-center text-xs font-semibold uppercase tracking-wide px-2 py-1 rounded border', cat.bg, cat.color)}>
               {cat.label}
             </span>
+            <span className={cn('inline-flex items-center text-xs font-semibold uppercase tracking-wide px-2 py-1 rounded border', stage.bg, stage.color)}>
+              {stage.label}
+            </span>
             {signal.source && (
               <span className="text-xs text-muted-foreground">{sourceType?.icon} {signal.source.name}</span>
             )}
@@ -100,6 +123,7 @@ export default function SignalDetailPage() {
         <div className="flex items-center gap-3 text-xs text-muted-foreground mb-4">
           {signal.authorHandle && <span>@{signal.authorHandle}</span>}
           <span>{formatDate(signal.publishedAt || signal.fetchedAt)}</span>
+          <span>{signal.assignee?.name || signal.assignee?.email || 'Unassigned'}</span>
           {signal.sourceUrl && (
             <a href={signal.sourceUrl} target="_blank" rel="noreferrer"
               className="flex items-center gap-1 text-primary hover:underline ml-auto">
@@ -113,6 +137,70 @@ export default function SignalDetailPage() {
           {actionBtn('SAVED', Check, 'Save', 'bg-green-400/10 border-green-400/30 text-green-400')}
           {actionBtn('BOOKMARKED', Bookmark, 'Bookmark', 'bg-amber-400/10 border-amber-400/30 text-amber-400')}
           {actionBtn('IGNORED', EyeOff, 'Ignore', 'bg-secondary border-border text-muted-foreground')}
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Workflow className="w-4 h-4 text-primary" />
+          <h2 className="text-sm font-semibold text-foreground">Workflow</h2>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <label className="space-y-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pipeline stage</span>
+            <select
+              value={signal.stage}
+              onChange={(e) => updateWorkflow.mutate({ stage: e.target.value })}
+              className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+            >
+              {Object.entries(STAGE_META).map(([value, meta]) => (
+                <option key={value} value={value}>{meta.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Owner</span>
+            <select
+              value={signal.assigneeId || ''}
+              onChange={(e) => updateWorkflow.mutate({ assigneeId: e.target.value || null })}
+              className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+            >
+              <option value="">Unassigned</option>
+              {(memberData?.members || []).map((member) => (
+                <option key={member.id} value={member.userId}>
+                  {member.user.name || member.user.email}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next step</label>
+          <input
+            defaultValue={signal.nextStep || ''}
+            onBlur={(e) => {
+              const value = e.target.value.trim();
+              if (value !== (signal.nextStep || '')) {
+                updateWorkflow.mutate({ nextStep: value || null });
+              }
+            }}
+            placeholder="Define the next concrete action for this signal"
+            className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
+          />
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <UserRound className="w-3.5 h-3.5" />
+            Owner: {signal.assignee?.name || signal.assignee?.email || 'None'}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <CalendarCheck className="w-3.5 h-3.5" />
+            {signal.closedAt ? `Closed ${formatDate(signal.closedAt)}` : 'Open opportunity'}
+          </span>
         </div>
       </div>
 

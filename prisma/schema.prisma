@@ -34,6 +34,16 @@ enum SignalStatus {
   BOOKMARKED
 }
 
+enum SignalStage {
+  TO_REVIEW
+  IN_PROGRESS
+  OUTREACH
+  QUALIFIED
+  WON
+  LOST
+  ARCHIVED
+}
+
 enum SourceType {
   REDDIT
   RSS
@@ -70,6 +80,7 @@ enum AuditAction {
   SIGNAL_SAVED
   SIGNAL_IGNORED
   SIGNAL_BOOKMARKED
+  SIGNAL_WORKFLOW_UPDATED
   ORG_SETTINGS_UPDATED
 }
 
@@ -106,6 +117,7 @@ model User {
   memberships   OrganizationMember[]
   sessions      Session[]
   annotations   SignalAnnotation[]
+  assignedSignals Signal[] @relation("SignalAssignee")
   auditLogs     AuditLog[]
 }
 
@@ -213,18 +225,25 @@ model Signal {
 
   // User actions
   status           SignalStatus    @default(NEW)
+  stage            SignalStage     @default(TO_REVIEW)
+  assigneeId       String?
+  nextStep         String?
+  closedAt         DateTime?
   updatedAt        DateTime        @updatedAt
 
   organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   source           Source          @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  assignee         User?           @relation("SignalAssignee", fields: [assigneeId], references: [id])
   keywords         SignalKeyword[]
   annotations      SignalAnnotation[]
 
   @@unique([organizationId, sourceId, externalId])
   @@index([organizationId, status])
+  @@index([organizationId, stage])
   @@index([organizationId, category])
   @@index([organizationId, confidenceScore])
   @@index([organizationId, fetchedAt])
+  @@index([organizationId, assigneeId])
 }
 
 model SignalKeyword {

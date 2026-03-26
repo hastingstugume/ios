@@ -11,7 +11,7 @@ A production-ready B2B SaaS platform that continuously discovers, classifies, an
 - **Scores** each signal with a 0–100 confidence score
 - **Surfaces** signals in a filterable, paginated opportunity feed
 - **Alerts** your team via email when high-confidence signals appear
-- **Tracks** your pipeline with save/bookmark/ignore/annotate actions
+- **Tracks** your pipeline with save/bookmark/ignore actions, workflow stages, ownership, next steps, and annotations
 
 ---
 
@@ -101,6 +101,8 @@ yarn db:generate
 yarn db:seed
 ```
 
+If you pull schema changes later, rerun `yarn db:migrate` and `yarn db:generate` before starting the API so Prisma types stay current.
+
 ### 4. Start the apps
 
 ```bash
@@ -170,7 +172,7 @@ yarn db:generate      # Regenerate Prisma client after schema changes
 | `User` + `OrganizationMember` | Auth + RBAC (OWNER/ADMIN/ANALYST/VIEWER) |
 | `Keyword` | Phrases to monitor |
 | `Source` | Reddit subreddits or RSS feeds |
-| `Signal` | Discovered + classified opportunities |
+| `Signal` | Discovered + classified opportunities with status, workflow stage, assignee, and next-step tracking |
 | `AlertRule` | Notification rules |
 | `AuditLog` | Security audit trail |
 
@@ -196,10 +198,13 @@ GET    /api/v1/orgs/:orgId/signals          → list with filters
 GET    /api/v1/orgs/:orgId/signals/stats    → aggregated stats
 GET    /api/v1/orgs/:orgId/signals/:id      → detail
 PATCH  /api/v1/orgs/:orgId/signals/:id/status  → save/ignore/bookmark
+PATCH  /api/v1/orgs/:orgId/signals/:id/workflow → update stage, owner, next step
 POST   /api/v1/orgs/:orgId/signals/:id/annotations → add note
 ```
 
-**Filter params:** `status`, `category`, `minConfidence`, `sourceId`, `keywordId`, `search`, `dateFrom`, `dateTo`, `page`, `limit`
+**Filter params:** `status`, `stage`, `category`, `minConfidence`, `sourceId`, `keywordId`, `assigneeId`, `search`, `dateFrom`, `dateTo`, `page`, `limit`
+
+**Workflow stages:** `TO_REVIEW` | `IN_PROGRESS` | `OUTREACH` | `QUALIFIED` | `WON` | `LOST` | `ARCHIVED`
 
 ### Keywords, Sources, Alerts, Dashboard
 
@@ -279,6 +284,7 @@ DATABASE_URL=postgresql://...
 REDIS_URL=redis://...
 SESSION_SECRET=<random-64-char-string>
 FRONTEND_URL=https://your-domain.com
+NEXT_PUBLIC_APP_URL=https://your-domain.com
 AI_API_KEY=sk-...
 
 # 2. Deploy DB migrations

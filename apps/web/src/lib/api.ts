@@ -38,6 +38,8 @@ export const signalsApi = {
   },
   get: (orgId: string, id: string) => api.get<Signal>(`/orgs/${orgId}/signals/${id}`),
   updateStatus: (orgId: string, id: string, status: string) => api.patch(`/orgs/${orgId}/signals/${id}/status`, { status }),
+  updateWorkflow: (orgId: string, id: string, data: { stage?: string; assigneeId?: string | null; nextStep?: string | null }) =>
+    api.patch<Signal>(`/orgs/${orgId}/signals/${id}/workflow`, data),
   addAnnotation: (orgId: string, id: string, note: string) => api.post(`/orgs/${orgId}/signals/${id}/annotations`, { note }),
   stats: (orgId: string) => api.get<any>(`/orgs/${orgId}/signals/stats`),
 };
@@ -111,7 +113,9 @@ export interface Signal {
   originalText: string; normalizedText: string | null; publishedAt: string | null;
   fetchedAt: string; category: string | null; confidenceScore: number | null;
   whyItMatters: string | null; suggestedOutreach: string | null; status: string;
+  stage: string; assigneeId?: string | null; nextStep?: string | null; closedAt?: string | null;
   source?: { id: string; name: string; type: string };
+  assignee?: Pick<User, 'id' | 'name' | 'email' | 'avatarUrl'> | null;
   keywords?: Array<{ keyword: Keyword }>;
   annotations?: Annotation[];
   _count?: { annotations: number };
