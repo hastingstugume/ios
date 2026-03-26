@@ -3,10 +3,14 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class OrganizationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService,
+  ) {}
 
   async findOne(id: string) {
     const org = await this.prisma.organization.findUnique({
@@ -64,6 +68,11 @@ export class OrganizationsService {
   async inviteMember(orgId: string, actorUserId: string, actorRole: UserRole, email: string, role: UserRole) {
     this.assertAdmin(actorRole);
     this.assertRoleAssignment(actorRole, role);
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { id: true, name: true },
+    });
+    if (!organization) throw new NotFoundException('Organization not found');
 
     const normalizedEmail = email.trim().toLowerCase();
     const existingInvitation = await this.prisma.invitation.findFirst({
@@ -95,6 +104,7 @@ export class OrganizationsService {
           metadata: { email: normalizedEmail, role, membershipCreated: true },
         },
       });
+      await this.notifications.sendWorkspaceAccessGrantedEmail(normalizedEmail, organization.name, role);
       return { type: 'member', member };
     }
 
@@ -115,6 +125,7 @@ export class OrganizationsService {
         metadata: { email: normalizedEmail, role, invitationId: invitation.id, invitationToken: invitation.token },
       },
     });
+    await this.notifications.sendWorkspaceInvitationEmail(normalizedEmail, organization.name, role, invitation.token);
     return { type: 'invitation', invitation };
   }
 

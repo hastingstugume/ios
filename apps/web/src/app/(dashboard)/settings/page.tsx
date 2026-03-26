@@ -211,7 +211,7 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary px-4 py-4">
             <div>
               <p className="text-sm font-medium text-foreground">Workspace members and invitations</p>
-              <p className="text-sm text-muted-foreground mt-1">Invite teammates and adjust roles without leaving the member list.</p>
+              <p className="text-sm text-muted-foreground mt-1">Invite teammates by email and adjust roles without leaving the member list.</p>
             </div>
             {canManageWorkspace && (
               <button
@@ -262,7 +262,7 @@ export default function SettingsPage() {
             <div className="rounded-xl border border-border bg-secondary/70 p-4">
               <div className="flex items-center gap-2 mb-3">
                 <LinkIcon className="w-4 h-4 text-primary" />
-                <h3 className="text-sm font-semibold text-foreground">Pending invitation links</h3>
+                <h3 className="text-sm font-semibold text-foreground">Pending invitations</h3>
               </div>
               <div className="space-y-3">
                 {invitations.map((invitation: Invitation) => (
@@ -271,14 +271,14 @@ export default function SettingsPage() {
                       <div>
                         <p className="text-sm text-foreground">{invitation.email}</p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {invitation.role} · expires {formatDate(invitation.expiresAt)}
+                          {invitation.role} · invite email sent · expires {formatDate(invitation.expiresAt)}
                         </p>
                       </div>
                       <button
                         onClick={() => copyInviteLink(invitation)}
                         className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                       >
-                        {copiedToken === invitation.id ? 'Copied link' : 'Copy invite link'}
+                        {copiedToken === invitation.id ? 'Copied link' : 'Copy fallback link'}
                       </button>
                     </div>
                   </div>
@@ -293,7 +293,7 @@ export default function SettingsPage() {
         open={showInviteModal}
         onClose={() => { setShowInviteModal(false); setInvite({ email: '', role: 'ANALYST' }); }}
         title="Add teammate"
-        description="Invite a teammate into the current workspace without leaving the member list."
+        description="Send a workspace invite by email without leaving the member list."
       >
         <div className="space-y-4">
           <input
@@ -316,7 +316,7 @@ export default function SettingsPage() {
               onClick={() => inviteMutation.mutate()}
               className="rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
             >
-              {inviteMutation.isPending ? 'Inviting…' : 'Send invite'}
+              {inviteMutation.isPending ? 'Sending…' : 'Send invite'}
             </button>
             <button
               onClick={() => { setShowInviteModal(false); setInvite({ email: '', role: 'ANALYST' }); }}
