@@ -1,38 +1,56 @@
 'use client';
-import { useRouter } from 'next/navigation';
+import { useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { authApi } from '@/lib/api';
-import { Radar, ArrowRight } from 'lucide-react';
+import { Radar, ArrowRight, Link2 } from 'lucide-react';
 
 const schema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
   password: z.string().min(8, 'At least 8 characters'),
-  organizationName: z.string().min(2),
+  organizationName: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
 
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const invitationToken = searchParams.get('invitationToken') || undefined;
   const qc = useQueryClient();
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({ resolver: zodResolver(schema) });
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({ resolver: zodResolver(schema) });
+  const organizationName = watch('organizationName');
 
   const signup = useMutation({
-    mutationFn: authApi.register,
+    mutationFn: (data: FormData) => authApi.register({
+      ...data,
+      organizationName: invitationToken ? undefined : data.organizationName,
+      invitationToken,
+    }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['auth', 'me'] }); router.push('/dashboard'); },
   });
 
-  const fields = [
-    { id: 'name', label: 'Your name', placeholder: 'Alice Thornton', type: 'text' },
-    { id: 'organizationName', label: 'Organization name', placeholder: 'Acme Growth Agency', type: 'text' },
-    { id: 'email', label: 'Work email', placeholder: 'alice@company.io', type: 'email' },
-    { id: 'password', label: 'Password', placeholder: '••••••••', type: 'password' },
-  ] as const;
+  const fields = useMemo(() => {
+    const base = [
+      { id: 'name', label: 'Your name', placeholder: 'Alice Thornton', type: 'text' },
+      { id: 'email', label: 'Work email', placeholder: 'alice@company.io', type: 'email' },
+      { id: 'password', label: 'Password', placeholder: '••••••••', type: 'password' },
+    ] as const;
+
+    if (invitationToken) return base;
+
+    return [
+      base[0],
+      { id: 'organizationName', label: 'Organization name', placeholder: 'Acme Growth Agency', type: 'text' },
+      base[1],
+      base[2],
+    ] as const;
+  }, [invitationToken]);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -42,9 +60,20 @@ export default function RegisterPage() {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 mb-4">
             <Radar className="w-6 h-6 text-primary" />
           </div>
-          <h1 className="text-xl font-semibold">Create your workspace</h1>
-          <p className="text-sm text-muted-foreground mt-1">Start discovering opportunities today</p>
+          <h1 className="text-xl font-semibold">{invitationToken ? 'Join your workspace' : 'Create your workspace'}</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {invitationToken ? 'Complete your account to accept the workspace invitation' : 'Start discovering opportunities today'}
+          </p>
         </div>
+
+        {invitationToken && (
+          <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 flex items-start gap-2">
+            <Link2 className="w-4 h-4 text-primary mt-0.5" />
+            <p className="text-xs text-primary/80">
+              This invite link will add your account to an existing workspace after registration.
+            </p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit((d) => signup.mutate(d))} className="space-y-4">
           {fields.map(({ id, label, placeholder, type }) => (
@@ -68,10 +97,10 @@ export default function RegisterPage() {
 
           <button
             type="submit"
-            disabled={signup.isPending}
+            disabled={signup.isPending || (!invitationToken && !organizationName?.trim())}
             className="w-full bg-primary text-primary-foreground rounded-lg py-2.5 text-sm font-medium flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
-            {signup.isPending ? 'Creating…' : (<>Create workspace <ArrowRight className="w-4 h-4" /></>)}
+            {signup.isPending ? 'Creating…' : (<>{invitationToken ? 'Join workspace' : 'Get started'} <ArrowRight className="w-4 h-4" /></>)}
           </button>
         </form>
 

@@ -1,9 +1,9 @@
-import { Controller, Post, Get, Body, Req, Res, UseGuards, HttpCode } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Req, Res, UseGuards, HttpCode } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { AuthGuard } from '../common/guards/auth.guard';
-import { RegisterDto, LoginDto } from './auth.dto';
+import { RegisterDto, LoginDto, UpdateProfileDto, ChangePasswordDto } from './auth.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -13,7 +13,7 @@ export class AuthController {
   @Post('register')
   @ApiOperation({ summary: 'Register and create organization' })
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
-    const session = await this.auth.register(dto.email, dto.password, dto.name, dto.organizationName);
+    const session = await this.auth.register(dto.email, dto.password, dto.name, dto.organizationName, dto.invitationToken);
     this.setSessionCookie(res, session.token, session.expiresAt);
     return { success: true, expiresAt: session.expiresAt };
   }
@@ -43,6 +43,20 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current user and memberships' })
   async me(@Req() req: any) {
     return this.auth.getMe(req.user.id);
+  }
+
+  @Patch('me')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Update current user profile' })
+  async updateMe(@Req() req: any, @Body() dto: UpdateProfileDto) {
+    return this.auth.updateProfile(req.user.id, dto.name);
+  }
+
+  @Patch('password')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Change current user password' })
+  async changePassword(@Req() req: any, @Body() dto: ChangePasswordDto) {
+    return this.auth.changePassword(req.user.id, dto.currentPassword, dto.newPassword);
   }
 
   private setSessionCookie(res: Response, token: string, expiresAt: Date) {

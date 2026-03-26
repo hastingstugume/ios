@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import { UserRole } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -12,32 +13,60 @@ export class AuthService {
     private config: ConfigService,
   ) {}
 
-  async register(email: string, password: string, name: string, orgName: string) {
+  async register(email: string, password: string, name: string, orgName?: string, invitationToken?: string) {
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) throw new ConflictException('Email already registered');
+    if (!orgName && !invitationToken) throw new BadRequestException('Organization name or invitation token is required');
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const slug = orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-      + '-' + uuidv4().slice(0, 6);
-
-    const [user, org] = await this.prisma.$transaction(async (tx) => {
-      const u = await tx.user.create({
+    const result = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
         data: { email, passwordHash, name, emailVerified: true },
       });
-      const o = await tx.organization.create({
-        data: { name: orgName, slug },
+
+      if (invitationToken) {
+        const invitation = await tx.invitation.findUnique({
+          where: { token: invitationToken },
+          include: { organization: true },
+        });
+
+        if (!invitation || invitation.acceptedAt || invitation.expiresAt < new Date()) {
+          throw new BadRequestException('Invitation is invalid or expired');
+        }
+
+        if (invitation.email.toLowerCase() !== email.toLowerCase()) {
+          throw new BadRequestException('Invitation email does not match this account');
+        }
+
+        await tx.organizationMember.create({
+          data: { userId: user.id, organizationId: invitation.organizationId, role: invitation.role },
+        });
+        await tx.invitation.update({
+          where: { id: invitation.id },
+          data: { acceptedAt: new Date() },
+        });
+
+        return { user, org: invitation.organization };
+      }
+
+      const safeOrgName = orgName!.trim();
+      const slug = safeOrgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+        + '-' + uuidv4().slice(0, 6);
+
+      const org = await tx.organization.create({
+        data: { name: safeOrgName, slug },
       });
       await tx.organizationMember.create({
-        data: { userId: u.id, organizationId: o.id, role: 'OWNER' },
+        data: { userId: user.id, organizationId: org.id, role: UserRole.OWNER },
       });
-      return [u, o];
+      return { user, org };
     });
 
     await this.prisma.auditLog.create({
-      data: { organizationId: org.id, userId: user.id, action: 'LOGIN' },
+      data: { organizationId: result.org.id, userId: result.user.id, action: 'LOGIN' },
     });
 
-    return this.createSession(user.id);
+    return this.createSession(result.user.id);
   }
 
   async login(email: string, password: string) {
@@ -88,6 +117,34 @@ export class AuthService {
       include: { organization: true },
     });
     return { user, memberships };
+  }
+
+  async updateProfile(userId: string, name: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { name },
+      select: { id: true, email: true, name: true, avatarUrl: true, createdAt: true },
+    });
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user?.passwordHash) throw new UnauthorizedException('Password change unavailable');
+
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) throw new UnauthorizedException('Current password is incorrect');
+
+    if (currentPassword === newPassword) {
+      throw new BadRequestException('New password must be different');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+
+    return { success: true };
   }
 
   private async createSession(userId: string) {

@@ -2,6 +2,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authApi, type User, type Membership } from '@/lib/api';
 import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 
 export function useAuth() {
   const { data, isLoading, error } = useQuery({
@@ -13,23 +14,48 @@ export function useAuth() {
 
   const qc = useQueryClient();
   const router = useRouter();
+  const [selectedOrgId, setSelectedOrgIdState] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = window.localStorage.getItem('ios:selected-org-id');
+    if (saved) setSelectedOrgIdState(saved);
+  }, []);
+
+  const memberships = data?.memberships || [];
+  const currentMembership: Membership | undefined = useMemo(() => {
+    if (!memberships.length) return undefined;
+    return memberships.find((membership) => membership.organization.id === selectedOrgId) || memberships[0];
+  }, [memberships, selectedOrgId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const nextOrgId = currentMembership?.organization?.id;
+    if (!nextOrgId) return;
+    window.localStorage.setItem('ios:selected-org-id', nextOrgId);
+    if (selectedOrgId !== nextOrgId) setSelectedOrgIdState(nextOrgId);
+  }, [currentMembership, selectedOrgId]);
 
   const logout = useMutation({
     mutationFn: authApi.logout,
-    onSuccess: () => { qc.clear(); router.push('/login'); },
+    onSuccess: () => {
+      if (typeof window !== 'undefined') window.localStorage.removeItem('ios:selected-org-id');
+      qc.clear();
+      router.push('/login');
+    },
   });
-
-  const currentMembership: Membership | undefined = data?.memberships?.[0];
 
   return {
     user: data?.user as User | undefined,
-    memberships: data?.memberships || [],
+    memberships,
     currentOrg: currentMembership?.organization,
     currentOrgId: currentMembership?.organization?.id,
     role: currentMembership?.role,
+    setCurrentOrgId: setSelectedOrgIdState,
     isLoading,
     isAuthenticated: !!data?.user,
     logout: logout.mutate,
+    error,
   };
 }
 

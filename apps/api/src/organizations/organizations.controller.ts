@@ -1,14 +1,24 @@
 // organizations.controller.ts
-import { Controller, Get, Patch, Param, Body, Query, Req, UseGuards, DefaultValuePipe, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, Req, UseGuards, DefaultValuePipe, ParseIntPipe } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { OrganizationsService } from './organizations.service';
 import { AuthGuard } from '../common/guards/auth.guard';
 import { OrgMemberGuard } from '../common/guards/org-member.guard';
-import { IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsEnum, IsOptional, IsString } from 'class-validator';
+import { UserRole } from '@prisma/client';
 
 class UpdateOrgDto {
   @IsOptional() @IsString() name?: string;
   @IsOptional() @IsString() logoUrl?: string;
+}
+
+class InviteMemberDto {
+  @IsEmail() email!: string;
+  @IsEnum(UserRole) role!: UserRole;
+}
+
+class UpdateMemberDto {
+  @IsEnum(UserRole) role!: UserRole;
 }
 
 @ApiTags('Organizations')
@@ -20,7 +30,7 @@ export class OrganizationsController {
   @Get() findOne(@Param('orgId') orgId: string) { return this.orgs.findOne(orgId); }
 
   @Patch() update(@Param('orgId') orgId: string, @Body() dto: UpdateOrgDto, @Req() req: any) {
-    return this.orgs.update(orgId, req.user.id, dto);
+    return this.orgs.update(orgId, req.user.id, req.membership?.role, dto);
   }
 
   @Get('audit-log')
@@ -30,5 +40,30 @@ export class OrganizationsController {
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
   ) {
     return this.orgs.getAuditLog(orgId, page, limit);
+  }
+
+  @Get('members')
+  listMembers(@Param('orgId') orgId: string) {
+    return this.orgs.listMembers(orgId);
+  }
+
+  @Post('members')
+  inviteMember(@Param('orgId') orgId: string, @Body() dto: InviteMemberDto, @Req() req: any) {
+    return this.orgs.inviteMember(orgId, req.user.id, req.membership?.role, dto.email, dto.role);
+  }
+
+  @Patch('members/:memberId')
+  updateMember(
+    @Param('orgId') orgId: string,
+    @Param('memberId') memberId: string,
+    @Body() dto: UpdateMemberDto,
+    @Req() req: any,
+  ) {
+    return this.orgs.updateMemberRole(orgId, memberId, req.user.id, req.membership?.role, dto.role);
+  }
+
+  @Delete('members/:memberId')
+  removeMember(@Param('orgId') orgId: string, @Param('memberId') memberId: string, @Req() req: any) {
+    return this.orgs.removeMember(orgId, memberId, req.user.id, req.membership?.role);
   }
 }
