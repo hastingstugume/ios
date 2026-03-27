@@ -1,5 +1,5 @@
 'use client';
-import { useMemo } from 'react';
+import { Suspense, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
@@ -18,7 +18,7 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-export default function RegisterPage() {
+function RegisterPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const invitationToken = searchParams.get('invitationToken') || undefined;
@@ -110,5 +110,13 @@ export default function RegisterPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+      <RegisterPageContent />
+    </Suspense>
   );
 }

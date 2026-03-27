@@ -1,6 +1,6 @@
 'use client';
 import { useState, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { signalsApi, keywordsApi, sourcesApi, organizationsApi } from '@/lib/api';
 import { SignalCard } from '@/components/signals/SignalCard';
@@ -86,7 +86,7 @@ export default function FeedPage() {
       search: filters.search || undefined,
     }),
     enabled: !!currentOrgId,
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 
   const { data: sources } = useQuery({

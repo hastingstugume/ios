@@ -1,7 +1,7 @@
 // src/signals/signals.service.ts
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { SignalStatus, SignalCategory, SignalStage, Prisma } from '@prisma/client';
+import { SignalStatus, SignalCategory, SignalStage, Prisma, AuditAction } from '@prisma/client';
 
 export interface SignalFilters {
   status?: SignalStatus;
@@ -100,29 +100,31 @@ export class SignalsService {
     const signal = await this.prisma.signal.findFirst({ where: { id, organizationId: orgId } });
     if (!signal) throw new NotFoundException('Signal not found');
 
-    const actionMap: Record<SignalStatus, any> = {
+    const actionMap: Partial<Record<SignalStatus, AuditAction>> = {
       SAVED: 'SIGNAL_SAVED',
       IGNORED: 'SIGNAL_IGNORED',
       BOOKMARKED: 'SIGNAL_BOOKMARKED',
-      NEW: 'SIGNAL_SAVED',
     };
 
-    const [updated] = await Promise.all([
-      this.prisma.signal.update({
-        where: { id },
-        data: {
-          status,
-          ...(status === 'IGNORED'
-            ? { stage: 'ARCHIVED', closedAt: new Date() }
-            : status === 'NEW'
-              ? { stage: 'TO_REVIEW', assigneeId: null, nextStep: null, closedAt: null }
-              : {}),
-        },
-      }),
-      this.prisma.auditLog.create({
-        data: { organizationId: orgId, userId, action: actionMap[status], metadata: { signalId: id } },
-      }),
-    ]);
+    const updatePromise = this.prisma.signal.update({
+      where: { id },
+      data: {
+        status,
+        ...(status === 'IGNORED'
+          ? { stage: 'ARCHIVED', closedAt: new Date() }
+          : status === 'NEW'
+            ? { stage: 'TO_REVIEW', assigneeId: null, nextStep: null, closedAt: null }
+            : {}),
+      },
+    });
+
+    const auditPromise = actionMap[status]
+      ? this.prisma.auditLog.create({
+          data: { organizationId: orgId, userId, action: actionMap[status]!, metadata: { signalId: id } },
+        })
+      : Promise.resolve(null);
+
+    const [updated] = await Promise.all([updatePromise, auditPromise]);
     return updated;
   }
 

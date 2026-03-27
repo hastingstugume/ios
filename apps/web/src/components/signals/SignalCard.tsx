@@ -110,6 +110,7 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
         <div className="flex items-center gap-1 flex-wrap">
           <select
             value={signal.stage}
+            disabled={updateWorkflow.isPending}
             onChange={(e) => updateWorkflow.mutate(e.target.value)}
             className="mr-2 rounded-md border border-border bg-secondary px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
           >

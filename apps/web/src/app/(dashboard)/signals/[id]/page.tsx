@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
@@ -13,6 +13,7 @@ export default function SignalDetailPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const [note, setNote] = useState('');
+  const [nextStepDraft, setNextStepDraft] = useState('');
 
   const { data: signal, isLoading } = useQuery({
     queryKey: ['signal', currentOrgId, id],
@@ -52,6 +53,10 @@ export default function SignalDetailPage() {
       qc.invalidateQueries({ queryKey: ['signal', currentOrgId, id] });
     },
   });
+
+  useEffect(() => {
+    setNextStepDraft(signal?.nextStep || '');
+  }, [signal?.nextStep]);
 
   if (isLoading) return (
     <div className="p-6 space-y-4 animate-pulse max-w-3xl">
@@ -151,6 +156,7 @@ export default function SignalDetailPage() {
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pipeline stage</span>
             <select
               value={signal.stage}
+              disabled={updateWorkflow.isPending}
               onChange={(e) => updateWorkflow.mutate({ stage: e.target.value })}
               className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
             >
@@ -164,6 +170,7 @@ export default function SignalDetailPage() {
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Owner</span>
             <select
               value={signal.assigneeId || ''}
+              disabled={updateWorkflow.isPending}
               onChange={(e) => updateWorkflow.mutate({ assigneeId: e.target.value || null })}
               className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
             >
@@ -180,7 +187,9 @@ export default function SignalDetailPage() {
         <div className="mt-4 space-y-2">
           <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next step</label>
           <input
-            defaultValue={signal.nextStep || ''}
+            value={nextStepDraft}
+            onChange={(e) => setNextStepDraft(e.target.value)}
+            disabled={updateWorkflow.isPending}
             onBlur={(e) => {
               const value = e.target.value.trim();
               if (value !== (signal.nextStep || '')) {
@@ -193,6 +202,7 @@ export default function SignalDetailPage() {
         </div>
 
         <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
+          {updateWorkflow.isPending ? <span>Saving workflow…</span> : null}
           <span className="inline-flex items-center gap-1">
             <UserRound className="w-3.5 h-3.5" />
             Owner: {signal.assignee?.name || signal.assignee?.email || 'None'}
