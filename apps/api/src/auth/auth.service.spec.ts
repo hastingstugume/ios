@@ -5,12 +5,16 @@ import { ConfigService } from '@nestjs/config';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 
 const mockPrisma: any = {
-  user: { findUnique: jest.fn(), create: jest.fn() },
+  user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
   organization: { create: jest.fn() },
   organizationMember: { create: jest.fn(), findFirst: jest.fn() },
   session: { create: jest.fn(), findUnique: jest.fn(), deleteMany: jest.fn(), delete: jest.fn() },
   auditLog: { create: jest.fn() },
-  $transaction: jest.fn((fn: (tx: any) => unknown) => fn(mockPrisma)),
+  $transaction: jest.fn((arg: any) => {
+    if (typeof arg === 'function') return arg(mockPrisma);
+    if (Array.isArray(arg)) return Promise.all(arg);
+    return arg;
+  }),
 };
 
 describe('AuthService', () => {
@@ -51,5 +55,18 @@ describe('AuthService', () => {
     const result = await service.validateSession('tok');
     expect(result).toBeNull();
     expect(mockPrisma.session.delete).toHaveBeenCalled();
+  });
+
+  it('should revoke active sessions after password change', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      passwordHash: await require('bcryptjs').hash('current-pass', 1),
+    });
+    mockPrisma.user.update.mockResolvedValue({ id: 'u1' });
+    mockPrisma.session.deleteMany.mockResolvedValue({ count: 2 });
+
+    await expect(service.changePassword('u1', 'current-pass', 'new-password-123')).resolves.toEqual({ success: true });
+    expect(mockPrisma.user.update).toHaveBeenCalled();
+    expect(mockPrisma.session.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u1' } });
   });
 });
