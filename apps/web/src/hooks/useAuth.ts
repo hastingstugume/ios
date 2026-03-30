@@ -2,7 +2,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authApi, type User, type Membership } from '@/lib/api';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 export function useAuth() {
   const { data, isLoading, error } = useQuery({
@@ -15,6 +15,7 @@ export function useAuth() {
   const qc = useQueryClient();
   const router = useRouter();
   const [selectedOrgId, setSelectedOrgIdState] = useState<string | null>(null);
+  const handledExpiredSessionRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -38,12 +39,20 @@ export function useAuth() {
 
   const logout = useMutation({
     mutationFn: authApi.logout,
-    onSuccess: () => {
+    onSettled: () => {
       if (typeof window !== 'undefined') window.localStorage.removeItem('ios:selected-org-id');
       qc.clear();
-      router.push('/login');
+      router.replace('/');
     },
   });
+
+  useEffect(() => {
+    const status = typeof error === 'object' && error && 'status' in error ? Number((error as any).status) : null;
+    if (status !== 401 || handledExpiredSessionRef.current || logout.isPending) return;
+
+    handledExpiredSessionRef.current = true;
+    logout.mutate();
+  }, [error, logout]);
 
   return {
     user: data?.user as User | undefined,
@@ -66,7 +75,7 @@ export function useRequireAuth() {
   const auth = useAuth();
 
   if (!auth.isLoading && !auth.isAuthenticated) {
-    router.push('/login');
+    router.push('/');
   }
 
   return auth;

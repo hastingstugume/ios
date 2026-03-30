@@ -15,7 +15,7 @@ export default function OnboardingPage() {
   const [workspaceName, setWorkspaceName] = useState('');
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) router.replace('/login');
+    if (!isLoading && !isAuthenticated) router.replace('/');
     if (!isLoading && isAuthenticated && !emailVerified) router.replace('/verify-email');
     if (!isLoading && isAuthenticated && onboardingCompleted) router.replace('/dashboard');
   }, [isLoading, isAuthenticated, emailVerified, onboardingCompleted, router]);

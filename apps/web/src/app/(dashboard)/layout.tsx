@@ -11,7 +11,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) router.replace('/login');
+    if (!isLoading && !isAuthenticated) router.replace('/');
     if (!isLoading && isAuthenticated && !emailVerified) router.replace('/verify-email');
     if (!isLoading && isAuthenticated && emailVerified && !onboardingCompleted) router.replace('/onboarding');
   }, [isLoading, isAuthenticated, emailVerified, onboardingCompleted, router]);

@@ -104,7 +104,6 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(200)
-  @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Logout' })
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const token = req.cookies?.session_token;
