@@ -689,8 +689,8 @@ export default function SettingsPage() {
                       If you ever need to switch this off, you’ll be asked to confirm with a current authenticator code or one of your backup codes.
                     </p>
                   </div>
-                  <div className="rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-3">
-                    <p className="text-sm text-amber-200">
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-3">
+                    <p className="text-sm text-amber-700 dark:text-amber-200">
                       Turning MFA off removes the extra protection on password sign-in. Only do this if you still have another safe way to protect the account.
                     </p>
                   </div>
@@ -735,8 +735,8 @@ export default function SettingsPage() {
         size="compact"
       >
         <div className="space-y-4">
-          <div className="rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-3">
-            <p className="text-sm text-amber-200">
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-3">
+            <p className="text-sm text-amber-700 dark:text-amber-200">
               Disabling MFA means your account will go back to password-only sign-in. Make sure this is intentional before you continue.
             </p>
           </div>
