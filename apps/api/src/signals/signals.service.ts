@@ -18,6 +18,16 @@ export interface SignalFilters {
   limit?: number;
 }
 
+type SignalForRanking = {
+  confidenceScore: number | null;
+  category: SignalCategory | null;
+  fetchedAt: Date;
+  publishedAt: Date | null;
+  status: SignalStatus;
+  source?: { type?: string | null } | null;
+  keywords?: Array<unknown>;
+};
+
 export interface UpdateSignalWorkflowInput {
   stage?: SignalStage;
   assigneeId?: string | null;
@@ -31,7 +41,7 @@ export class SignalsService {
   async findAll(orgId: string, filters: SignalFilters) {
     const page = Math.max(1, filters.page || 1);
     const limit = Math.min(100, Math.max(1, filters.limit || 20));
-    const skip = (page - 1) * limit;
+    const candidateLimit = Math.min(300, Math.max(limit * 4, page * limit * 2));
 
     const where: Prisma.SignalWhereInput = {
       organizationId: orgId,
@@ -60,9 +70,8 @@ export class SignalsService {
     const [data, total] = await Promise.all([
       this.prisma.signal.findMany({
         where,
-        skip,
-        take: limit,
-        orderBy: [{ confidenceScore: 'desc' }, { fetchedAt: 'desc' }],
+        take: candidateLimit,
+        orderBy: [{ fetchedAt: 'desc' }, { confidenceScore: 'desc' }],
         include: {
           source: { select: { id: true, name: true, type: true } },
           keywords: { include: { keyword: { select: { id: true, phrase: true } } } },
@@ -73,8 +82,17 @@ export class SignalsService {
       this.prisma.signal.count({ where }),
     ]);
 
+    const rankedData = data
+      .map((signal) => this.enrichSignal(signal))
+      .sort((left, right) => {
+        const scoreDiff = (right.priorityScore ?? 0) - (left.priorityScore ?? 0);
+        if (scoreDiff !== 0) return scoreDiff;
+        return new Date(right.fetchedAt).getTime() - new Date(left.fetchedAt).getTime();
+      });
+    const skip = (page - 1) * limit;
+
     return {
-      data,
+      data: rankedData.slice(skip, skip + limit),
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -93,7 +111,7 @@ export class SignalsService {
       },
     });
     if (!signal) throw new NotFoundException('Signal not found');
-    return signal;
+    return this.enrichSignal(signal);
   }
 
   async updateStatus(orgId: string, id: string, userId: string, status: SignalStatus) {
@@ -220,5 +238,122 @@ export class SignalsService {
     ]);
 
     return { total, byCategory, byStatus, byStage, highConfidence, recent };
+  }
+
+  private enrichSignal<T extends SignalForRanking>(signal: T) {
+    const priorityScore = this.calculatePriorityScore(signal);
+    return {
+      ...signal,
+      priorityScore,
+      rankingReasons: this.buildRankingReasons(signal, priorityScore),
+      freshnessLabel: this.getFreshnessLabel(signal.fetchedAt, signal.publishedAt),
+    };
+  }
+
+  private calculatePriorityScore(signal: SignalForRanking) {
+    const confidence = signal.confidenceScore ?? 0;
+    const keywordCount = signal.keywords?.length ?? 0;
+    const hoursOld = Math.max(
+      0,
+      (Date.now() - new Date(signal.publishedAt || signal.fetchedAt).getTime()) / (1000 * 60 * 60),
+    );
+    const freshnessBoost = hoursOld <= 6 ? 18 : hoursOld <= 24 ? 12 : hoursOld <= 72 ? 7 : hoursOld <= 168 ? 3 : 0;
+    const keywordBoost = Math.min(12, keywordCount * 4);
+    const categoryBoost: Partial<Record<SignalCategory, number>> = {
+      BUYING_INTENT: 12,
+      RECOMMENDATION_REQUEST: 10,
+      PAIN_COMPLAINT: 8,
+      HIRING_SIGNAL: 7,
+      PARTNERSHIP_INQUIRY: 6,
+      MARKET_TREND: 4,
+      OTHER: 0,
+    };
+    const sourceBoost: Partial<Record<string, number>> = {
+      REDDIT: 5,
+      REDDIT_SEARCH: 4,
+      HN_SEARCH: 5,
+      GITHUB_SEARCH: 3,
+      STACKOVERFLOW_SEARCH: 3,
+      WEB_SEARCH: 1,
+      RSS: 2,
+      MANUAL: 2,
+      TWITTER: 1,
+    };
+    const statusAdjustment = signal.status === 'NEW' ? 4 : signal.status === 'SAVED' ? 2 : 0;
+
+    return Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(
+          confidence * 0.65 +
+          freshnessBoost +
+          keywordBoost +
+          (categoryBoost[signal.category || SignalCategory.OTHER] ?? 0) +
+          (sourceBoost[signal.source?.type || ''] ?? 0) +
+          statusAdjustment,
+        ),
+      ),
+    );
+  }
+
+  private buildRankingReasons(
+    signal: SignalForRanking,
+    priorityScore: number,
+  ) {
+    const reasons: string[] = [];
+    const keywordCount = signal.keywords?.length ?? 0;
+    const ageHours = Math.max(
+      0,
+      (Date.now() - new Date(signal.publishedAt || signal.fetchedAt).getTime()) / (1000 * 60 * 60),
+    );
+
+    if ((signal.confidenceScore ?? 0) >= 85) {
+      reasons.push('Very high intent score');
+    } else if ((signal.confidenceScore ?? 0) >= 70) {
+      reasons.push('Strong confidence signal');
+    }
+
+    if (keywordCount >= 3) {
+      reasons.push(`Matched ${keywordCount} tracked keywords`);
+    } else if (keywordCount > 0) {
+      reasons.push(`Matched ${keywordCount} tracked keyword${keywordCount === 1 ? '' : 's'}`);
+    }
+
+    if (signal.category === SignalCategory.BUYING_INTENT) {
+      reasons.push('Clear buying-intent category');
+    } else if (signal.category === SignalCategory.RECOMMENDATION_REQUEST) {
+      reasons.push('Active recommendation request');
+    } else if (signal.category === SignalCategory.PAIN_COMPLAINT) {
+      reasons.push('Explicit pain/problem discussion');
+    }
+
+    if (ageHours <= 24) {
+      reasons.push('Fresh opportunity');
+    } else if (ageHours <= 72) {
+      reasons.push('Still recent');
+    }
+
+    if (signal.source?.type === 'REDDIT' || signal.source?.type === 'HN_SEARCH') {
+      reasons.push(`High-signal ${signal.source.type === 'REDDIT' ? 'community' : 'founder'} source`);
+    }
+
+    if (priorityScore >= 90) {
+      reasons.unshift('Top priority lead');
+    }
+
+    return reasons.slice(0, 4);
+  }
+
+  private getFreshnessLabel(fetchedAt: Date, publishedAt: Date | null) {
+    const ageHours = Math.max(
+      0,
+      (Date.now() - new Date(publishedAt || fetchedAt).getTime()) / (1000 * 60 * 60),
+    );
+
+    if (ageHours <= 6) return 'Hot';
+    if (ageHours <= 24) return 'Fresh';
+    if (ageHours <= 72) return 'Recent';
+    return 'Aged';
   }
 }

@@ -6,6 +6,8 @@ import { PrismaService } from '../prisma/prisma.service';
 const mockPrisma: any = {
   signal: {
     findFirst: jest.fn(),
+    findMany: jest.fn(),
+    count: jest.fn(),
     update: jest.fn(),
   },
   organizationMember: {
@@ -110,5 +112,67 @@ describe('SignalsService', () => {
     await expect(
       service.updateWorkflow('org_1', 'missing', 'user_1', { stage: 'IN_PROGRESS' }),
     ).rejects.toThrow(NotFoundException);
+  });
+
+  it('ranks fresher buying-intent signals ahead of older weaker ones', async () => {
+    mockPrisma.signal.findMany.mockResolvedValue([
+      {
+        id: 'old_low',
+        organizationId: 'org_1',
+        sourceId: 'src_1',
+        externalId: 'ext_1',
+        sourceUrl: 'https://example.com/1',
+        originalTitle: 'Older discussion',
+        originalText: 'Need help eventually',
+        normalizedText: 'Need help eventually',
+        fetchedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+        publishedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+        category: 'OTHER',
+        confidenceScore: 58,
+        whyItMatters: null,
+        suggestedOutreach: null,
+        status: 'NEW',
+        stage: 'TO_REVIEW',
+        source: { id: 'src_1', name: 'Web', type: 'WEB_SEARCH' },
+        keywords: [{ keyword: { id: 'kw_1', phrase: 'help' } }],
+        assignee: null,
+        _count: { annotations: 0 },
+      },
+      {
+        id: 'fresh_high',
+        organizationId: 'org_1',
+        sourceId: 'src_2',
+        externalId: 'ext_2',
+        sourceUrl: 'https://example.com/2',
+        originalTitle: 'Looking for an automation agency',
+        originalText: 'We need an automation consultant this week',
+        normalizedText: 'We need an automation consultant this week',
+        fetchedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        category: 'BUYING_INTENT',
+        confidenceScore: 82,
+        whyItMatters: null,
+        suggestedOutreach: null,
+        status: 'NEW',
+        stage: 'TO_REVIEW',
+        source: { id: 'src_2', name: 'HN', type: 'HN_SEARCH' },
+        keywords: [
+          { keyword: { id: 'kw_1', phrase: 'automation' } },
+          { keyword: { id: 'kw_2', phrase: 'consultant' } },
+        ],
+        assignee: null,
+        _count: { annotations: 0 },
+      },
+    ]);
+    mockPrisma.signal.count.mockResolvedValue(2);
+
+    const result = await service.findAll('org_1', { page: 1, limit: 20 });
+
+    expect(result.data[0].id).toBe('fresh_high');
+    expect(result.data[0].priorityScore).toBeGreaterThan(result.data[1].priorityScore);
+    expect(result.data[0].rankingReasons).toEqual(expect.arrayContaining([
+      'Clear buying-intent category',
+      'Strong confidence signal',
+    ]));
   });
 });

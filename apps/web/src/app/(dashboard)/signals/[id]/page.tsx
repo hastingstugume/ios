@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { organizationsApi, signalsApi } from '@/lib/api';
 import { CATEGORY_META, SOURCE_TYPE_META, STAGE_META, getConfidenceColor, getConfidenceBg, formatDate, cn } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, Check, Bookmark, EyeOff, SendHorizonal, Lightbulb, FileText, Zap, User, Workflow, UserRound, CalendarCheck } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Check, Bookmark, EyeOff, SendHorizonal, Lightbulb, FileText, Zap, User, Workflow, UserRound, CalendarCheck, Sparkles, Flame } from 'lucide-react';
 
 export default function SignalDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -73,6 +73,7 @@ export default function SignalDetailPage() {
   const cat = CATEGORY_META[signal.category || 'OTHER'] || CATEGORY_META.OTHER;
   const stage = STAGE_META[signal.stage] || STAGE_META.TO_REVIEW;
   const sourceType = SOURCE_TYPE_META[signal.source?.type || ''];
+  const priorityScore = signal.priorityScore ?? signal.confidenceScore ?? 0;
 
   const actionBtn = (status: 'SAVED' | 'BOOKMARKED' | 'IGNORED', icon: any, label: string, activeClass: string) => {
     const Icon = icon;
@@ -129,6 +130,12 @@ export default function SignalDetailPage() {
           {signal.authorHandle && <span>@{signal.authorHandle}</span>}
           <span>{formatDate(signal.publishedAt || signal.fetchedAt)}</span>
           <span>{signal.assignee?.name || signal.assignee?.email || 'Unassigned'}</span>
+          {signal.freshnessLabel ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-primary/15 bg-primary/5 px-2 py-1 text-primary">
+              <Flame className="h-3 w-3" />
+              {signal.freshnessLabel}
+            </span>
+          ) : null}
           {signal.sourceUrl && (
             <a href={signal.sourceUrl} target="_blank" rel="noreferrer"
               className="flex items-center gap-1 text-primary hover:underline ml-auto">
@@ -142,6 +149,20 @@ export default function SignalDetailPage() {
           {actionBtn('SAVED', Check, 'Save', 'bg-green-400/10 border-green-400/30 text-green-400')}
           {actionBtn('BOOKMARKED', Bookmark, 'Bookmark', 'bg-amber-400/10 border-amber-400/30 text-amber-400')}
           {actionBtn('IGNORED', EyeOff, 'Ignore', 'bg-secondary border-border text-muted-foreground')}
+        </div>
+
+        <div className="mt-4 rounded-xl border border-primary/15 bg-primary/5 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-lg border border-primary/15 bg-background px-2.5 py-1.5 text-xs font-medium text-primary">
+              <Sparkles className="h-3.5 w-3.5" />
+              Priority {priorityScore}
+            </span>
+            {(signal.rankingReasons || []).map((reason) => (
+              <span key={reason} className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-muted-foreground">
+                {reason}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 

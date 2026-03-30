@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Signal, signalsApi } from '@/lib/api';
 import { CATEGORY_META, SOURCE_TYPE_META, STAGE_META, getConfidenceColor, getConfidenceBg, formatDate, cn } from '@/lib/utils';
-import { Bookmark, EyeOff, Check, ExternalLink, MessageSquare, ChevronRight, UserRound, Workflow } from 'lucide-react';
+import { Bookmark, EyeOff, Check, ExternalLink, MessageSquare, ChevronRight, UserRound, Workflow, Sparkles, Flame } from 'lucide-react';
 
 interface SignalCardProps {
   signal: Signal;
@@ -16,6 +16,7 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
   const cat = CATEGORY_META[signal.category || 'OTHER'] || CATEGORY_META.OTHER;
   const stage = STAGE_META[signal.stage] || STAGE_META.TO_REVIEW;
   const sourceType = SOURCE_TYPE_META[signal.source?.type || ''];
+  const priorityScore = signal.priorityScore ?? signal.confidenceScore ?? 0;
 
   const updateStatus = useMutation({
     mutationFn: (status: string) => signalsApi.updateStatus(orgId, signal.id, status),
@@ -56,6 +57,12 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
             <span className={cn('inline-flex items-center text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded border', stage.bg, stage.color)}>
               {stage.label}
             </span>
+            {signal.freshnessLabel ? (
+              <span className="inline-flex items-center gap-1 rounded border border-primary/15 bg-primary/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                <Flame className="h-3 w-3" />
+                {signal.freshnessLabel}
+              </span>
+            ) : null}
             {signal.source && (
               <span className="text-[11px] text-muted-foreground flex items-center gap-1">
                 {sourceType?.icon} {signal.source.name}
@@ -73,6 +80,18 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
           <p className="text-sm text-muted-foreground leading-7 line-clamp-2 mt-2">
             {signal.normalizedText || signal.originalText?.slice(0, 220)}
           </p>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1.5 text-[11px] font-medium text-primary">
+              <Sparkles className="h-3.5 w-3.5" />
+              Priority {priorityScore}
+            </span>
+            {(signal.rankingReasons || []).slice(0, 3).map((reason) => (
+              <span key={reason} className="rounded-lg border border-border bg-secondary px-2.5 py-1.5 text-[11px] text-muted-foreground">
+                {reason}
+              </span>
+            ))}
+          </div>
 
           {signal.whyItMatters && (
             <div className="mt-3 bg-primary/5 border border-primary/10 rounded-lg px-3 py-2">
