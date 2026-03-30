@@ -102,7 +102,7 @@ function ResetPasswordContent() {
             ) : null}
             {requestReset.isSuccess ? (
               <div className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary">
-                If your account supports password reset, check your inbox for the secure link.
+                Check your inbox for the link to reset your password.
               </div>
             ) : null}
 
