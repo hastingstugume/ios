@@ -7,6 +7,31 @@ import { v4 as uuidv4 } from 'uuid';
 import { AccountType, UserRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 
+type OAuthProvider = 'google' | 'microsoft' | 'github';
+
+type OAuthStart = {
+  authorizationUrl: string;
+  state: string;
+};
+
+type OAuthProfile = {
+  providerUserId: string;
+  email: string | null;
+  emailVerified: boolean;
+  name: string | null;
+  avatarUrl: string | null;
+};
+
+type OAuthProviderConfig = {
+  id: OAuthProvider;
+  clientId: string;
+  clientSecret: string;
+  authorizeUrl: string;
+  tokenUrl: string;
+  scopes: string[];
+  callbackUrl: string;
+};
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -58,6 +83,28 @@ export class AuthService {
     return { success: true, requiresVerification: true, joinedOrgId: result.joinedOrgId };
   }
 
+  startOAuth(provider: string) {
+    const config = this.getOAuthProviderConfig(provider);
+    const state = `oauth_${uuidv4().replace(/-/g, '')}`;
+    const params = new URLSearchParams({
+      client_id: config.clientId,
+      redirect_uri: config.callbackUrl,
+      response_type: 'code',
+      scope: config.scopes.join(' '),
+      state,
+    });
+
+    if (config.id === 'google') {
+      params.set('access_type', 'offline');
+      params.set('prompt', 'consent');
+    }
+
+    return {
+      authorizationUrl: `${config.authorizeUrl}?${params.toString()}`,
+      state,
+    } satisfies OAuthStart;
+  }
+
   async login(email: string, password: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user || !user.passwordHash) throw new UnauthorizedException('Invalid credentials');
@@ -82,6 +129,47 @@ export class AuthService {
       ...session,
       authState: {
         emailVerified: Boolean(user.emailVerified),
+        onboardingCompleted: Boolean(user.onboardingCompletedAt),
+      },
+    };
+  }
+
+  async loginWithOAuth(provider: string, code: string, invitationToken?: string) {
+    const config = this.getOAuthProviderConfig(provider);
+    const accessToken = await this.exchangeOAuthCode(config, code);
+    const profile = await this.fetchOAuthProfile(config.id, accessToken);
+
+    if (!profile.email) {
+      throw new BadRequestException(`Unable to determine the ${config.id} account email address`);
+    }
+
+    let user = await this.resolveOAuthUser(config.id, profile);
+    if (invitationToken) {
+      await this.acceptInvitation(user.id, profile.email, invitationToken);
+      const refreshedUser = await this.prisma.user.findUnique({
+        where: { id: user.id },
+        include: { memberships: true },
+      });
+      if (!refreshedUser) throw new UnauthorizedException('User not found');
+      user = refreshedUser;
+    }
+
+    const membership = await this.prisma.organizationMember.findFirst({
+      where: { userId: user.id },
+      include: { organization: true },
+    });
+
+    if (membership) {
+      await this.prisma.auditLog.create({
+        data: { organizationId: membership.organizationId, userId: user.id, action: 'LOGIN' },
+      });
+    }
+
+    const session = await this.createSession(user.id);
+    return {
+      ...session,
+      authState: {
+        emailVerified: true,
         onboardingCompleted: Boolean(user.onboardingCompletedAt),
       },
     };
@@ -251,6 +339,263 @@ export class AuthService {
         token: `verify_${uuidv4().replace(/-/g, '')}`,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
+    });
+  }
+
+  private getOAuthProviderConfig(provider: string): OAuthProviderConfig {
+    const normalized = provider.toLowerCase() as OAuthProvider;
+    const apiBaseUrl = this.config.get<string>('API_BASE_URL', 'http://localhost:3001');
+
+    switch (normalized) {
+      case 'google': {
+        const clientId = this.config.get<string>('GOOGLE_CLIENT_ID', '').trim();
+        const clientSecret = this.config.get<string>('GOOGLE_CLIENT_SECRET', '').trim();
+        if (!clientId || !clientSecret) {
+          throw new BadRequestException('Google sign-in is not configured');
+        }
+        return {
+          id: 'google',
+          clientId,
+          clientSecret,
+          authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+          tokenUrl: 'https://oauth2.googleapis.com/token',
+          scopes: ['openid', 'email', 'profile'],
+          callbackUrl: `${apiBaseUrl}/api/v1/auth/oauth/google/callback`,
+        };
+      }
+      case 'microsoft': {
+        const clientId = this.config.get<string>('MICROSOFT_CLIENT_ID', '').trim();
+        const clientSecret = this.config.get<string>('MICROSOFT_CLIENT_SECRET', '').trim();
+        const tenantId = this.config.get<string>('MICROSOFT_TENANT_ID', 'common').trim() || 'common';
+        if (!clientId || !clientSecret) {
+          throw new BadRequestException('Microsoft sign-in is not configured');
+        }
+        return {
+          id: 'microsoft',
+          clientId,
+          clientSecret,
+          authorizeUrl: `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize`,
+          tokenUrl: `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
+          scopes: ['openid', 'profile', 'email', 'User.Read'],
+          callbackUrl: `${apiBaseUrl}/api/v1/auth/oauth/microsoft/callback`,
+        };
+      }
+      case 'github': {
+        const clientId = this.config.get<string>('GITHUB_CLIENT_ID', '').trim();
+        const clientSecret = this.config.get<string>('GITHUB_CLIENT_SECRET', '').trim();
+        if (!clientId || !clientSecret) {
+          throw new BadRequestException('GitHub sign-in is not configured');
+        }
+        return {
+          id: 'github',
+          clientId,
+          clientSecret,
+          authorizeUrl: 'https://github.com/login/oauth/authorize',
+          tokenUrl: 'https://github.com/login/oauth/access_token',
+          scopes: ['read:user', 'user:email'],
+          callbackUrl: `${apiBaseUrl}/api/v1/auth/oauth/github/callback`,
+        };
+      }
+      default:
+        throw new BadRequestException('Unsupported OAuth provider');
+    }
+  }
+
+  private async exchangeOAuthCode(config: OAuthProviderConfig, code: string) {
+    const body = new URLSearchParams({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      code,
+      redirect_uri: config.callbackUrl,
+      grant_type: 'authorization_code',
+    });
+
+    const response = await fetch(config.tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      },
+      body: body.toString(),
+    });
+
+    const payload: any = await response.json().catch(() => ({}));
+    if (!response.ok || !payload?.access_token) {
+      throw new BadRequestException(`Unable to complete ${config.id} sign-in`);
+    }
+
+    return payload.access_token as string;
+  }
+
+  private async fetchOAuthProfile(provider: OAuthProvider, accessToken: string): Promise<OAuthProfile> {
+    switch (provider) {
+      case 'google': {
+        const response = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const payload: any = await response.json().catch(() => ({}));
+        if (!response.ok || !payload?.sub) throw new BadRequestException('Unable to load Google profile');
+        return {
+          providerUserId: payload.sub,
+          email: payload.email ?? null,
+          emailVerified: Boolean(payload.email_verified),
+          name: payload.name ?? null,
+          avatarUrl: payload.picture ?? null,
+        };
+      }
+      case 'microsoft': {
+        const response = await fetch('https://graph.microsoft.com/oidc/userinfo', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const payload: any = await response.json().catch(() => ({}));
+        if (!response.ok || !payload?.sub) throw new BadRequestException('Unable to load Microsoft profile');
+        return {
+          providerUserId: payload.sub,
+          email: payload.email ?? payload.preferred_username ?? null,
+          emailVerified: Boolean(payload.email || payload.preferred_username),
+          name: payload.name ?? null,
+          avatarUrl: null,
+        };
+      }
+      case 'github': {
+        const [profileResponse, emailResponse] = await Promise.all([
+          fetch('https://api.github.com/user', {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              Accept: 'application/vnd.github+json',
+              'User-Agent': 'InternetOpportunityScanner',
+            },
+          }),
+          fetch('https://api.github.com/user/emails', {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              Accept: 'application/vnd.github+json',
+              'User-Agent': 'InternetOpportunityScanner',
+            },
+          }),
+        ]);
+
+        const profile: any = await profileResponse.json().catch(() => ({}));
+        const emails = (await emailResponse.json().catch(() => [])) as any[];
+        if (!profileResponse.ok || !profile?.id) throw new BadRequestException('Unable to load GitHub profile');
+
+        const preferredEmail = Array.isArray(emails)
+          ? emails.find((entry) => entry.primary && entry.verified) || emails.find((entry) => entry.verified) || emails[0]
+          : null;
+
+        return {
+          providerUserId: String(profile.id),
+          email: preferredEmail?.email ?? profile.email ?? null,
+          emailVerified: Boolean(preferredEmail?.verified ?? profile.email),
+          name: profile.name ?? profile.login ?? null,
+          avatarUrl: profile.avatar_url ?? null,
+        };
+      }
+    }
+  }
+
+  private async resolveOAuthUser(provider: OAuthProvider, profile: OAuthProfile) {
+    const identity = await this.prisma.userIdentity.findUnique({
+      where: {
+        provider_providerUserId: {
+          provider,
+          providerUserId: profile.providerUserId,
+        },
+      },
+      include: {
+        user: {
+          include: {
+            memberships: true,
+          },
+        },
+      },
+    });
+
+    if (identity) {
+      return identity.user;
+    }
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: profile.email! },
+      include: { memberships: true },
+    });
+
+    if (existingUser) {
+      const updatedUser = await this.prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          emailVerified: true,
+          name: existingUser.name || profile.name || undefined,
+          avatarUrl: existingUser.avatarUrl || profile.avatarUrl || undefined,
+        },
+        include: { memberships: true },
+      });
+
+      await this.prisma.userIdentity.create({
+        data: {
+          userId: updatedUser.id,
+          provider,
+          providerUserId: profile.providerUserId,
+          email: profile.email,
+        },
+      });
+
+      return updatedUser;
+    }
+
+    const user = await this.prisma.user.create({
+      data: {
+        email: profile.email!,
+        name: profile.name,
+        avatarUrl: profile.avatarUrl,
+        emailVerified: true,
+      },
+      include: { memberships: true },
+    });
+
+    await this.prisma.userIdentity.create({
+      data: {
+        userId: user.id,
+        provider,
+        providerUserId: profile.providerUserId,
+        email: profile.email,
+      },
+    });
+
+    return user;
+  }
+
+  private async acceptInvitation(userId: string, email: string, invitationToken: string) {
+    const invitation = await this.prisma.invitation.findUnique({
+      where: { token: invitationToken },
+      include: { organization: true },
+    });
+
+    if (!invitation || invitation.acceptedAt || invitation.expiresAt < new Date()) {
+      throw new BadRequestException('Invitation is invalid or expired');
+    }
+
+    if (invitation.email.toLowerCase() !== email.toLowerCase()) {
+      throw new BadRequestException('Invitation email does not match this account');
+    }
+
+    const existingMembership = await this.prisma.organizationMember.findFirst({
+      where: { userId, organizationId: invitation.organizationId },
+    });
+
+    if (!existingMembership) {
+      await this.prisma.organizationMember.create({
+        data: {
+          userId,
+          organizationId: invitation.organizationId,
+          role: invitation.role,
+        },
+      });
+    }
+
+    await this.prisma.invitation.update({
+      where: { id: invitation.id },
+      data: { acceptedAt: invitation.acceptedAt ?? new Date() },
     });
   }
 

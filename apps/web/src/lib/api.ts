@@ -1,4 +1,5 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+export type OAuthProvider = 'google' | 'microsoft' | 'github';
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}/api/v1${path}`, {
@@ -36,6 +37,11 @@ export const authApi = {
   me: () => api.get<{ user: User; memberships: Membership[]; authState: { emailVerified: boolean; onboardingCompleted: boolean } }>('/auth/me'),
   updateMe: (data: { name: string }) => api.patch<User>('/auth/me', data),
   changePassword: (data: { currentPassword: string; newPassword: string }) => api.patch('/auth/password', data),
+  getOAuthStartUrl: (provider: OAuthProvider, invitationToken?: string) => {
+    const params = new URLSearchParams();
+    if (invitationToken) params.set('invitationToken', invitationToken);
+    return `${API_BASE}/api/v1/auth/oauth/${provider}/start${params.toString() ? `?${params.toString()}` : ''}`;
+  },
 };
 
 export const signalsApi = {

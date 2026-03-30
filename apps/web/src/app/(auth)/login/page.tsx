@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { authApi } from '@/lib/api';
 import { ArrowRight, Eye, EyeOff, Mail, RefreshCw } from 'lucide-react';
 import { AuthShell } from '@/components/auth/AuthShell';
+import { OAuthButtons } from '@/components/auth/OAuthButtons';
 
 const schema = z.object({
   email: z.string().email(),
@@ -57,14 +58,28 @@ export default function LoginPage() {
       title="Welcome back"
       description="Sign in to your workspace to review fresh intent signals, alerts, and team actions."
     >
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
           <p className="text-xs text-primary/80">
             Demo access: <span className="font-mono">alice@acmegrowth.io</span> / <span className="font-mono">demo1234!</span>
           </p>
         </div>
 
-        <form onSubmit={handleSubmit((d) => login.mutate(d))} className="space-y-4">
+        <div className="space-y-3">
+          <OAuthButtons />
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-card px-3 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                Or continue with email
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit((d) => login.mutate(d))} className="space-y-3">
           <div>
             <label className="text-sm text-muted-foreground mb-1.5 block">Email</label>
             <input

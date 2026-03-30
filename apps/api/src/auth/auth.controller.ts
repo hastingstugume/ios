@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, Req, Res, UseGuards, HttpCode } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Req, Res, UseGuards, HttpCode, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
@@ -31,6 +31,75 @@ export class AuthController {
       expiresAt: session.expiresAt,
       authState: session.authState,
     };
+  }
+
+  @Get('oauth/:provider/start')
+  @ApiOperation({ summary: 'Start OAuth sign-in' })
+  async oauthStart(
+    @Param('provider') provider: string,
+    @Query('invitationToken') invitationToken: string | undefined,
+    @Res() res: Response,
+  ) {
+    const oauth = this.auth.startOAuth(provider);
+    res.cookie('oauth_state', oauth.state, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 10 * 60 * 1000,
+      path: '/',
+    });
+    res.cookie('oauth_provider', provider, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 10 * 60 * 1000,
+      path: '/',
+    });
+    if (invitationToken) {
+      res.cookie('oauth_invitation_token', invitationToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 10 * 60 * 1000,
+        path: '/',
+      });
+    }
+    return res.redirect(oauth.authorizationUrl);
+  }
+
+  @Get('oauth/:provider/callback')
+  @ApiOperation({ summary: 'Handle OAuth callback' })
+  async oauthCallback(
+    @Param('provider') provider: string,
+    @Query('code') code: string | undefined,
+    @Query('state') state: string | undefined,
+    @Query('error') error: string | undefined,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const redirect = new URL('/login', frontendUrl);
+
+    if (error) {
+      redirect.searchParams.set('error', error);
+      return res.redirect(redirect.toString());
+    }
+
+    if (!code || !state || req.cookies?.oauth_state !== state || req.cookies?.oauth_provider !== provider) {
+      redirect.searchParams.set('error', 'oauth_state_mismatch');
+      return res.redirect(redirect.toString());
+    }
+
+    const invitationToken = req.cookies?.oauth_invitation_token;
+    const session = await this.auth.loginWithOAuth(provider, code, invitationToken);
+
+    this.setSessionCookie(res, session.token, session.expiresAt);
+    res.clearCookie('oauth_state', { path: '/' });
+    res.clearCookie('oauth_provider', { path: '/' });
+    res.clearCookie('oauth_invitation_token', { path: '/' });
+
+    const destination = session.authState.onboardingCompleted ? '/dashboard' : '/onboarding';
+    return res.redirect(new URL(destination, frontendUrl).toString());
   }
 
   @Post('logout')

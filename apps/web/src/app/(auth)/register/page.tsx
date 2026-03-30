@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { authApi } from '@/lib/api';
 import { ArrowRight, Link2 } from 'lucide-react';
 import { AuthShell } from '@/components/auth/AuthShell';
+import { OAuthButtons } from '@/components/auth/OAuthButtons';
 
 const schema = z.object({
   name: z.string().min(2),
@@ -62,8 +63,8 @@ function RegisterPageContent() {
           : 'Start with your account first. After email verification, we’ll help you choose freelancer or business and create the right workspace.'
       }
     >
-      <div className="space-y-6">
-        <div className="space-y-2">
+      <div className="space-y-4">
+        <div className="space-y-1.5">
           <div className="flex items-center justify-between text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
             <span>Step 1 of 3</span>
             <span>Create account</span>
@@ -82,7 +83,21 @@ function RegisterPageContent() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit((d) => signup.mutate(d))} className="space-y-4">
+        <div className="space-y-3">
+          <OAuthButtons invitationToken={invitationToken} />
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-card px-3 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                Or continue with email
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit((d) => signup.mutate(d))} className="space-y-3">
           {fields.map(({ id, label, placeholder, type }) => (
             <div key={id}>
               <label className="text-sm text-muted-foreground mb-1.5 block">{label}</label>
