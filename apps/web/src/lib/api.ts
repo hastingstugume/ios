@@ -89,6 +89,19 @@ export const keywordsApi = {
 
 export const sourcesApi = {
   list: (orgId: string) => api.get<Source[]>(`/orgs/${orgId}/sources`),
+  suggestions: (orgId: string) => api.get<{ source: 'cache' | 'similar-cache' | 'generated'; suggestions: SourceTemplateSuggestion[] }>(`/orgs/${orgId}/sources/suggestions`),
+  templates: (orgId: string) => api.get<{ templates: SourceTemplateSuggestion[] }>(`/orgs/${orgId}/sources/templates`),
+  createTemplate: (
+    orgId: string,
+    data: {
+      name: string;
+      description?: string;
+      audience?: string;
+      sourceIds: string[];
+      includeKeywords?: boolean;
+      includeNegativeKeywords?: boolean;
+    },
+  ) => api.post<SourceTemplateSuggestion>(`/orgs/${orgId}/sources/templates`, data),
   preview: (orgId: string, data: { type: string; config: any }) => api.post<SourcePreview>(`/orgs/${orgId}/sources/preview`, data),
   create: (orgId: string, data: any) => api.post(`/orgs/${orgId}/sources`, data),
   update: (orgId: string, id: string, data: any) => api.patch(`/orgs/${orgId}/sources/${id}`, data),
@@ -104,7 +117,7 @@ export const alertsApi = {
 
 export const organizationsApi = {
   get: (orgId: string) => api.get<OrganizationDetail>(`/orgs/${orgId}`),
-  update: (orgId: string, data: { name?: string; logoUrl?: string; negativeKeywords?: string[] }) => api.patch<Organization>(`/orgs/${orgId}`, data),
+  update: (orgId: string, data: { name?: string; logoUrl?: string; businessFocus?: string; targetAudience?: string; negativeKeywords?: string[] }) => api.patch<Organization>(`/orgs/${orgId}`, data),
   members: (orgId: string) => api.get<{ members: OrganizationMember[]; invitations: Invitation[] }>(`/orgs/${orgId}/members`),
   inviteMember: (orgId: string, data: { email: string; role: string }) => api.post(`/orgs/${orgId}/members`, data),
   updateMember: (orgId: string, memberId: string, data: { role: string }) => api.patch(`/orgs/${orgId}/members/${memberId}`, data),
@@ -139,7 +152,15 @@ export interface AuthSession {
   userAgent: string | null;
   isCurrent: boolean;
 }
-export interface Organization { id: string; name: string; slug: string; plan: string; negativeKeywords?: string[]; }
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  businessFocus?: string | null;
+  targetAudience?: string | null;
+  negativeKeywords?: string[];
+}
 export interface OrganizationMember {
   id: string;
   role: string;
@@ -216,6 +237,23 @@ export interface Source {
     pipelineSignals: number;
     savedSignals: number;
   };
+}
+export interface SourceTemplateSuggestion {
+  id: string;
+  name: string;
+  audience: string;
+  description: string;
+  recommendedKeywords: string[];
+  recommendedNegativeKeywords: string[];
+  generatedBy?: string | null;
+  rank: number;
+  createdAt: string;
+  updatedAt: string;
+  sources: Array<{
+    name: string;
+    type: string;
+    config: Record<string, any>;
+  }>;
 }
 export interface SourcePreview {
   totalFetched: number;

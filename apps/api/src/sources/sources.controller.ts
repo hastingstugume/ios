@@ -4,7 +4,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { SourcesService } from './sources.service';
 import { AuthGuard } from '../common/guards/auth.guard';
 import { OrgMemberGuard } from '../common/guards/org-member.guard';
-import { IsString, IsEnum, IsObject, IsOptional } from 'class-validator';
+import { IsString, IsEnum, IsObject, IsOptional, IsArray, IsBoolean } from 'class-validator';
 import { SourceType, SourceStatus } from '@prisma/client';
 
 class CreateSourceDto {
@@ -24,6 +24,15 @@ class UpdateSourceDto {
   @IsOptional() @IsObject() config?: Record<string, any>;
 }
 
+class CreateSavedTemplateDto {
+  @IsString() name!: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsString() audience?: string;
+  @IsArray() sourceIds!: string[];
+  @IsOptional() @IsBoolean() includeKeywords?: boolean;
+  @IsOptional() @IsBoolean() includeNegativeKeywords?: boolean;
+}
+
 @ApiTags('Sources')
 @Controller('orgs/:orgId/sources')
 @UseGuards(AuthGuard, OrgMemberGuard)
@@ -31,6 +40,15 @@ export class SourcesController {
   constructor(private sources: SourcesService) {}
 
   @Get() findAll(@Param('orgId') orgId: string) { return this.sources.findAll(orgId); }
+  @Get('suggestions') suggestions(@Param('orgId') orgId: string, @Req() req: any) {
+    return this.sources.getSuggestedTemplates(orgId, req.user.id);
+  }
+  @Get('templates') listSavedTemplates(@Param('orgId') orgId: string) {
+    return this.sources.listSavedTemplates(orgId);
+  }
+  @Post('templates') createSavedTemplate(@Param('orgId') orgId: string, @Body() dto: CreateSavedTemplateDto, @Req() req: any) {
+    return this.sources.createSavedTemplate(orgId, req.user.id, dto);
+  }
   @Post('preview') preview(@Param('orgId') orgId: string, @Body() dto: PreviewSourceDto) {
     return this.sources.preview(orgId, dto);
   }

@@ -68,6 +68,8 @@ export default function SettingsPage() {
   const qc = useQueryClient();
   const [name, setName] = useState('');
   const [orgName, setOrgName] = useState('');
+  const [businessFocus, setBusinessFocus] = useState('');
+  const [targetAudience, setTargetAudience] = useState('');
   const [negativeKeywords, setNegativeKeywords] = useState('');
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '' });
   const [mfaSetup, setMfaSetup] = useState<{ secret: string; otpauthUri: string; issuer: string } | null>(null);
@@ -88,6 +90,14 @@ export default function SettingsPage() {
   useEffect(() => {
     setOrgName(currentOrg?.name || '');
   }, [currentOrg?.name]);
+
+  useEffect(() => {
+    setBusinessFocus(currentOrg?.businessFocus || '');
+  }, [currentOrg?.businessFocus]);
+
+  useEffect(() => {
+    setTargetAudience(currentOrg?.targetAudience || '');
+  }, [currentOrg?.targetAudience]);
 
   useEffect(() => {
     setNegativeKeywords((currentOrg?.negativeKeywords || []).join(', '));
@@ -150,6 +160,8 @@ export default function SettingsPage() {
   const orgMutation = useMutation({
     mutationFn: () => organizationsApi.update(currentOrgId!, {
       name: orgName.trim(),
+      businessFocus: businessFocus.trim(),
+      targetAudience: targetAudience.trim(),
       negativeKeywords: negativeKeywords.split(',').map((term) => term.trim()).filter(Boolean),
     }),
     onSuccess: () => {
@@ -361,6 +373,30 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Business focus</label>
+              <input
+                value={businessFocus}
+                onChange={(e) => setBusinessFocus(e.target.value)}
+                disabled={!canManageWorkspace}
+                placeholder="DevOps consulting, AI automation, ERP implementation"
+                className="w-full rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:text-muted-foreground"
+              />
+              <p className="mt-2 text-xs text-muted-foreground">Used to tailor AI-generated source templates to your niche.</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Target buyers</label>
+              <input
+                value={targetAudience}
+                onChange={(e) => setTargetAudience(e.target.value)}
+                disabled={!canManageWorkspace}
+                placeholder="B2B SaaS founders, operations leaders, internal IT teams"
+                className="w-full rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:text-muted-foreground"
+              />
+              <p className="mt-2 text-xs text-muted-foreground">Who you want the scanner to find demand from most often.</p>
+            </div>
+          </div>
           <div>
             <label className="mb-1 block text-xs text-muted-foreground">Workspace negative keywords</label>
             <input
@@ -386,6 +422,8 @@ export default function SettingsPage() {
               disabled={
                 (
                   (!orgName.trim() || orgName.trim() === (currentOrg?.name || ''))
+                  && businessFocus.trim() === (currentOrg?.businessFocus || '')
+                  && targetAudience.trim() === (currentOrg?.targetAudience || '')
                   && negativeKeywords === ((currentOrg?.negativeKeywords || []).join(', '))
                 ) || orgMutation.isPending
               }

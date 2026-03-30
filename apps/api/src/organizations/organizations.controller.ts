@@ -11,6 +11,8 @@ import { UserRole } from '@prisma/client';
 class UpdateOrgDto {
   @IsOptional() @IsString() name?: string;
   @IsOptional() @IsString() logoUrl?: string;
+  @IsOptional() @IsString() businessFocus?: string;
+  @IsOptional() @IsString() targetAudience?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) negativeKeywords?: string[];
 }
 

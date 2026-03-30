@@ -102,17 +102,21 @@ model Organization {
   slug             String   @unique
   logoUrl          String?
   plan             String   @default("free")
+  businessFocus    String?
+  targetAudience   String?
   negativeKeywords String[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  members     OrganizationMember[]
-  invitations Invitation[]
-  keywords    Keyword[]
-  sources     Source[]
-  signals     Signal[]
-  alertRules  AlertRule[]
-  auditLogs   AuditLog[]
+  members                   OrganizationMember[]
+  invitations               Invitation[]
+  keywords                  Keyword[]
+  sources                   Source[]
+  sourceTemplateSuggestions SourceTemplateSuggestion[]
+  savedSourceTemplates      SavedSourceTemplate[]
+  signals                   Signal[]
+  alertRules                AlertRule[]
+  auditLogs                 AuditLog[]
 }
 
 model User {
@@ -137,6 +141,7 @@ model User {
   mfaChallenges MfaChallenge[]
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens PasswordResetToken[]
+  savedSourceTemplates SavedSourceTemplate[]
   annotations   SignalAnnotation[]
   assignedSignals Signal[] @relation("SignalAssignee")
   auditLogs     AuditLog[]
@@ -244,6 +249,47 @@ model Session {
 }
 
 // ─── Keywords & Sources ───────────────────────────────────────────────────────
+
+model SourceTemplateSuggestion {
+  id                         String       @id @default(cuid())
+  organizationId             String
+  profileHash                String
+  name                       String
+  audience                   String
+  description                String
+  recommendedKeywords        String[]
+  recommendedNegativeKeywords String[]
+  sources                    Json
+  rank                       Int          @default(0)
+  generatedBy                String?
+  createdAt                  DateTime     @default(now())
+  updatedAt                  DateTime     @updatedAt
+
+  organization               Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, profileHash])
+  @@index([organizationId, createdAt])
+}
+
+model SavedSourceTemplate {
+  id                          String       @id @default(cuid())
+  organizationId              String
+  createdByUserId             String?
+  name                        String
+  audience                    String
+  description                 String
+  recommendedKeywords         String[]
+  recommendedNegativeKeywords String[]
+  sources                     Json
+  createdAt                   DateTime     @default(now())
+  updatedAt                   DateTime     @updatedAt
+
+  organization                Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdByUser               User?        @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, name])
+  @@index([organizationId, createdAt])
+}
 
 model Keyword {
   id             String       @id @default(cuid())

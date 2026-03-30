@@ -25,12 +25,19 @@ export class OrganizationsService {
     return org;
   }
 
-  async update(id: string, userId: string, role: UserRole, data: { name?: string; logoUrl?: string; negativeKeywords?: string[] }) {
+  async update(
+    id: string,
+    userId: string,
+    role: UserRole,
+    data: { name?: string; logoUrl?: string; businessFocus?: string; targetAudience?: string; negativeKeywords?: string[] },
+  ) {
     this.assertAdmin(role);
     const org = await this.prisma.organization.update({
       where: { id },
       data: {
         ...data,
+        ...(data.businessFocus !== undefined ? { businessFocus: data.businessFocus.trim() || null } : {}),
+        ...(data.targetAudience !== undefined ? { targetAudience: data.targetAudience.trim() || null } : {}),
         ...(data.negativeKeywords
           ? {
               negativeKeywords: data.negativeKeywords

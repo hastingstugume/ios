@@ -5,6 +5,8 @@ import { SourceType, SourceStatus } from '@prisma/client';
 import { EntitlementsService } from '../entitlements/entitlements.service';
 import { IngestionService } from '../ingestion/ingestion.service';
 import { getSourceProfile } from './source-profiles';
+import { ClassificationService, type SourceSuggestionPack } from '../classification/classification.service';
+import { createHash } from 'crypto';
 
 @Injectable()
 export class SourcesService {
@@ -12,6 +14,7 @@ export class SourcesService {
     private prisma: PrismaService,
     private entitlements: EntitlementsService,
     private ingestion: IngestionService,
+    private classification: ClassificationService,
   ) {}
 
   async findAll(orgId: string) {
@@ -160,6 +163,189 @@ export class SourcesService {
     return this.ingestion.previewSource(orgId, data.type, data.config);
   }
 
+  async getSuggestedTemplates(orgId: string, userId: string) {
+    const [organization, user, keywords] = await Promise.all([
+      this.prisma.organization.findUnique({
+        where: { id: orgId },
+        select: {
+          id: true,
+          name: true,
+          businessFocus: true,
+          targetAudience: true,
+          negativeKeywords: true,
+        },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          accountType: true,
+        },
+      }),
+      this.prisma.keyword.findMany({
+        where: { organizationId: orgId, isActive: true },
+        orderBy: { createdAt: 'asc' },
+        take: 8,
+        select: { phrase: true },
+      }),
+    ]);
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    const context = {
+      organizationName: organization.name,
+      accountType: (user?.accountType || 'UNKNOWN') as 'FREELANCER' | 'BUSINESS' | 'UNKNOWN',
+      businessFocus: organization.businessFocus,
+      targetAudience: organization.targetAudience,
+      trackedKeywords: keywords.map((keyword) => keyword.phrase.trim()).filter(Boolean),
+      negativeKeywords: (organization.negativeKeywords || []).map((term) => term.trim()).filter(Boolean),
+    };
+
+    const profileHash = this.createSuggestionProfileHash(context);
+    const cached = await this.prisma.sourceTemplateSuggestion.findMany({
+      where: { organizationId: orgId, profileHash },
+      orderBy: [{ rank: 'asc' }, { createdAt: 'desc' }],
+    });
+
+    if (cached.length) {
+      return {
+        source: 'cache',
+        suggestions: cached.map((suggestion) => this.mapSuggestionRecord(suggestion)),
+      };
+    }
+
+    const hasSparseContext = !organization.businessFocus && !organization.targetAudience && keywords.length === 0;
+    if (hasSparseContext) {
+      const similar = await this.prisma.sourceTemplateSuggestion.findMany({
+        where: { organizationId: orgId },
+        orderBy: { createdAt: 'desc' },
+        take: 3,
+      });
+
+      if (similar.length) {
+        return {
+          source: 'similar-cache',
+          suggestions: similar
+            .sort((left, right) => left.rank - right.rank)
+            .map((suggestion) => this.mapSuggestionRecord(suggestion)),
+        };
+      }
+    }
+
+    const generated = await this.classification.generateSourceSuggestions(context);
+
+    await this.prisma.sourceTemplateSuggestion.deleteMany({
+      where: { organizationId: orgId, profileHash },
+    });
+
+    const created = await Promise.all(
+      generated.map((suggestion, index) =>
+        this.prisma.sourceTemplateSuggestion.create({
+          data: {
+            organizationId: orgId,
+            profileHash,
+            name: suggestion.name,
+            audience: suggestion.audience,
+            description: suggestion.description,
+            recommendedKeywords: suggestion.recommendedKeywords,
+            recommendedNegativeKeywords: suggestion.recommendedNegativeKeywords,
+            sources: suggestion.sources,
+            rank: index,
+            generatedBy: 'ai',
+          },
+        }),
+      ),
+    );
+
+    return {
+      source: 'generated',
+      suggestions: created.map((suggestion) => this.mapSuggestionRecord(suggestion)),
+    };
+  }
+
+  async listSavedTemplates(orgId: string) {
+    const templates = await this.prisma.savedSourceTemplate.findMany({
+      where: { organizationId: orgId },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+
+    return {
+      templates: templates.map((template) => this.mapSavedTemplateRecord(template)),
+    };
+  }
+
+  async createSavedTemplate(
+    orgId: string,
+    userId: string,
+    data: {
+      name: string;
+      description?: string;
+      audience?: string;
+      sourceIds: string[];
+      includeKeywords?: boolean;
+      includeNegativeKeywords?: boolean;
+    },
+  ) {
+    const name = data.name.trim();
+    if (!name) throw new BadRequestException('Template name is required');
+
+    const sourceIds = Array.from(new Set((data.sourceIds || []).filter(Boolean)));
+    if (sourceIds.length === 0) {
+      throw new BadRequestException('Choose at least one source to save as a template');
+    }
+
+    const existing = await this.prisma.savedSourceTemplate.findFirst({
+      where: { organizationId: orgId, name: { equals: name, mode: 'insensitive' } },
+    });
+    if (existing) throw new ConflictException('A saved template with this name already exists');
+
+    const [organization, sources, keywords] = await Promise.all([
+      this.prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { name: true, negativeKeywords: true },
+      }),
+      this.prisma.source.findMany({
+        where: { organizationId: orgId, id: { in: sourceIds } },
+        orderBy: { createdAt: 'asc' },
+      }),
+      data.includeKeywords
+        ? this.prisma.keyword.findMany({
+            where: { organizationId: orgId, isActive: true },
+            orderBy: { createdAt: 'asc' },
+            take: 12,
+            select: { phrase: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    if (!organization) throw new NotFoundException('Organization not found');
+    if (sources.length !== sourceIds.length) {
+      throw new NotFoundException('One or more selected sources could not be found');
+    }
+
+    const template = await this.prisma.savedSourceTemplate.create({
+      data: {
+        organizationId: orgId,
+        createdByUserId: userId,
+        name,
+        audience: data.audience?.trim() || `${organization.name} workspace template`,
+        description:
+          data.description?.trim() ||
+          `Saved from ${sources.length} existing source${sources.length === 1 ? '' : 's'} in this workspace.`,
+        recommendedKeywords: data.includeKeywords ? keywords.map((keyword) => keyword.phrase) : [],
+        recommendedNegativeKeywords: data.includeNegativeKeywords ? organization.negativeKeywords || [] : [],
+        sources: sources.map((source) => ({
+          name: source.name,
+          type: source.type,
+          config: source.config,
+        })),
+      },
+    });
+
+    return this.mapSavedTemplateRecord(template);
+  }
+
   validateConfig(type: SourceType, config: Record<string, any>) {
     if (config.excludeTerms !== undefined && (!Array.isArray(config.excludeTerms) || config.excludeTerms.some((term: unknown) => typeof term !== 'string'))) {
       throw new BadRequestException('Exclude terms must be an array of strings');
@@ -253,5 +439,81 @@ export class SourcesService {
     if (message.includes('organization.findUnique()')) return 'Workspace settings could not be loaded';
     if (message.includes('negativeKeywords')) return 'Workspace filters could not be loaded';
     return message;
+  }
+
+  private createSuggestionProfileHash(context: {
+    organizationName: string;
+    accountType: 'FREELANCER' | 'BUSINESS' | 'UNKNOWN';
+    businessFocus?: string | null;
+    targetAudience?: string | null;
+    trackedKeywords: string[];
+    negativeKeywords: string[];
+  }) {
+    return createHash('sha1')
+      .update(
+        JSON.stringify({
+          organizationName: context.organizationName.trim().toLowerCase(),
+          accountType: context.accountType,
+          businessFocus: context.businessFocus?.trim().toLowerCase() || null,
+          targetAudience: context.targetAudience?.trim().toLowerCase() || null,
+          trackedKeywords: context.trackedKeywords.map((keyword) => keyword.trim().toLowerCase()).sort(),
+          negativeKeywords: context.negativeKeywords.map((keyword) => keyword.trim().toLowerCase()).sort(),
+        }),
+      )
+      .digest('hex');
+  }
+
+  private mapSuggestionRecord(suggestion: {
+    id: string;
+    name: string;
+    audience: string;
+    description: string;
+    recommendedKeywords: string[];
+    recommendedNegativeKeywords: string[];
+    sources: unknown;
+    rank: number;
+    generatedBy: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }): SourceSuggestionPack & { id: string; rank: number; generatedBy: string | null; createdAt: Date; updatedAt: Date } {
+    return {
+      id: suggestion.id,
+      name: suggestion.name,
+      audience: suggestion.audience,
+      description: suggestion.description,
+      recommendedKeywords: suggestion.recommendedKeywords,
+      recommendedNegativeKeywords: suggestion.recommendedNegativeKeywords,
+      sources: Array.isArray(suggestion.sources) ? (suggestion.sources as SourceSuggestionPack['sources']) : [],
+      rank: suggestion.rank,
+      generatedBy: suggestion.generatedBy,
+      createdAt: suggestion.createdAt,
+      updatedAt: suggestion.updatedAt,
+    };
+  }
+
+  private mapSavedTemplateRecord(template: {
+    id: string;
+    name: string;
+    audience: string;
+    description: string;
+    recommendedKeywords: string[];
+    recommendedNegativeKeywords: string[];
+    sources: unknown;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    return {
+      id: template.id,
+      name: template.name,
+      audience: template.audience,
+      description: template.description,
+      recommendedKeywords: template.recommendedKeywords,
+      recommendedNegativeKeywords: template.recommendedNegativeKeywords,
+      sources: Array.isArray(template.sources) ? (template.sources as SourceSuggestionPack['sources']) : [],
+      rank: 0,
+      generatedBy: 'workspace',
+      createdAt: template.createdAt,
+      updatedAt: template.updatedAt,
+    };
   }
 }
