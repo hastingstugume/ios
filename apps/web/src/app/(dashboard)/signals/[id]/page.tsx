@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { organizationsApi, signalsApi } from '@/lib/api';
 import { CATEGORY_META, SOURCE_TYPE_META, STAGE_META, getConfidenceColor, getConfidenceBg, formatDate, cn } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, Check, Bookmark, EyeOff, SendHorizonal, Lightbulb, FileText, Zap, User, Workflow, UserRound, CalendarCheck, Sparkles, Flame } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Check, Bookmark, EyeOff, SendHorizonal, Lightbulb, FileText, Zap, User, Workflow, UserRound, CalendarCheck, Sparkles, Flame, Reply, Clock3 } from 'lucide-react';
 
 export default function SignalDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -14,6 +14,7 @@ export default function SignalDetailPage() {
   const qc = useQueryClient();
   const [note, setNote] = useState('');
   const [nextStepDraft, setNextStepDraft] = useState('');
+  const [replyCopied, setReplyCopied] = useState(false);
 
   const { data: signal, isLoading } = useQuery({
     queryKey: ['signal', currentOrgId, id],
@@ -92,6 +93,13 @@ export default function SignalDetailPage() {
     );
   };
 
+  const copySuggestedReply = async () => {
+    if (!signal?.suggestedReply || typeof navigator === 'undefined' || !navigator.clipboard) return;
+    await navigator.clipboard.writeText(signal.suggestedReply);
+    setReplyCopied(true);
+    window.setTimeout(() => setReplyCopied(false), 1500);
+  };
+
   return (
     <div className="page-shell max-w-4xl space-y-5 animate-fade-in">
       {/* Back */}
@@ -113,6 +121,11 @@ export default function SignalDetailPage() {
             {signal.source && (
               <span className="text-xs text-muted-foreground">{sourceType?.icon} {signal.source.name}</span>
             )}
+            {signal.sourceProfile ? (
+              <span className="rounded-full border border-border px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                {signal.sourceProfile.badgeLabel}
+              </span>
+            ) : null}
           </div>
           <div className={cn('flex flex-col items-center px-3 py-2 rounded-xl border shrink-0', getConfidenceBg(signal.confidenceScore))}>
             <span className={cn('text-2xl font-bold tabular-nums', getConfidenceColor(signal.confidenceScore))}>
@@ -128,7 +141,10 @@ export default function SignalDetailPage() {
 
         <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           {signal.authorHandle && <span>@{signal.authorHandle}</span>}
-          <span>{formatDate(signal.publishedAt || signal.fetchedAt)}</span>
+          <span className="inline-flex items-center gap-1">
+            <Clock3 className="w-3.5 h-3.5" />
+            Posted {signal.postedAgo || formatDate(signal.publishedAt || signal.fetchedAt)}
+          </span>
           <span>{signal.assignee?.name || signal.assignee?.email || 'Unassigned'}</span>
           {signal.freshnessLabel ? (
             <span className="inline-flex items-center gap-1 rounded-full border border-primary/15 bg-primary/5 px-2 py-1 text-primary">
@@ -240,11 +256,64 @@ export default function SignalDetailPage() {
         <div className="bg-primary/5 border border-primary/15 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
             <Zap className="w-4 h-4 text-primary" />
-            <h2 className="text-sm font-semibold text-primary">Why This Matters</h2>
+            <h2 className="text-sm font-semibold text-primary">Intent Clarity</h2>
           </div>
           <p className="text-sm text-foreground/80 leading-relaxed">{signal.whyItMatters}</p>
         </div>
       )}
+
+      {(signal.painPoint || signal.urgency || signal.sentiment || signal.conversationType) ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="bg-card border border-border rounded-xl p-4">
+            <h2 className="text-sm font-semibold text-foreground mb-3">Context</h2>
+            <div className="space-y-3 text-sm">
+              {signal.painPoint ? (
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">Pain point</p>
+                  <p className="text-foreground/80 leading-relaxed">{signal.painPoint}</p>
+                </div>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                {signal.urgency ? (
+                  <span className={cn(
+                    'rounded-lg border px-2.5 py-1 text-xs font-medium',
+                    signal.urgency === 'CRITICAL' || signal.urgency === 'HIGH'
+                      ? 'border-rose-400/20 bg-rose-400/10 text-rose-300'
+                      : signal.urgency === 'MEDIUM'
+                        ? 'border-amber-400/20 bg-amber-400/10 text-amber-300'
+                        : 'border-border bg-secondary text-muted-foreground',
+                  )}>
+                    {signal.urgency} urgency
+                  </span>
+                ) : null}
+                {signal.sentiment ? (
+                  <span className="rounded-lg border border-border bg-secondary px-2.5 py-1 text-xs text-muted-foreground">
+                    {signal.sentiment.toLowerCase()} tone
+                  </span>
+                ) : null}
+                {signal.conversationType ? (
+                  <span className="rounded-lg border border-border bg-secondary px-2.5 py-1 text-xs text-muted-foreground">
+                    {signal.conversationType.replaceAll('_', ' ').toLowerCase()}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          {signal.sourceProfile ? (
+            <div className="bg-card border border-border rounded-xl p-4">
+              <h2 className="text-sm font-semibold text-foreground mb-3">Source Provenance</h2>
+              <div className="space-y-2 text-sm text-foreground/80">
+                <p><span className="text-muted-foreground">Platform:</span> {signal.sourceProfile.platformLabel}</p>
+                <p><span className="text-muted-foreground">Provider:</span> {signal.sourceProfile.providerLabel}</p>
+                <p><span className="text-muted-foreground">Acquisition:</span> {signal.sourceProfile.acquisitionMode.replaceAll('_', ' ')}</p>
+                <p><span className="text-muted-foreground">Support:</span> {signal.sourceProfile.supportStatus.replaceAll('_', ' ')}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{signal.sourceProfile.complianceNotes}</p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Suggested outreach */}
       {signal.suggestedOutreach && (
@@ -256,6 +325,25 @@ export default function SignalDetailPage() {
           <p className="text-sm text-foreground/80 leading-relaxed">{signal.suggestedOutreach}</p>
         </div>
       )}
+
+      {signal.suggestedReply ? (
+        <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div className="flex items-center gap-2">
+              <Reply className="w-4 h-4 text-emerald-300" />
+              <h2 className="text-sm font-semibold text-emerald-300">Suggested Reply</h2>
+            </div>
+            <button
+              type="button"
+              onClick={copySuggestedReply}
+              className="text-xs text-emerald-300 hover:text-emerald-200"
+            >
+              {replyCopied ? 'Copied' : 'Copy reply'}
+            </button>
+          </div>
+          <p className="text-sm text-foreground/80 leading-relaxed">{signal.suggestedReply}</p>
+        </div>
+      ) : null}
 
       {/* Original content */}
       <div className="bg-card border border-border rounded-xl p-4">

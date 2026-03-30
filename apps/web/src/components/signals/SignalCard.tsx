@@ -1,9 +1,10 @@
 'use client';
 import Link from 'next/link';
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Signal, signalsApi } from '@/lib/api';
 import { CATEGORY_META, SOURCE_TYPE_META, STAGE_META, getConfidenceColor, getConfidenceBg, formatDate, cn } from '@/lib/utils';
-import { Bookmark, EyeOff, Check, ExternalLink, MessageSquare, ChevronRight, UserRound, Workflow, Sparkles, Flame } from 'lucide-react';
+import { Bookmark, EyeOff, Check, ExternalLink, MessageSquare, ChevronRight, UserRound, Workflow, Sparkles, Flame, Reply, Clock3 } from 'lucide-react';
 
 interface SignalCardProps {
   signal: Signal;
@@ -13,6 +14,7 @@ interface SignalCardProps {
 
 export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
   const qc = useQueryClient();
+  const [replyCopied, setReplyCopied] = useState(false);
   const cat = CATEGORY_META[signal.category || 'OTHER'] || CATEGORY_META.OTHER;
   const stage = STAGE_META[signal.stage] || STAGE_META.TO_REVIEW;
   const sourceType = SOURCE_TYPE_META[signal.source?.type || ''];
@@ -35,6 +37,13 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
   });
 
   const isIgnored = signal.status === 'IGNORED';
+
+  const copySuggestedReply = async () => {
+    if (!signal.suggestedReply || typeof navigator === 'undefined' || !navigator.clipboard) return;
+    await navigator.clipboard.writeText(signal.suggestedReply);
+    setReplyCopied(true);
+    window.setTimeout(() => setReplyCopied(false), 1500);
+  };
 
   return (
     <div className={cn(
@@ -68,7 +77,15 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
                 {sourceType?.icon} {signal.source.name}
               </span>
             )}
-            <span className="text-[11px] text-muted-foreground sm:ml-auto">{formatDate(signal.fetchedAt)}</span>
+            {signal.sourceProfile ? (
+              <span className="rounded border border-border bg-secondary px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                {signal.sourceProfile.badgeLabel}
+              </span>
+            ) : null}
+            <span className="text-[11px] text-muted-foreground sm:ml-auto flex items-center gap-1">
+              <Clock3 className="h-3.5 w-3.5" />
+              Posted {signal.postedAgo || formatDate(signal.publishedAt || signal.fetchedAt)}
+            </span>
           </div>
 
           <Link href={`/signals/${signal.id}`}>
@@ -80,6 +97,31 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
           <p className="text-sm text-muted-foreground leading-7 line-clamp-2 mt-2">
             {signal.normalizedText || signal.originalText?.slice(0, 220)}
           </p>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {signal.urgency ? (
+              <span className={cn(
+                'rounded-lg border px-2.5 py-1 text-[11px] font-medium',
+                signal.urgency === 'CRITICAL' || signal.urgency === 'HIGH'
+                  ? 'border-rose-400/20 bg-rose-400/10 text-rose-300'
+                  : signal.urgency === 'MEDIUM'
+                    ? 'border-amber-400/20 bg-amber-400/10 text-amber-300'
+                    : 'border-border bg-secondary text-muted-foreground',
+              )}>
+                {signal.urgency} urgency
+              </span>
+            ) : null}
+            {signal.sentiment ? (
+              <span className="rounded-lg border border-border bg-secondary px-2.5 py-1 text-[11px] text-muted-foreground">
+                {signal.sentiment.toLowerCase()} tone
+              </span>
+            ) : null}
+            {signal.conversationType ? (
+              <span className="rounded-lg border border-border bg-secondary px-2.5 py-1 text-[11px] text-muted-foreground">
+                {signal.conversationType.replaceAll('_', ' ').toLowerCase()}
+              </span>
+            ) : null}
+          </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1 rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1.5 text-[11px] font-medium text-primary">
@@ -95,10 +137,33 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
 
           {signal.whyItMatters && (
             <div className="mt-3 bg-primary/5 border border-primary/10 rounded-lg px-3 py-2">
-              <p className="text-[11px] font-medium text-primary uppercase tracking-wide mb-1">Why it matters</p>
+              <p className="text-[11px] font-medium text-primary uppercase tracking-wide mb-1">Intent clarity</p>
               <p className="text-sm text-foreground/80 leading-6 line-clamp-2">{signal.whyItMatters}</p>
             </div>
           )}
+
+          {signal.painPoint ? (
+            <div className="mt-3 rounded-lg border border-border bg-background px-3 py-2">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">Pain point</p>
+              <p className="text-sm text-foreground/80 leading-6 line-clamp-2">{signal.painPoint}</p>
+            </div>
+          ) : null}
+
+          {signal.suggestedReply ? (
+            <div className="mt-3 rounded-lg border border-emerald-400/15 bg-emerald-400/5 px-3 py-2">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-300">Suggested reply</p>
+                <button
+                  type="button"
+                  onClick={copySuggestedReply}
+                  className="text-[11px] text-emerald-300 hover:text-emerald-200"
+                >
+                  {replyCopied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <p className="mt-1 text-sm text-foreground/80 leading-6 line-clamp-2">{signal.suggestedReply}</p>
+            </div>
+          ) : null}
 
           {signal.keywords && signal.keywords.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">
@@ -178,6 +243,16 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
               <MessageSquare className="w-3.5 h-3.5" />
               {signal._count.annotations}
             </span>
+          ) : null}
+          {signal.suggestedReply ? (
+            <button
+              type="button"
+              onClick={copySuggestedReply}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <Reply className="w-3.5 h-3.5" />
+              {replyCopied ? 'Copied' : 'Reply'}
+            </button>
           ) : null}
           <a href={signal.sourceUrl} target="_blank" rel="noreferrer"
             className="text-muted-foreground hover:text-foreground transition-colors p-1.5">

@@ -2,6 +2,7 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SignalStatus, SignalCategory, SignalStage, Prisma, AuditAction } from '@prisma/client';
+import { getSourceProfile } from '../sources/source-profiles';
 
 export interface SignalFilters {
   status?: SignalStatus;
@@ -24,6 +25,9 @@ type SignalForRanking = {
   fetchedAt: Date;
   publishedAt: Date | null;
   status: SignalStatus;
+  sourceUrl?: string;
+  whyItMatters?: string | null;
+  classificationRaw?: any;
   source?: { type?: string | null } | null;
   keywords?: Array<unknown>;
 };
@@ -242,11 +246,22 @@ export class SignalsService {
 
   private enrichSignal<T extends SignalForRanking>(signal: T) {
     const priorityScore = this.calculatePriorityScore(signal);
+    const sourceProfile = signal.source?.type ? getSourceProfile(signal.source.type as any) : null;
+    const classification = signal.classificationRaw || {};
+    const postedAt = signal.publishedAt || signal.fetchedAt;
     return {
       ...signal,
       priorityScore,
       rankingReasons: this.buildRankingReasons(signal, priorityScore),
       freshnessLabel: this.getFreshnessLabel(signal.fetchedAt, signal.publishedAt),
+      postedAgo: this.getRelativeAgeLabel(postedAt),
+      sourceLabel: signal.source?.type ? sourceProfile?.platformLabel || signal.source.type : 'Unknown source',
+      sourceProfile,
+      painPoint: classification.painPoint || signal.whyItMatters || null,
+      urgency: classification.urgency || 'MEDIUM',
+      sentiment: classification.sentiment || 'NEUTRAL',
+      conversationType: classification.conversationType || 'OTHER',
+      suggestedReply: classification.suggestedReply || null,
     };
   }
 
@@ -338,6 +353,10 @@ export class SignalsService {
       reasons.push(`High-signal ${signal.source.type === 'REDDIT' ? 'community' : 'founder'} source`);
     }
 
+    if (signal.classificationRaw?.urgency === 'HIGH' || signal.classificationRaw?.urgency === 'CRITICAL') {
+      reasons.push('Urgent buyer conversation');
+    }
+
     if (priorityScore >= 90) {
       reasons.unshift('Top priority lead');
     }
@@ -355,5 +374,17 @@ export class SignalsService {
     if (ageHours <= 24) return 'Fresh';
     if (ageHours <= 72) return 'Recent';
     return 'Aged';
+  }
+
+  private getRelativeAgeLabel(date: Date) {
+    const diffMs = Math.max(0, Date.now() - new Date(date).getTime());
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 }
