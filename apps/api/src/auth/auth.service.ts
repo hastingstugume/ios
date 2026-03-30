@@ -124,7 +124,11 @@ export class AuthService {
     } satisfies OAuthStart;
   }
 
-  async login(email: string, password: string): Promise<SessionResult | MfaChallengeResult> {
+  async login(
+    email: string,
+    password: string,
+    metadata?: { ipAddress?: string | null; userAgent?: string | null },
+  ): Promise<SessionResult | MfaChallengeResult> {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user || !user.passwordHash) throw new UnauthorizedException('Invalid credentials');
 
@@ -148,11 +152,16 @@ export class AuthService {
       return this.createMfaChallenge(user.id, authState);
     }
 
-    const session = await this.createSession(user.id);
+    const session = await this.createSession(user.id, metadata);
     return { ...session, authState };
   }
 
-  async loginWithOAuth(provider: string, code: string, invitationToken?: string): Promise<SessionResult | MfaChallengeResult> {
+  async loginWithOAuth(
+    provider: string,
+    code: string,
+    invitationToken?: string,
+    metadata?: { ipAddress?: string | null; userAgent?: string | null },
+  ): Promise<SessionResult | MfaChallengeResult> {
     const config = this.getOAuthProviderConfig(provider);
     const accessToken = await this.exchangeOAuthCode(config, code);
     const profile = await this.fetchOAuthProfile(config.id, accessToken);
@@ -191,7 +200,7 @@ export class AuthService {
       return this.createMfaChallenge(user.id, authState);
     }
 
-    const session = await this.createSession(user.id);
+    const session = await this.createSession(user.id, metadata);
     return { ...session, authState };
   }
 
@@ -292,7 +301,7 @@ export class AuthService {
     return { success: true };
   }
 
-  async verifyEmail(token: string) {
+  async verifyEmail(token: string, metadata?: { ipAddress?: string | null; userAgent?: string | null }) {
     const record = await this.prisma.emailVerificationToken.findUnique({
       where: { token },
       include: { user: true },
@@ -312,7 +321,7 @@ export class AuthService {
       }),
     ]);
 
-    return this.createSession(record.userId);
+    return this.createSession(record.userId, metadata);
   }
 
   async resendVerification(email: string) {
@@ -492,7 +501,11 @@ export class AuthService {
     return { success: true };
   }
 
-  async verifyMfaLogin(challengeToken: string, code: string) {
+  async verifyMfaLogin(
+    challengeToken: string,
+    code: string,
+    metadata?: { ipAddress?: string | null; userAgent?: string | null },
+  ) {
     const challenge = await this.prisma.mfaChallenge.findUnique({
       where: { token: challengeToken },
       include: {
@@ -536,11 +549,55 @@ export class AuthService {
         : []),
     ]);
 
-    const session = await this.createSession(challenge.user.id);
+    const session = await this.createSession(challenge.user.id, metadata);
     return {
       ...session,
       authState: this.buildAuthState(challenge.user),
     };
+  }
+
+  async listSessions(userId: string, currentToken?: string) {
+    const sessions = await this.prisma.session.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      sessions: sessions.map((session) => ({
+        id: session.id,
+        createdAt: session.createdAt,
+        expiresAt: session.expiresAt,
+        ipAddress: session.ipAddress,
+        userAgent: session.userAgent,
+        isCurrent: currentToken ? session.token === currentToken : false,
+      })),
+    };
+  }
+
+  async revokeSession(userId: string, sessionId: string, currentToken?: string) {
+    const session = await this.prisma.session.findFirst({
+      where: { id: sessionId, userId },
+    });
+    if (!session) throw new BadRequestException('Session not found');
+    if (currentToken && session.token === currentToken) {
+      throw new BadRequestException('Use standard sign out for the current session');
+    }
+
+    await this.prisma.session.delete({
+      where: { id: session.id },
+    });
+
+    return { success: true };
+  }
+
+  async revokeOtherSessions(userId: string, currentToken?: string) {
+    const where: any = { userId };
+    if (currentToken) {
+      where.token = { not: currentToken };
+    }
+
+    await this.prisma.session.deleteMany({ where });
+    return { success: true };
   }
 
   private async createVerificationToken(userId: string) {
@@ -873,7 +930,7 @@ export class AuthService {
     return null;
   }
 
-  private async createSession(userId: string) {
+  private async createSession(userId: string, metadata?: { ipAddress?: string | null; userAgent?: string | null }) {
     const expiryDays = this.config.get('SESSION_EXPIRY_DAYS', 30);
     const token = `ses_${uuidv4().replace(/-/g, '')}`;
     const session = await this.prisma.session.create({
@@ -881,6 +938,8 @@ export class AuthService {
         userId,
         token,
         expiresAt: new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000),
+        ipAddress: metadata?.ipAddress ?? null,
+        userAgent: metadata?.userAgent ?? null,
       },
     });
     return { token: session.token, expiresAt: session.expiresAt };

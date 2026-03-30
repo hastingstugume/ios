@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
-import { authApi, organizationsApi, type AuditLog, type Invitation, type OrganizationMember } from '@/lib/api';
+import { authApi, organizationsApi, type AuditLog, type AuthSession, type Invitation, type OrganizationMember } from '@/lib/api';
 import { useTheme, type ThemeMode } from '@/components/theme-provider';
 import { formatDate, formatPlanName } from '@/lib/utils';
 import { User, Building2, Shield, Users, Clock3, Link as LinkIcon, Trash2, Plus, Pencil, Sun, Moon, Monitor } from 'lucide-react';
@@ -30,6 +30,36 @@ function RoleBadge({ role }: { role: string }) {
       {role}
     </span>
   );
+}
+
+function formatSessionLabel(userAgent: string | null) {
+  if (!userAgent) return 'Browser session';
+
+  if (/chrome/i.test(userAgent)) return 'Chrome';
+  if (/firefox/i.test(userAgent)) return 'Firefox';
+  if (/safari/i.test(userAgent) && !/chrome|chromium/i.test(userAgent)) return 'Safari';
+  if (/edg/i.test(userAgent)) return 'Edge';
+
+  return 'Browser session';
+}
+
+function formatSessionTimestamp(value: string) {
+  return new Date(value).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function formatSessionIp(ipAddress: string | null) {
+  if (!ipAddress) return null;
+
+  if (ipAddress === '::1') {
+    return '127.0.0.1';
+  }
+
+  return ipAddress;
 }
 
 export default function SettingsPage() {
@@ -104,6 +134,11 @@ export default function SettingsPage() {
     queryFn: () => organizationsApi.auditLog(currentOrgId!, 1, 20),
     enabled: !!currentOrgId,
   });
+  const sessionsQuery = useQuery({
+    queryKey: ['auth-sessions'],
+    queryFn: () => authApi.sessions(),
+    enabled: !!user?.id,
+  });
 
   const canManageWorkspace = role === 'OWNER' || role === 'ADMIN';
 
@@ -126,6 +161,14 @@ export default function SettingsPage() {
   const passwordMutation = useMutation({
     mutationFn: () => authApi.changePassword(passwords),
     onSuccess: () => setPasswords({ currentPassword: '', newPassword: '' }),
+  });
+  const revokeSessionMutation = useMutation({
+    mutationFn: (sessionId: string) => authApi.revokeSession(sessionId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['auth-sessions'] }),
+  });
+  const revokeOtherSessionsMutation = useMutation({
+    mutationFn: () => authApi.revokeOtherSessions(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['auth-sessions'] }),
   });
 
   const setupMfaMutation = useMutation({
@@ -215,6 +258,7 @@ export default function SettingsPage() {
   const members = membersQuery.data?.members || [];
   const invitations = membersQuery.data?.invitations || [];
   const auditLogs = auditQuery.data?.data || [];
+  const activeSessions = sessionsQuery.data?.sessions || [];
   const themeOptions: Array<{ value: ThemeMode; label: string; description: string; icon: any }> = [
     { value: 'light', label: 'Light', description: 'Bright interface for daytime work.', icon: Sun },
     { value: 'dark', label: 'Dark', description: 'Low-glare theme for focused sessions.', icon: Moon },
@@ -556,6 +600,73 @@ export default function SettingsPage() {
               </p>
             </div>
           )}
+        </div>
+      </section>
+
+      <section className="section-card">
+        <SectionTitle icon={Shield} title="Sessions" subtitle="Review where your account is signed in and revoke devices you no longer use." />
+        <div className="space-y-4 px-5 py-5">
+          <div className="flex flex-col gap-3 rounded-xl border border-border bg-secondary px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Active sessions</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                This helps you spot older browsers or devices and sign them out without affecting the session you’re using now.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => revokeOtherSessionsMutation.mutate()}
+              disabled={revokeOtherSessionsMutation.isPending || activeSessions.filter((session) => !session.isCurrent).length === 0}
+              className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+            >
+              {revokeOtherSessionsMutation.isPending ? 'Signing out others…' : 'Sign out other sessions'}
+            </button>
+          </div>
+
+          {sessionsQuery.error ? (
+            <p className="text-sm text-destructive">{(sessionsQuery.error as Error).message}</p>
+          ) : null}
+
+          <div className="space-y-3">
+            {activeSessions.map((session: AuthSession) => (
+              <div key={session.id} className="rounded-xl border border-border bg-secondary px-4 py-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-foreground">
+                        {formatSessionLabel(session.userAgent)}
+                      </p>
+                      {session.isCurrent ? (
+                        <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                          Current
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Started {formatSessionTimestamp(session.createdAt)} · Expires {formatSessionTimestamp(session.expiresAt)}
+                    </p>
+                    {formatSessionIp(session.ipAddress) ? (
+                      <p className="mt-1 text-xs text-muted-foreground">IP {formatSessionIp(session.ipAddress)}</p>
+                    ) : null}
+                  </div>
+
+                  {!session.isCurrent ? (
+                    <button
+                      type="button"
+                      onClick={() => revokeSessionMutation.mutate(session.id)}
+                      disabled={revokeSessionMutation.isPending}
+                      className="rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                    >
+                      {revokeSessionMutation.isPending ? 'Revoking…' : 'Sign out'}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+            {!activeSessions.length && !sessionsQuery.isLoading ? (
+              <p className="text-sm text-muted-foreground">No active sessions found.</p>
+            ) : null}
+          </div>
         </div>
       </section>
 

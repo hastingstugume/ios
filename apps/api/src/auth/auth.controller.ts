@@ -23,8 +23,8 @@ export class AuthController {
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 900000 } })
   @ApiOperation({ summary: 'Login' })
-  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
-    const session = await this.auth.login(dto.email, dto.password);
+  async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const session = await this.auth.login(dto.email, dto.password, this.getRequestMetadata(req));
     if ('mfaRequired' in session && session.mfaRequired) {
       res.clearCookie('session_token');
       return session;
@@ -95,7 +95,7 @@ export class AuthController {
     }
 
     const invitationToken = req.cookies?.oauth_invitation_token;
-    const session = await this.auth.loginWithOAuth(provider, code, invitationToken);
+    const session = await this.auth.loginWithOAuth(provider, code, invitationToken, this.getRequestMetadata(req));
     res.clearCookie('oauth_state', { path: '/' });
     res.clearCookie('oauth_provider', { path: '/' });
     res.clearCookie('oauth_invitation_token', { path: '/' });
@@ -130,11 +130,19 @@ export class AuthController {
     return this.auth.getMe(req.user.id);
   }
 
+  @Get('sessions')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'List active sessions for the current user' })
+  async sessions(@Req() req: any) {
+    const token = req.cookies?.session_token;
+    return this.auth.listSessions(req.user.id, token);
+  }
+
   @Post('verify-email')
   @HttpCode(200)
   @ApiOperation({ summary: 'Verify email and create a session' })
   async verifyEmail(@Body() dto: VerifyEmailDto, @Res({ passthrough: true }) res: Response) {
-    const session = await this.auth.verifyEmail(dto.token);
+    const session = await this.auth.verifyEmail(dto.token, this.getRequestMetadata(res.req as Request));
     this.setSessionCookie(res, session.token, session.expiresAt);
     return { success: true, expiresAt: session.expiresAt };
   }
@@ -166,7 +174,7 @@ export class AuthController {
   @HttpCode(200)
   @ApiOperation({ summary: 'Complete sign-in with a multi-factor authentication code' })
   async verifyMfaLogin(@Body() dto: VerifyMfaLoginDto, @Res({ passthrough: true }) res: Response) {
-    const session = await this.auth.verifyMfaLogin(dto.challengeToken, dto.code);
+    const session = await this.auth.verifyMfaLogin(dto.challengeToken, dto.code, this.getRequestMetadata(res.req as Request));
     this.setSessionCookie(res, session.token, session.expiresAt);
     return {
       success: true,
@@ -221,6 +229,24 @@ export class AuthController {
     return this.auth.disableMfa(req.user.id, dto.code);
   }
 
+  @Post('sessions/revoke-others')
+  @UseGuards(AuthGuard)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Revoke all other active sessions for the current user' })
+  async revokeOtherSessions(@Req() req: any) {
+    const token = req.cookies?.session_token;
+    return this.auth.revokeOtherSessions(req.user.id, token);
+  }
+
+  @Post('sessions/:sessionId/revoke')
+  @UseGuards(AuthGuard)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Revoke one active session for the current user' })
+  async revokeSession(@Req() req: any, @Param('sessionId') sessionId: string) {
+    const token = req.cookies?.session_token;
+    return this.auth.revokeSession(req.user.id, sessionId, token);
+  }
+
   private setSessionCookie(res: Response, token: string, expiresAt: Date) {
     res.cookie('session_token', token, {
       httpOnly: true,
@@ -229,5 +255,34 @@ export class AuthController {
       expires: expiresAt,
       path: '/',
     });
+  }
+
+  private getRequestMetadata(req: Request | undefined) {
+    const forwardedFor = req?.headers['x-forwarded-for'];
+    const rawIpAddress = Array.isArray(forwardedFor)
+      ? forwardedFor[0]
+      : typeof forwardedFor === 'string'
+        ? forwardedFor.split(',')[0]?.trim()
+        : req?.ip ?? null;
+
+    return {
+      ipAddress: this.normalizeIpAddress(rawIpAddress),
+      userAgent: req?.headers['user-agent'] ?? null,
+    };
+  }
+
+  private normalizeIpAddress(ipAddress: string | null | undefined) {
+    if (!ipAddress) return null;
+    const normalized = ipAddress.trim();
+
+    if (normalized === '::1') {
+      return '127.0.0.1';
+    }
+
+    if (normalized.startsWith('::ffff:')) {
+      return normalized.slice(7);
+    }
+
+    return normalized;
   }
 }

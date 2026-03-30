@@ -11,7 +11,7 @@ const mockPrisma: any = {
   userIdentity: { findUnique: jest.fn(), create: jest.fn() },
   organization: { create: jest.fn() },
   organizationMember: { create: jest.fn(), findFirst: jest.fn() },
-  session: { create: jest.fn(), findUnique: jest.fn(), deleteMany: jest.fn(), delete: jest.fn() },
+  session: { create: jest.fn(), findUnique: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), deleteMany: jest.fn(), delete: jest.fn() },
   mfaChallenge: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
   invitation: { findUnique: jest.fn(), update: jest.fn() },
   emailVerificationToken: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
@@ -28,12 +28,36 @@ describe('AuthService', () => {
   let service: AuthService;
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    mockPrisma.$transaction.mockImplementation((arg: any) => {
+      if (typeof arg === 'function') return arg(mockPrisma);
+      if (Array.isArray(arg)) return Promise.all(arg);
+      return arg;
+    });
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: ConfigService, useValue: { get: (k: string, d?: any) => d } },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (k: string, d?: any) => {
+              const values: Record<string, any> = {
+                GOOGLE_CLIENT_ID: 'google-client',
+                GOOGLE_CLIENT_SECRET: 'google-secret',
+                MICROSOFT_CLIENT_ID: 'microsoft-client',
+                MICROSOFT_CLIENT_SECRET: 'microsoft-secret',
+                GITHUB_CLIENT_ID: 'github-client',
+                GITHUB_CLIENT_SECRET: 'github-secret',
+                API_BASE_URL: 'http://localhost:3001',
+                MFA_ISSUER: 'Opportunity Scanner',
+              };
+
+              return k in values ? values[k] : d;
+            },
+          },
+        },
         { provide: NotificationsService, useValue: { sendVerificationEmail: jest.fn(), sendPasswordResetEmail: jest.fn() } },
       ],
     }).compile();
@@ -150,6 +174,58 @@ describe('AuthService', () => {
     await expect(service.changePassword('u1', 'current-pass', 'new-password-123')).resolves.toEqual({ success: true });
     expect(mockPrisma.user.update).toHaveBeenCalled();
     expect(mockPrisma.session.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u1' } });
+  });
+
+  it('lists sessions and marks the current one', async () => {
+    mockPrisma.session.findMany.mockResolvedValue([
+      {
+        id: 's1',
+        token: 'current',
+        createdAt: new Date('2026-03-30T10:00:00.000Z'),
+        expiresAt: new Date('2026-04-29T10:00:00.000Z'),
+        ipAddress: '127.0.0.1',
+        userAgent: 'Mozilla/5.0 Chrome/122',
+      },
+      {
+        id: 's2',
+        token: 'other',
+        createdAt: new Date('2026-03-29T10:00:00.000Z'),
+        expiresAt: new Date('2026-04-28T10:00:00.000Z'),
+        ipAddress: null,
+        userAgent: null,
+      },
+    ]);
+
+    await expect(service.listSessions('u1', 'current')).resolves.toEqual({
+      sessions: [
+        expect.objectContaining({ id: 's1', isCurrent: true }),
+        expect.objectContaining({ id: 's2', isCurrent: false }),
+      ],
+    });
+  });
+
+  it('revokes a non-current session', async () => {
+    mockPrisma.session.findFirst.mockResolvedValue({
+      id: 's2',
+      token: 'other',
+      userId: 'u1',
+    });
+    mockPrisma.session.delete.mockResolvedValue({ id: 's2' });
+
+    await expect(service.revokeSession('u1', 's2', 'current')).resolves.toEqual({ success: true });
+    expect(mockPrisma.session.delete).toHaveBeenCalledWith({ where: { id: 's2' } });
+  });
+
+  it('revokes other sessions while keeping the current one', async () => {
+    mockPrisma.session.deleteMany.mockResolvedValue({ count: 2 });
+
+    await expect(service.revokeOtherSessions('u1', 'current')).resolves.toEqual({ success: true });
+    expect(mockPrisma.session.deleteMany).toHaveBeenCalledWith({
+      where: {
+        userId: 'u1',
+        token: { not: 'current' },
+      },
+    });
   });
 
   it('verifies email and creates a session', async () => {

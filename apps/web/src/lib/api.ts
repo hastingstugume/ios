@@ -53,6 +53,9 @@ export const authApi = {
   setupMfa: () => api.post<{ secret: string; otpauthUri: string; issuer: string }>('/auth/mfa/setup', {}),
   enableMfa: (data: { code: string }) => api.post<{ success: true; backupCodes: string[] }>('/auth/mfa/enable', data),
   disableMfa: (data: { code: string }) => api.post<{ success: true }>('/auth/mfa/disable', data),
+  sessions: () => api.get<{ sessions: AuthSession[] }>('/auth/sessions'),
+  revokeSession: (sessionId: string) => api.post<{ success: true }>(`/auth/sessions/${sessionId}/revoke`, {}),
+  revokeOtherSessions: () => api.post<{ success: true }>('/auth/sessions/revoke-others', {}),
   getOAuthStartUrl: (provider: OAuthProvider, invitationToken?: string) => {
     const params = new URLSearchParams();
     if (invitationToken) params.set('invitationToken', invitationToken);
@@ -128,6 +131,14 @@ export interface User {
   authProviders?: Array<'google' | 'microsoft' | 'github'>;
 }
 export interface Membership { id: string; role: string; organization: Organization; joinedAt?: string; }
+export interface AuthSession {
+  id: string;
+  createdAt: string;
+  expiresAt: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  isCurrent: boolean;
+}
 export interface Organization { id: string; name: string; slug: string; plan: string; negativeKeywords?: string[]; }
 export interface OrganizationMember {
   id: string;

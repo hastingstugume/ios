@@ -15,8 +15,10 @@ async function bootstrap() {
 
   const config = app.get(ConfigService);
   const frontendUrl = config.get('FRONTEND_URL', 'http://localhost:3000');
+  const trustProxy = config.get('TRUST_PROXY', config.get('NODE_ENV') === 'production');
 
   // Security
+  app.set('trust proxy', trustProxy ? 1 : false);
   app.use(helmet({
     crossOriginEmbedderPolicy: false,
   }));
