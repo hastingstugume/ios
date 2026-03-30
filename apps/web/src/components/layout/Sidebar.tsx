@@ -3,7 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { cn } from '@/lib/utils';
+import { cn, formatPlanName } from '@/lib/utils';
 import { Radar, LayoutDashboard, Zap, Tag, Database, Bell, Settings, LogOut, ChevronDown, Building2, Check } from 'lucide-react';
 
 const NAV = [
@@ -45,7 +45,7 @@ export function Sidebar() {
             </div>
             <div className="min-w-0 flex-1 text-left">
               <span className="block text-xs font-medium text-foreground truncate">{currentOrg.name}</span>
-              <span className="block text-[10px] text-muted-foreground truncate">{currentOrg.plan} workspace</span>
+              <span className="block text-[10px] text-muted-foreground truncate">{formatPlanName(currentOrg.plan)} workspace</span>
             </div>
             <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
           </button>
@@ -68,7 +68,7 @@ export function Sidebar() {
                     <div className="min-w-0">
                       <p className="truncate font-medium">{membership.organization.name}</p>
                       <p className="truncate text-[10px] uppercase tracking-wide text-muted-foreground">
-                        {membership.role} · {membership.organization.plan}
+                        {membership.role} · {formatPlanName(membership.organization.plan)}
                       </p>
                     </div>
                     {active && <Check className="w-4 h-4 text-primary shrink-0" />}

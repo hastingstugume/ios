@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { authApi, organizationsApi, type AuditLog, type Invitation, type OrganizationMember } from '@/lib/api';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatPlanName } from '@/lib/utils';
 import { User, Building2, Shield, Users, Clock3, Link as LinkIcon, Trash2, Plus, Pencil } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 
@@ -34,6 +34,7 @@ export default function SettingsPage() {
   const qc = useQueryClient();
   const [name, setName] = useState('');
   const [orgName, setOrgName] = useState('');
+  const [negativeKeywords, setNegativeKeywords] = useState('');
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '' });
   const [invite, setInvite] = useState({ email: '', role: 'ANALYST' });
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
@@ -47,6 +48,10 @@ export default function SettingsPage() {
   useEffect(() => {
     setOrgName(currentOrg?.name || '');
   }, [currentOrg?.name]);
+
+  useEffect(() => {
+    setNegativeKeywords((currentOrg?.negativeKeywords || []).join(', '));
+  }, [currentOrg?.negativeKeywords]);
 
   const membersQuery = useQuery({
     queryKey: ['org-members', currentOrgId],
@@ -68,7 +73,10 @@ export default function SettingsPage() {
   });
 
   const orgMutation = useMutation({
-    mutationFn: () => organizationsApi.update(currentOrgId!, { name: orgName.trim() }),
+    mutationFn: () => organizationsApi.update(currentOrgId!, {
+      name: orgName.trim(),
+      negativeKeywords: negativeKeywords.split(',').map((term) => term.trim()).filter(Boolean),
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['auth', 'me'] });
       qc.invalidateQueries({ queryKey: ['org-members', currentOrgId] });
@@ -127,7 +135,7 @@ export default function SettingsPage() {
           <p className="mt-2 text-base text-muted-foreground">Manage your account, workspace, team access, and audit visibility.</p>
         </div>
         <div className="rounded-lg border border-border bg-secondary px-4 py-3 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground capitalize">{currentOrg?.plan || 'Free'}</span> plan
+          <span className="font-medium text-foreground">{formatPlanName(currentOrg?.plan)}</span> plan
         </div>
       </section>
 
@@ -184,10 +192,21 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">Workspace negative keywords</label>
+            <input
+              value={negativeKeywords}
+              onChange={(e) => setNegativeKeywords(e.target.value)}
+              disabled={!canManageWorkspace}
+              placeholder="wordpress, crypto, newsletter, affiliate"
+              className="w-full rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:text-muted-foreground"
+            />
+            <p className="mt-2 text-xs text-muted-foreground">Comma-separated phrases that should be filtered out across all discovery sources in this workspace.</p>
+          </div>
           <div className="rounded-xl border border-border bg-secondary p-4">
             <label className="mb-2 block text-xs text-muted-foreground">Plan</label>
             <div className="flex items-center gap-2">
-              <span className="text-lg font-semibold text-foreground capitalize">{currentOrg?.plan || 'Free'}</span>
+              <span className="text-lg font-semibold text-foreground">{formatPlanName(currentOrg?.plan)}</span>
               <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase text-primary">Active</span>
             </div>
           </div>
@@ -195,7 +214,12 @@ export default function SettingsPage() {
           {orgMutation.error && <p className="text-sm text-destructive">{(orgMutation.error as Error).message}</p>}
           {canManageWorkspace && (
             <button
-              disabled={!orgName.trim() || orgName.trim() === (currentOrg?.name || '') || orgMutation.isPending}
+              disabled={
+                (
+                  (!orgName.trim() || orgName.trim() === (currentOrg?.name || ''))
+                  && negativeKeywords === ((currentOrg?.negativeKeywords || []).join(', '))
+                ) || orgMutation.isPending
+              }
               onClick={() => orgMutation.mutate()}
               className="rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
             >
