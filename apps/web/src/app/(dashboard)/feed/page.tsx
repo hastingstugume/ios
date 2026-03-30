@@ -49,7 +49,7 @@ function Select({ value, onChange, options, className = '' }: {
 
 function StatChip({ label, value, icon: Icon }: { label: string; value: number; icon: any }) {
   return (
-    <div className="bg-secondary border border-border rounded-lg px-3 py-2 min-w-[140px]">
+    <div className="min-w-0 flex-1 rounded-lg border border-border bg-secondary px-3 py-2 sm:min-w-[140px]">
       <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wide">
         <Icon className="w-3.5 h-3.5 text-primary" />
         {label}
@@ -118,7 +118,7 @@ export default function FeedPage() {
   return (
     <div className="page-shell animate-fade-in">
       <div className="page-hero space-y-5">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-primary" />
@@ -129,7 +129,7 @@ export default function FeedPage() {
           </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg border transition-colors ${
+            className={`flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors sm:w-auto ${
               showFilters || activeFilterCount > 0
                 ? 'bg-primary/10 border-primary/20 text-primary'
                 : 'border-border text-muted-foreground hover:text-foreground hover:bg-accent'
@@ -145,7 +145,7 @@ export default function FeedPage() {
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="grid grid-cols-2 gap-3 lg:flex lg:flex-wrap">
           <StatChip label="Signals" value={signalCount} icon={Clock} />
           <StatChip label="High Confidence" value={highConfidenceCount} icon={Target} />
           <StatChip label="Saved" value={savedCount} icon={Bookmark} />
@@ -168,24 +168,27 @@ export default function FeedPage() {
         </div>
 
         {showFilters && (
-          <div className="flex flex-wrap gap-2 pt-1">
-            <Select value={filters.category} onChange={(v) => setFilter('category', v)} options={CATEGORIES} />
-            <Select value={filters.status} onChange={(v) => setFilter('status', v)} options={STATUSES} />
-            <Select value={filters.stage} onChange={(v) => setFilter('stage', v)} options={STAGES} />
-            <Select value={filters.minConfidence} onChange={(v) => setFilter('minConfidence', v)} options={CONFIDENCE_OPTIONS} />
+          <div className="grid gap-2 pt-1 sm:grid-cols-2 xl:grid-cols-4">
+            <Select value={filters.category} onChange={(v) => setFilter('category', v)} options={CATEGORIES} className="w-full" />
+            <Select value={filters.status} onChange={(v) => setFilter('status', v)} options={STATUSES} className="w-full" />
+            <Select value={filters.stage} onChange={(v) => setFilter('stage', v)} options={STAGES} className="w-full" />
+            <Select value={filters.minConfidence} onChange={(v) => setFilter('minConfidence', v)} options={CONFIDENCE_OPTIONS} className="w-full" />
             <Select
               value={filters.sourceId}
               onChange={(v) => setFilter('sourceId', v)}
+              className="w-full"
               options={[{ value: '', label: 'All sources' }, ...(sources || []).map((s) => ({ value: s.id, label: s.name }))]}
             />
             <Select
               value={filters.keywordId}
               onChange={(v) => setFilter('keywordId', v)}
+              className="w-full"
               options={[{ value: '', label: 'All keywords' }, ...(keywords || []).map((k) => ({ value: k.id, label: k.phrase }))]}
             />
             <Select
               value={filters.assigneeId}
               onChange={(v) => setFilter('assigneeId', v)}
+              className="w-full"
               options={[{ value: '', label: 'Any owner' }, ...((memberData?.members || []).map((member) => ({ value: member.userId, label: member.user.name || member.user.email })))]}
             />
             {activeFilterCount > 0 && (
@@ -232,7 +235,7 @@ export default function FeedPage() {
       )}
 
       {data?.meta && data.meta.totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 pt-2">
+        <div className="flex flex-col items-center justify-center gap-3 pt-2 sm:flex-row">
           <button
             disabled={filters.page <= 1}
             onClick={() => setFilter('page', filters.page - 1)}

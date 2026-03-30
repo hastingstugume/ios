@@ -269,21 +269,21 @@ export default function SourcesPage() {
             <h1 className="text-3xl font-semibold tracking-tight text-foreground">Sources</h1>
             <p className="mt-2 text-base text-muted-foreground">Configure where to discover signals.</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground">
+          <div className="grid grid-cols-2 gap-2 text-sm sm:flex sm:flex-wrap">
+            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground">
               <span className="font-medium text-foreground">{activeSources}</span> active
             </div>
-            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground">
+            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground">
               <span className="font-medium text-foreground">{totalSignals}</span> total signals
             </div>
-            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground">
+            <div className="col-span-2 rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground sm:col-span-1">
               <span className="font-medium text-foreground">{errorSources}</span> need attention
             </div>
           </div>
         </div>
         <button
           onClick={() => setAdding(!adding)}
-          className="inline-flex items-center gap-2 self-start rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          className="inline-flex w-full items-center justify-center gap-2 self-start rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:w-auto"
         >
           <Plus className="w-4 h-4" />
           Add source
@@ -292,7 +292,7 @@ export default function SourcesPage() {
 
       <section className="section-card p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative max-w-md flex-1">
+          <div className="relative w-full max-w-md flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={search}
@@ -306,8 +306,8 @@ export default function SourcesPage() {
       </section>
 
       <section className="section-card p-4">
-        <div className="flex items-start gap-3">
-          <Sparkles className="mt-0.5 h-4 w-4 text-primary" />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+          <Sparkles className="h-4 w-4 text-primary sm:mt-0.5" />
           <div className="flex-1 space-y-4">
             <div>
               <h2 className="text-base font-semibold text-foreground">Starter presets</h2>
@@ -344,7 +344,7 @@ export default function SourcesPage() {
                       <button
                         onClick={() => addRecommendedKeywords.mutate(preset.recommendedKeywords || [])}
                         disabled={addRecommendedKeywords.isPending}
-                        className="mt-3 rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                        className="mt-3 w-full rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50 sm:w-auto"
                       >
                         {addRecommendedKeywords.isPending ? 'Adding keywords…' : 'Add recommended keywords'}
                       </button>
@@ -363,7 +363,7 @@ export default function SourcesPage() {
                       <button
                         onClick={() => applyRecommendedNegatives.mutate(preset.recommendedNegativeKeywords || [])}
                         disabled={applyRecommendedNegatives.isPending}
-                        className="mt-3 rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                        className="mt-3 w-full rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50 sm:w-auto"
                       >
                         {applyRecommendedNegatives.isPending ? 'Applying negatives…' : 'Apply recommended negatives'}
                       </button>
@@ -379,7 +379,7 @@ export default function SourcesPage() {
                   <button
                     onClick={() => installPreset.mutate(preset.id)}
                     disabled={installPreset.isPending}
-                    className="mt-4 rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                    className="mt-4 w-full rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 sm:w-auto"
                   >
                     {installPreset.isPending ? 'Installing…' : 'Install preset'}
                   </button>

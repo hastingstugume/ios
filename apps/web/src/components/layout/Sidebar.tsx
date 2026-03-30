@@ -15,13 +15,13 @@ const NAV = [
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
-export function Sidebar() {
+export function Sidebar({ className = '', onNavigate }: { className?: string; onNavigate?: () => void }) {
   const pathname = usePathname();
   const { user, currentOrg, memberships, setCurrentOrgId, logout } = useAuth();
   const [showOrgMenu, setShowOrgMenu] = useState(false);
 
   return (
-    <aside className="w-56 shrink-0 flex flex-col bg-card border-r border-border h-screen sticky top-0">
+    <aside className={cn('w-56 shrink-0 flex flex-col bg-card border-r border-border h-screen sticky top-0', className)}>
       <div className="px-4 py-4 border-b border-border">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
@@ -59,6 +59,7 @@ export function Sidebar() {
                     onClick={() => {
                       setCurrentOrgId(membership.organization.id);
                       setShowOrgMenu(false);
+                      onNavigate?.();
                     }}
                     className={cn(
                       'w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors',
@@ -87,6 +88,7 @@ export function Sidebar() {
             <Link
               key={href}
               href={href}
+              onClick={() => onNavigate?.()}
               className={cn(
                 'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-colors group relative',
                 active
@@ -120,7 +122,10 @@ export function Sidebar() {
           </div>
         </div>
         <button
-          onClick={() => logout(undefined)}
+          onClick={() => {
+            onNavigate?.();
+            logout(undefined);
+          }}
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
         >
           <LogOut className="w-3.5 h-3.5" />

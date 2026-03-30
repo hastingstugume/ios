@@ -39,9 +39,9 @@ export default function DashboardPage() {
   });
 
   if (isLoading) return (
-    <div className="p-8 space-y-6 animate-pulse">
+    <div className="page-shell animate-pulse">
       <div className="h-8 bg-secondary rounded w-48" />
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {[...Array(6)].map((_, i) => <div key={i} className="h-28 bg-secondary rounded-xl" />)}
       </div>
     </div>
@@ -52,19 +52,19 @@ export default function DashboardPage() {
   return (
     <div className="page-shell animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-foreground">Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Your opportunity pipeline at a glance</p>
         </div>
-        <Link href="/feed" className="flex items-center gap-1.5 bg-primary text-primary-foreground text-sm px-3 py-1.5 rounded-lg hover:bg-primary/90 transition-colors font-medium">
+        <Link href="/feed" className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:w-auto">
           <Zap className="w-3.5 h-3.5" />
           View Feed
         </Link>
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard label="New Today"      value={s.newToday ?? 0}      icon={Clock}      sub="signals discovered"         color="text-blue-400" />
         <StatCard label="This Week"      value={s.newThisWeek ?? 0}   icon={TrendingUp} sub="total signals"              color="text-purple-400" />
         <StatCard label="High Confidence" value={s.highConfidence ?? 0} icon={Target}    sub="score ≥ 80, actionable"     color="text-green-400" />
@@ -76,9 +76,9 @@ export default function DashboardPage() {
         <StatCard label="Total Signals"  value={s.totalSignals ?? 0}  icon={Zap}        sub="all time"                   color="text-slate-300" />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         {/* Trend chart */}
-        <div className="col-span-2 bg-card border border-border rounded-xl p-4">
+        <div className="bg-card border border-border rounded-xl p-4 xl:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-sm font-semibold text-foreground">Signal Volume — Last 30 Days</h2>
@@ -149,7 +149,7 @@ export default function DashboardPage() {
 
       {/* Recent high-confidence */}
       <div className="bg-card border border-border rounded-xl">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <Star className="w-4 h-4 text-amber-400" />
             <h2 className="text-sm font-semibold text-foreground">Recent High-Confidence Signals</h2>

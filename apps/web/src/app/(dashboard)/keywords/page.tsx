@@ -58,33 +58,33 @@ export default function KeywordsPage() {
   return (
     <div className="page-shell animate-fade-in">
       <div className="page-hero space-y-5">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-xl font-semibold text-foreground">Keywords</h1>
             <p className="text-sm text-muted-foreground mt-1">Monitor the internet for the phrases that matter to your business.</p>
           </div>
           <button
             onClick={() => setAdding(!adding)}
-            className="flex items-center gap-1.5 bg-primary text-primary-foreground text-sm px-3 py-2 rounded-lg hover:bg-primary/90 transition-colors font-medium"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:w-auto"
           >
             <Plus className="w-4 h-4" />
             Add keyword
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-3 text-sm">
-          <div className="bg-secondary border border-border rounded-lg px-3 py-2 text-muted-foreground">
+        <div className="grid grid-cols-2 gap-3 text-sm sm:flex sm:flex-wrap">
+          <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground">
             <span className="text-foreground font-semibold">{keywords.length}</span> tracked phrases
           </div>
-          <div className="bg-secondary border border-border rounded-lg px-3 py-2 text-muted-foreground">
+          <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground">
             <span className="text-foreground font-semibold">{activeKeywords}</span> active
           </div>
-          <div className="bg-secondary border border-border rounded-lg px-3 py-2 text-muted-foreground">
+          <div className="col-span-2 rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground sm:col-span-1">
             <span className="text-foreground font-semibold">{trackedSignals}</span> matched signals
           </div>
         </div>
 
-        <div className="relative max-w-md">
+        <div className="relative w-full max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             value={search}
@@ -116,7 +116,7 @@ export default function KeywordsPage() {
             className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
           />
           {(create.error || update.error) && <p className="text-sm text-destructive">{((create.error || update.error) as Error).message}</p>}
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <button
               disabled={!phrase.trim() || create.isPending || update.isPending}
               onClick={() => phrase.trim() && (editingId ? update.mutate(editingId) : create.mutate())}

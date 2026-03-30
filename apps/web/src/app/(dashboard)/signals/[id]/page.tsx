@@ -59,7 +59,7 @@ export default function SignalDetailPage() {
   }, [signal?.nextStep]);
 
   if (isLoading) return (
-    <div className="p-6 space-y-4 animate-pulse max-w-3xl">
+    <div className="page-shell max-w-4xl space-y-4 animate-pulse">
       <div className="h-6 bg-secondary rounded w-32" />
       <div className="h-40 bg-card border border-border rounded-xl" />
       <div className="h-64 bg-card border border-border rounded-xl" />
@@ -67,7 +67,7 @@ export default function SignalDetailPage() {
   );
 
   if (!signal) return (
-    <div className="p-6 text-center text-muted-foreground">Signal not found.</div>
+    <div className="page-shell max-w-4xl text-center text-muted-foreground">Signal not found.</div>
   );
 
   const cat = CATEGORY_META[signal.category || 'OTHER'] || CATEGORY_META.OTHER;
@@ -93,7 +93,7 @@ export default function SignalDetailPage() {
   };
 
   return (
-    <div className="p-6 max-w-3xl space-y-5 animate-fade-in">
+    <div className="page-shell max-w-4xl space-y-5 animate-fade-in">
       {/* Back */}
       <button onClick={() => router.back()} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ArrowLeft className="w-4 h-4" />
@@ -102,7 +102,7 @@ export default function SignalDetailPage() {
 
       {/* Hero card */}
       <div className="bg-card border border-border rounded-xl p-5">
-        <div className="flex items-start justify-between gap-4 mb-4">
+        <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={cn('inline-flex items-center text-xs font-semibold uppercase tracking-wide px-2 py-1 rounded border', cat.bg, cat.color)}>
               {cat.label}
@@ -126,7 +126,7 @@ export default function SignalDetailPage() {
           {signal.originalTitle || 'Untitled signal'}
         </h1>
 
-        <div className="flex items-center gap-3 text-xs text-muted-foreground mb-4">
+        <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           {signal.authorHandle && <span>@{signal.authorHandle}</span>}
           <span>{formatDate(signal.publishedAt || signal.fetchedAt)}</span>
           <span>{signal.assignee?.name || signal.assignee?.email || 'Unassigned'}</span>
@@ -138,7 +138,7 @@ export default function SignalDetailPage() {
           ) : null}
           {signal.sourceUrl && (
             <a href={signal.sourceUrl} target="_blank" rel="noreferrer"
-              className="flex items-center gap-1 text-primary hover:underline ml-auto">
+              className="flex items-center gap-1 text-primary hover:underline sm:ml-auto">
               View original <ExternalLink className="w-3 h-3" />
             </a>
           )}
@@ -303,7 +303,7 @@ export default function SignalDetailPage() {
           </div>
         )}
 
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}

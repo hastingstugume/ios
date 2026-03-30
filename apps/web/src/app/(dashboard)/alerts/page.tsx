@@ -118,7 +118,7 @@ export default function AlertsPage() {
         </div>
         <button
           onClick={() => { resetForm(); setAdding(true); }}
-          className="inline-flex items-center gap-2 self-start rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          className="inline-flex w-full items-center justify-center gap-2 self-start rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:w-auto"
         >
           <Plus className="w-4 h-4" />
           New rule
@@ -211,7 +211,7 @@ export default function AlertsPage() {
               className="w-full rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
           </div>
           {(create.error || updateRule.error) && <p className="text-sm text-destructive">{((create.error || updateRule.error) as Error).message}</p>}
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <button disabled={!form.name || !form.emailRecipients || create.isPending || updateRule.isPending} onClick={() => editingRule ? updateRule.mutate() : create.mutate()}
               className="rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40">
               {create.isPending || updateRule.isPending ? (editingRule ? 'Saving…' : 'Creating…') : (editingRule ? 'Save rule' : 'Create rule')}
@@ -232,7 +232,7 @@ export default function AlertsPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           {filteredRules.map((rule) => (
             <div key={rule.id} className="section-card px-5 py-5">
-              <div className="flex items-start gap-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                 <span className={`mt-0.5 flex h-11 w-11 items-center justify-center rounded-xl border shrink-0 ${
                   rule.isActive ? 'border-primary/20 bg-primary/10 text-primary' : 'border-border bg-secondary text-muted-foreground'
                 }`}>
@@ -278,7 +278,7 @@ export default function AlertsPage() {
                     <p className="mt-3 text-xs text-muted-foreground">Last triggered {formatDate(rule.lastTriggeredAt)}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-start sm:self-center">
                   <button
                     onClick={() => {
                       setAdding(false);

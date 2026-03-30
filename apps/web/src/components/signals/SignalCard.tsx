@@ -41,8 +41,8 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
       'group bg-card border border-border rounded-xl transition-all hover:border-border/80 hover:shadow-lg hover:shadow-black/20',
       isIgnored && 'opacity-60 hover:opacity-80',
     )}>
-      <div className="flex items-start gap-4 p-4">
-        <div className={cn('flex min-w-[58px] flex-col items-center justify-center rounded-xl border px-2.5 py-2 shrink-0', getConfidenceBg(signal.confidenceScore))}>
+      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start">
+        <div className={cn('flex w-fit min-w-[58px] flex-col items-center justify-center rounded-xl border px-2.5 py-2 shrink-0', getConfidenceBg(signal.confidenceScore))}>
           <span className={cn('text-xl font-bold tabular-nums leading-none', getConfidenceColor(signal.confidenceScore))}>
             {signal.confidenceScore ?? '—'}
           </span>
@@ -50,7 +50,7 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
             <span className={cn('inline-flex items-center text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded border', cat.bg, cat.color)}>
               {cat.label}
             </span>
@@ -68,7 +68,7 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
                 {sourceType?.icon} {signal.source.name}
               </span>
             )}
-            <span className="text-[11px] text-muted-foreground ml-auto">{formatDate(signal.fetchedAt)}</span>
+            <span className="text-[11px] text-muted-foreground sm:ml-auto">{formatDate(signal.fetchedAt)}</span>
           </div>
 
           <Link href={`/signals/${signal.id}`}>
@@ -125,13 +125,13 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between px-4 py-3 border-t border-border/60">
-        <div className="flex items-center gap-1 flex-wrap">
+      <div className="flex flex-col gap-3 border-t border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-1">
           <select
             value={signal.stage}
             disabled={updateWorkflow.isPending}
             onChange={(e) => updateWorkflow.mutate(e.target.value)}
-            className="mr-2 rounded-md border border-border bg-secondary px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+            className="w-full rounded-md border border-border bg-secondary px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 sm:mr-2 sm:w-auto"
           >
             {Object.entries(STAGE_META).map(([value, meta]) => (
               <option key={value} value={value}>{meta.label}</option>
@@ -172,7 +172,7 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
           </button>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center justify-end gap-1">
           {signal._count?.annotations ? (
             <span className="flex items-center gap-1 text-[10px] text-muted-foreground mr-1">
               <MessageSquare className="w-3.5 h-3.5" />
