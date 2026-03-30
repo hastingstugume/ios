@@ -10,7 +10,7 @@ import { AuthShell } from '@/components/auth/AuthShell';
 export default function OnboardingPage() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { isLoading, isAuthenticated, emailVerified, onboardingCompleted, currentOrg } = useAuth();
+  const { isLoading, isAuthenticated, emailVerified, onboardingCompleted, currentOrg, user } = useAuth();
   const [accountType, setAccountType] = useState<'FREELANCER' | 'BUSINESS'>('BUSINESS');
   const [workspaceName, setWorkspaceName] = useState('');
 
@@ -25,6 +25,15 @@ export default function OnboardingPage() {
       setWorkspaceName(currentOrg.name);
     }
   }, [currentOrg?.name]);
+
+  useEffect(() => {
+    if (currentOrg?.name) return;
+    if (accountType !== 'FREELANCER') return;
+    if (workspaceName.trim()) return;
+    if (!user?.name?.trim()) return;
+
+    setWorkspaceName(user.name.trim());
+  }, [accountType, currentOrg?.name, user?.name, workspaceName]);
 
   const complete = useMutation({
     mutationFn: () => authApi.completeOnboarding({ accountType, workspaceName }),
