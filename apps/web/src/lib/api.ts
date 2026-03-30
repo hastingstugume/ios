@@ -22,11 +22,18 @@ export const api = {
 
 // Typed API helpers
 export const authApi = {
-  login: (email: string, password: string) => api.post('/auth/login', { email, password }),
-  register: (data: { email: string; password: string; name: string; organizationName?: string; invitationToken?: string }) =>
+  login: (email: string, password: string) =>
+    api.post<{ success: true; expiresAt: string; authState: { emailVerified: boolean; onboardingCompleted: boolean } }>(
+      '/auth/login',
+      { email, password },
+    ),
+  register: (data: { email: string; password: string; name: string; invitationToken?: string }) =>
     api.post('/auth/register', data),
+  verifyEmail: (token: string) => api.post('/auth/verify-email', { token }),
+  resendVerification: (email: string) => api.post('/auth/resend-verification', { email }),
+  completeOnboarding: (data: { accountType: 'FREELANCER' | 'BUSINESS'; workspaceName: string }) => api.post('/auth/onboarding', data),
   logout: () => api.post('/auth/logout', {}),
-  me: () => api.get<{ user: User; memberships: Membership[] }>('/auth/me'),
+  me: () => api.get<{ user: User; memberships: Membership[]; authState: { emailVerified: boolean; onboardingCompleted: boolean } }>('/auth/me'),
   updateMe: (data: { name: string }) => api.patch<User>('/auth/me', data),
   changePassword: (data: { currentPassword: string; newPassword: string }) => api.patch('/auth/password', data),
 };
@@ -86,7 +93,15 @@ export const publicApi = {
 };
 
 // Types
-export interface User { id: string; email: string; name: string | null; avatarUrl: string | null; }
+export interface User {
+  id: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
+  emailVerified?: boolean;
+  accountType?: 'FREELANCER' | 'BUSINESS' | null;
+  onboardingCompletedAt?: string | null;
+}
 export interface Membership { id: string; role: string; organization: Organization; joinedAt?: string; }
 export interface Organization { id: string; name: string; slug: string; plan: string; negativeKeywords?: string[]; }
 export interface OrganizationMember {

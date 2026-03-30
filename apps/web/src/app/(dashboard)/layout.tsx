@@ -6,13 +6,15 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { Menu, X } from 'lucide-react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { isLoading, isAuthenticated } = useAuth();
+  const { isLoading, isAuthenticated, emailVerified, onboardingCompleted } = useAuth();
   const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.replace('/login');
-  }, [isLoading, isAuthenticated, router]);
+    if (!isLoading && isAuthenticated && !emailVerified) router.replace('/verify-email');
+    if (!isLoading && isAuthenticated && emailVerified && !onboardingCompleted) router.replace('/onboarding');
+  }, [isLoading, isAuthenticated, emailVerified, onboardingCompleted, router]);
 
   if (isLoading) {
     return (
@@ -25,7 +27,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  if (!isAuthenticated) return null;
+  if (!isAuthenticated || !emailVerified || !onboardingCompleted) return null;
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">

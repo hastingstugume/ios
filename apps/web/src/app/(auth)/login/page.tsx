@@ -7,7 +7,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { authApi } from '@/lib/api';
-import { Radar, ArrowRight, Eye, EyeOff, ChevronLeft } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Mail, RefreshCw } from 'lucide-react';
+import { AuthShell } from '@/components/auth/AuthShell';
 
 const schema = z.object({
   email: z.string().email(),
@@ -21,40 +22,48 @@ export default function LoginPage() {
   const qc = useQueryClient();
   const [showPass, setShowPass] = useState(false);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({ resolver: zodResolver(schema) });
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({ resolver: zodResolver(schema) });
+  const email = watch('email');
 
   const login = useMutation({
     mutationFn: (d: FormData) => authApi.login(d.email, d.password),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['auth', 'me'] }); router.push('/dashboard'); },
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['auth', 'me'] });
+
+      if (!result.authState.emailVerified) {
+        router.replace(`/verify-email?email=${encodeURIComponent(email)}`);
+        return;
+      }
+
+      if (!result.authState.onboardingCompleted) {
+        router.replace('/onboarding');
+        return;
+      }
+
+      router.replace('/dashboard');
+    },
   });
 
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(217_91%_60%/0.08)_0%,transparent_60%)] pointer-events-none" />
-      <div className="w-full max-w-sm space-y-8 animate-fade-in">
-        <div>
-          <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
-            <ChevronLeft className="h-4 w-4" />
-            Back to home
-          </Link>
-        </div>
-        {/* Logo */}
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 mb-4">
-            <Radar className="w-6 h-6 text-primary" />
-          </div>
-          <h1 className="text-xl font-semibold text-foreground">Internet Opportunity Scanner</h1>
-          <p className="text-sm text-muted-foreground mt-1">Sign in to your workspace</p>
-        </div>
+  const resendVerification = useMutation({
+    mutationFn: (targetEmail: string) => authApi.resendVerification(targetEmail),
+  });
 
-        {/* Demo hint */}
-        <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
-          <p className="text-xs text-primary/80 text-center">
-            Demo: <span className="font-mono">alice@acmegrowth.io</span> / <span className="font-mono">demo1234!</span>
+  const loginError = login.error ? (login.error as Error).message : null;
+  const needsVerification = Boolean(loginError && loginError.toLowerCase().includes('verify your email'));
+
+  return (
+    <AuthShell
+      eyebrow="Sign In"
+      title="Welcome back"
+      description="Sign in to your workspace to review fresh intent signals, alerts, and team actions."
+    >
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+          <p className="text-xs text-primary/80">
+            Demo access: <span className="font-mono">alice@acmegrowth.io</span> / <span className="font-mono">demo1234!</span>
           </p>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit((d) => login.mutate(d))} className="space-y-4">
           <div>
             <label className="text-sm text-muted-foreground mb-1.5 block">Email</label>
@@ -81,9 +90,9 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {login.error && (
+          {loginError && (
             <div className="bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
-              <p className="text-destructive text-sm">{(login.error as Error).message}</p>
+              <p className="text-destructive text-sm">{loginError}</p>
             </div>
           )}
 
@@ -96,11 +105,61 @@ export default function LoginPage() {
           </button>
         </form>
 
+        {needsVerification && email ? (
+          <div className="rounded-2xl border border-border bg-secondary/55 p-4">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 rounded-full bg-primary/10 p-2 text-primary">
+                <Mail className="h-4 w-4" />
+              </div>
+              <div className="flex-1 space-y-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Finish verifying your email</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    We can resend the verification link to <span className="font-medium text-foreground">{email}</span>,
+                    or you can continue on the verification screen.
+                  </p>
+                </div>
+
+                {resendVerification.isSuccess ? (
+                  <div className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary">
+                    Verification email sent. Check your inbox and spam folder.
+                  </div>
+                ) : null}
+                {resendVerification.error ? (
+                  <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {(resendVerification.error as Error).message}
+                  </div>
+                ) : null}
+
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={() => resendVerification.mutate(email)}
+                    disabled={resendVerification.isPending}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    {resendVerification.isPending ? 'Sending…' : 'Resend verification'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/verify-email?email=${encodeURIComponent(email)}`)}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium text-primary transition-colors hover:text-primary/80"
+                  >
+                    Open verification page
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <p className="text-center text-sm text-muted-foreground">
           No account?{' '}
-          <Link href="/register" className="text-primary hover:underline">Create workspace</Link>
+          <Link href="/register" className="text-primary hover:underline">Create one and verify your email</Link>
         </p>
       </div>
-    </div>
+    </AuthShell>
   );
 }

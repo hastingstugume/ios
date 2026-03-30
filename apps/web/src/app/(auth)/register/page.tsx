@@ -7,13 +7,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { authApi } from '@/lib/api';
-import { Radar, ArrowRight, Link2, ChevronLeft } from 'lucide-react';
+import { ArrowRight, Link2 } from 'lucide-react';
+import { AuthShell } from '@/components/auth/AuthShell';
 
 const schema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
   password: z.string().min(8, 'At least 8 characters'),
-  organizationName: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -23,16 +23,17 @@ function RegisterPageContent() {
   const searchParams = useSearchParams();
   const invitationToken = searchParams.get('invitationToken') || undefined;
   const qc = useQueryClient();
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({ resolver: zodResolver(schema) });
-  const organizationName = watch('organizationName');
+  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   const signup = useMutation({
     mutationFn: (data: FormData) => authApi.register({
       ...data,
-      organizationName: invitationToken ? undefined : data.organizationName,
       invitationToken,
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['auth', 'me'] }); router.push('/dashboard'); },
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['auth', 'me'] });
+      router.push(`/verify-email?email=${encodeURIComponent(variables.email)}`);
+    },
   });
 
   const fields = useMemo(() => {
@@ -46,30 +47,30 @@ function RegisterPageContent() {
 
     return [
       base[0],
-      { id: 'organizationName', label: 'Organization name', placeholder: 'Acme Growth Agency', type: 'text' },
       base[1],
       base[2],
     ] as const;
   }, [invitationToken]);
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(217_91%_60%/0.08)_0%,transparent_60%)] pointer-events-none" />
-      <div className="w-full max-w-sm space-y-8 animate-fade-in">
-        <div>
-          <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
-            <ChevronLeft className="h-4 w-4" />
-            Back to home
-          </Link>
-        </div>
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 mb-4">
-            <Radar className="w-6 h-6 text-primary" />
+    <AuthShell
+      eyebrow={invitationToken ? 'Accept Invitation' : 'Create Account'}
+      title={invitationToken ? 'Join your workspace' : 'Create your account'}
+      description={
+        invitationToken
+          ? 'Finish account setup, verify your email, and we’ll connect you to the invited workspace.'
+          : 'Start with your account first. After email verification, we’ll help you choose freelancer or business and create the right workspace.'
+      }
+    >
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
+            <span>Step 1 of 3</span>
+            <span>Create account</span>
           </div>
-          <h1 className="text-xl font-semibold">{invitationToken ? 'Join your workspace' : 'Create your workspace'}</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {invitationToken ? 'Complete your account to accept the workspace invitation' : 'Start discovering opportunities today'}
-          </p>
+          <div className="h-2 overflow-hidden rounded-full bg-secondary">
+            <div className="h-full w-1/3 rounded-full bg-primary" />
+          </div>
         </div>
 
         {invitationToken && (
@@ -103,10 +104,10 @@ function RegisterPageContent() {
 
           <button
             type="submit"
-            disabled={signup.isPending || (!invitationToken && !organizationName?.trim())}
+            disabled={signup.isPending}
             className="w-full bg-primary text-primary-foreground rounded-lg py-2.5 text-sm font-medium flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
-            {signup.isPending ? 'Creating…' : (<>{invitationToken ? 'Join workspace' : 'Get started'} <ArrowRight className="w-4 h-4" /></>)}
+            {signup.isPending ? 'Creating…' : (<>{invitationToken ? 'Join workspace' : 'Continue'} <ArrowRight className="w-4 h-4" /></>)}
           </button>
         </form>
 
@@ -115,7 +116,7 @@ function RegisterPageContent() {
           <Link href="/login" className="text-primary hover:underline">Sign in</Link>
         </p>
       </div>
-    </div>
+    </AuthShell>
   );
 }
 

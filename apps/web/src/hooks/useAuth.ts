@@ -51,6 +51,8 @@ export function useAuth() {
     currentOrg: currentMembership?.organization,
     currentOrgId: currentMembership?.organization?.id,
     role: currentMembership?.role,
+    emailVerified: data?.authState?.emailVerified ?? false,
+    onboardingCompleted: data?.authState?.onboardingCompleted ?? false,
     setCurrentOrgId: setSelectedOrgIdState,
     isLoading,
     isAuthenticated: !!data?.user,

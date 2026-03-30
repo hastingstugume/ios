@@ -4,7 +4,7 @@ import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { AuthGuard } from '../common/guards/auth.guard';
-import { RegisterDto, LoginDto, UpdateProfileDto, ChangePasswordDto } from './auth.dto';
+import { RegisterDto, LoginDto, UpdateProfileDto, ChangePasswordDto, VerifyEmailDto, ResendVerificationDto, CompleteOnboardingDto } from './auth.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -13,11 +13,10 @@ export class AuthController {
 
   @Post('register')
   @Throttle({ default: { limit: 10, ttl: 900000 } })
-  @ApiOperation({ summary: 'Register and create organization' })
+  @ApiOperation({ summary: 'Register and send verification email' })
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
-    const session = await this.auth.register(dto.email, dto.password, dto.name, dto.organizationName, dto.invitationToken);
-    this.setSessionCookie(res, session.token, session.expiresAt);
-    return { success: true, expiresAt: session.expiresAt };
+    res.clearCookie('session_token');
+    return this.auth.register(dto.email, dto.password, dto.name, dto.invitationToken);
   }
 
   @Post('login')
@@ -27,7 +26,11 @@ export class AuthController {
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const session = await this.auth.login(dto.email, dto.password);
     this.setSessionCookie(res, session.token, session.expiresAt);
-    return { success: true, expiresAt: session.expiresAt };
+    return {
+      success: true,
+      expiresAt: session.expiresAt,
+      authState: session.authState,
+    };
   }
 
   @Post('logout')
@@ -46,6 +49,31 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current user and memberships' })
   async me(@Req() req: any) {
     return this.auth.getMe(req.user.id);
+  }
+
+  @Post('verify-email')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Verify email and create a session' })
+  async verifyEmail(@Body() dto: VerifyEmailDto, @Res({ passthrough: true }) res: Response) {
+    const session = await this.auth.verifyEmail(dto.token);
+    this.setSessionCookie(res, session.token, session.expiresAt);
+    return { success: true, expiresAt: session.expiresAt };
+  }
+
+  @Post('resend-verification')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 5, ttl: 900000 } })
+  @ApiOperation({ summary: 'Resend verification email' })
+  async resendVerification(@Body() dto: ResendVerificationDto) {
+    return this.auth.resendVerification(dto.email);
+  }
+
+  @Post('onboarding')
+  @UseGuards(AuthGuard)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Complete post-signup onboarding' })
+  async completeOnboarding(@Req() req: any, @Body() dto: CompleteOnboardingDto) {
+    return this.auth.completeOnboarding(req.user.id, dto.accountType, dto.workspaceName);
   }
 
   @Patch('me')

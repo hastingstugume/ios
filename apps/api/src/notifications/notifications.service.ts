@@ -157,4 +157,31 @@ export class NotificationsService {
       html,
     });
   }
+
+  async sendVerificationEmail(email: string, name: string, token: string) {
+    const verifyUrl = this.appUrl(`/verify-email?token=${token}`);
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 640px; margin: 0 auto;">
+        <div style="background: #0f172a; padding: 28px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: #f8fafc; margin: 0; font-size: 22px;">Verify your email</h1>
+          <p style="color: #94a3b8; margin: 10px 0 0; font-size: 14px; line-height: 1.6;">
+            Hi ${name}, confirm your email to finish setting up your account and continue into onboarding.
+          </p>
+        </div>
+        <div style="background: #111827; padding: 28px; border-radius: 0 0 12px 12px;">
+          <a href="${verifyUrl}" style="display: inline-block; background: linear-gradient(135deg,#0ea5e9,#22d3ee); color: white; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 15px; font-weight: 600;">Verify email</a>
+          <p style="color: #64748b; font-size: 12px; margin: 18px 0 0; line-height: 1.6;">
+            If the button does not work, copy this link into your browser:<br />
+            <span style="color: #94a3b8;">${verifyUrl}</span>
+          </p>
+        </div>
+      </div>
+    `;
+
+    await this.sendEmail({
+      to: email,
+      subject: 'Verify your email address',
+      html,
+    });
+  }
 }
