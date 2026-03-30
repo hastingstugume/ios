@@ -65,7 +65,8 @@ export function useAuth() {
     setCurrentOrgId: setSelectedOrgIdState,
     isLoading,
     isAuthenticated: !!data?.user,
-    logout: logout.mutate,
+    logout: () => logout.mutate(),
+    isLoggingOut: logout.isPending,
     error,
   };
 }

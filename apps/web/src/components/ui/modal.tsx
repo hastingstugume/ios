@@ -9,12 +9,14 @@ export function Modal({
   title,
   description,
   children,
+  size = 'default',
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   description?: string;
   children: React.ReactNode;
+  size?: 'default' | 'compact';
 }) {
   useEffect(() => {
     if (!open) return;
@@ -42,7 +44,9 @@ export function Modal({
         onClick={onClose}
       />
       <div className="relative z-10 mx-auto flex min-h-full w-full items-start justify-center sm:items-center">
-        <div className="relative flex w-full max-w-2xl max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl sm:max-h-[calc(100vh-3rem)]">
+        <div
+          className={`relative flex w-full ${size === 'compact' ? 'max-w-md' : 'max-w-2xl'} max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl sm:max-h-[calc(100vh-3rem)]`}
+        >
         <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
           <div>
             <h2 className="text-lg font-semibold text-foreground">{title}</h2>

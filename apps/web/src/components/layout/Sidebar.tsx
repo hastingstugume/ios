@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { cn, formatPlanName } from '@/lib/utils';
-import { Radar, LayoutDashboard, Zap, Tag, Database, Bell, Settings, LogOut, ChevronDown, Building2, Check } from 'lucide-react';
+import { Radar, LayoutDashboard, Zap, Tag, Database, Bell, Settings, LogOut, ChevronDown, Building2, Check, Loader2 } from 'lucide-react';
 
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -17,7 +17,7 @@ const NAV = [
 
 export function Sidebar({ className = '', onNavigate }: { className?: string; onNavigate?: () => void }) {
   const pathname = usePathname();
-  const { user, currentOrg, memberships, setCurrentOrgId, logout } = useAuth();
+  const { user, currentOrg, memberships, setCurrentOrgId, logout, isLoggingOut } = useAuth();
   const [showOrgMenu, setShowOrgMenu] = useState(false);
 
   return (
@@ -123,13 +123,16 @@ export function Sidebar({ className = '', onNavigate }: { className?: string; on
         </div>
         <button
           onClick={() => {
+            if (isLoggingOut) return;
+            setShowOrgMenu(false);
             onNavigate?.();
-            logout(undefined);
+            logout();
           }}
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          disabled={isLoggingOut}
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <LogOut className="w-3.5 h-3.5" />
-          Sign out
+          {isLoggingOut ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+          {isLoggingOut ? 'Signing out…' : 'Sign out'}
         </button>
       </div>
     </aside>
