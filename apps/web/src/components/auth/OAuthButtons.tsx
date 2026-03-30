@@ -1,7 +1,7 @@
 'use client';
 
 import { authApi, type OAuthProvider } from '@/lib/api';
-import { Github, Laptop } from 'lucide-react';
+import { Github } from 'lucide-react';
 
 function GoogleIcon() {
   return (
@@ -26,13 +26,24 @@ function GoogleIcon() {
   );
 }
 
+function MicrosoftIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+      <path fill="#F25022" d="M3 3h8.5v8.5H3z" />
+      <path fill="#7FBA00" d="M12.5 3H21v8.5h-8.5z" />
+      <path fill="#00A4EF" d="M3 12.5h8.5V21H3z" />
+      <path fill="#FFB900" d="M12.5 12.5H21V21h-8.5z" />
+    </svg>
+  );
+}
+
 const PROVIDERS: Array<{
   id: OAuthProvider;
   label: string;
-  icon: typeof Github | typeof Laptop | typeof GoogleIcon;
+  icon: typeof Github | typeof GoogleIcon | typeof MicrosoftIcon;
 }> = [
   { id: 'google', label: 'Google', icon: GoogleIcon },
-  { id: 'microsoft', label: 'Microsoft', icon: Laptop },
+  { id: 'microsoft', label: 'Microsoft', icon: MicrosoftIcon },
   { id: 'github', label: 'GitHub', icon: Github },
 ];
 
