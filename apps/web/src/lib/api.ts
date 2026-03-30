@@ -57,6 +57,7 @@ export const keywordsApi = {
 
 export const sourcesApi = {
   list: (orgId: string) => api.get<Source[]>(`/orgs/${orgId}/sources`),
+  preview: (orgId: string, data: { type: string; config: any }) => api.post<SourcePreview>(`/orgs/${orgId}/sources/preview`, data),
   create: (orgId: string, data: any) => api.post(`/orgs/${orgId}/sources`, data),
   update: (orgId: string, id: string, data: any) => api.patch(`/orgs/${orgId}/sources/${id}`, data),
   delete: (orgId: string, id: string) => api.delete(`/orgs/${orgId}/sources/${id}`),
@@ -71,7 +72,7 @@ export const alertsApi = {
 
 export const organizationsApi = {
   get: (orgId: string) => api.get<OrganizationDetail>(`/orgs/${orgId}`),
-  update: (orgId: string, data: { name?: string; logoUrl?: string }) => api.patch<Organization>(`/orgs/${orgId}`, data),
+  update: (orgId: string, data: { name?: string; logoUrl?: string; negativeKeywords?: string[] }) => api.patch<Organization>(`/orgs/${orgId}`, data),
   members: (orgId: string) => api.get<{ members: OrganizationMember[]; invitations: Invitation[] }>(`/orgs/${orgId}/members`),
   inviteMember: (orgId: string, data: { email: string; role: string }) => api.post(`/orgs/${orgId}/members`, data),
   updateMember: (orgId: string, memberId: string, data: { role: string }) => api.patch(`/orgs/${orgId}/members/${memberId}`, data),
@@ -87,7 +88,7 @@ export const publicApi = {
 // Types
 export interface User { id: string; email: string; name: string | null; avatarUrl: string | null; }
 export interface Membership { id: string; role: string; organization: Organization; joinedAt?: string; }
-export interface Organization { id: string; name: string; slug: string; plan: string; }
+export interface Organization { id: string; name: string; slug: string; plan: string; negativeKeywords?: string[]; }
 export interface OrganizationMember {
   id: string;
   role: string;
@@ -114,6 +115,9 @@ export interface Signal {
   fetchedAt: string; category: string | null; confidenceScore: number | null;
   whyItMatters: string | null; suggestedOutreach: string | null; status: string;
   stage: string; assigneeId?: string | null; nextStep?: string | null; closedAt?: string | null;
+  priorityScore?: number | null;
+  rankingReasons?: string[];
+  freshnessLabel?: string;
   source?: { id: string; name: string; type: string };
   assignee?: Pick<User, 'id' | 'name' | 'email' | 'avatarUrl'> | null;
   keywords?: Array<{ keyword: Keyword }>;
@@ -121,7 +125,43 @@ export interface Signal {
   _count?: { annotations: number };
 }
 export interface Keyword { id: string; phrase: string; description: string | null; isActive: boolean; _count?: { signalKeywords: number }; }
-export interface Source { id: string; name: string; type: string; status: string; config: any; lastFetchedAt: string | null; errorMessage: string | null; _count?: { signals: number }; }
+export interface Source {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  config: any;
+  lastFetchedAt: string | null;
+  errorMessage: string | null;
+  _count?: { signals: number };
+  health?: {
+    score: number;
+    label: string;
+    last7dSignals: number;
+    highConfidenceSignals: number;
+    pipelineSignals: number;
+    savedSignals: number;
+  };
+}
+export interface SourcePreview {
+  totalFetched: number;
+  matchingCount: number;
+  previewItems: Array<{
+    externalId: string;
+    title: string;
+    text: string;
+    url: string;
+    author: string | null;
+    publishedAt: string | null;
+    matchedKeywords: string[];
+    excludedByWorkspace: boolean;
+    excludedBySource: boolean;
+    passesFilters: boolean;
+    category: string | null;
+    confidenceScore: number | null;
+    whyItMatters: string | null;
+  }>;
+}
 export interface AlertRule { id: string; name: string; isActive: boolean; minConfidence: number; categories: string[]; keywordIds: string[]; frequency: string; emailRecipients: string[]; lastTriggeredAt: string | null; }
 export interface Annotation { id: string; note: string; createdAt: string; user: Pick<User, 'id' | 'name' | 'avatarUrl'>; }
 export interface PaginatedResponse<T> { data: T[]; meta: { total: number; page: number; limit: number; totalPages: number; }; }

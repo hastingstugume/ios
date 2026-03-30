@@ -13,7 +13,7 @@ export type SignalCategory =
   | 'OTHER';
 
 export type SignalStatus = 'NEW' | 'SAVED' | 'IGNORED' | 'BOOKMARKED';
-export type SourceType = 'REDDIT' | 'RSS' | 'MANUAL' | 'TWITTER';
+export type SourceType = 'REDDIT' | 'REDDIT_SEARCH' | 'RSS' | 'HN_SEARCH' | 'GITHUB_SEARCH' | 'STACKOVERFLOW_SEARCH' | 'WEB_SEARCH' | 'MANUAL' | 'TWITTER';
 export type SourceStatus = 'ACTIVE' | 'PAUSED' | 'ERROR';
 export type AlertFrequency = 'IMMEDIATE' | 'HOURLY' | 'DAILY' | 'WEEKLY';
 

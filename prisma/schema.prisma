@@ -46,7 +46,12 @@ enum SignalStage {
 
 enum SourceType {
   REDDIT
+  REDDIT_SEARCH
   RSS
+  HN_SEARCH
+  GITHUB_SEARCH
+  STACKOVERFLOW_SEARCH
+  WEB_SEARCH
   MANUAL
   TWITTER
 }
@@ -87,13 +92,14 @@ enum AuditAction {
 // ─── Org & Users ─────────────────────────────────────────────────────────────
 
 model Organization {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique
-  logoUrl     String?
-  plan        String   @default("free")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String   @id @default(cuid())
+  name             String
+  slug             String   @unique
+  logoUrl          String?
+  plan             String   @default("free")
+  negativeKeywords String[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   members     OrganizationMember[]
   invitations Invitation[]

@@ -19,6 +19,15 @@ export function formatDate(dateStr: string | null | undefined) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+export function formatPlanName(plan: string | null | undefined) {
+  const normalized = plan?.trim().toLowerCase();
+  if (!normalized) return 'Free';
+  if (normalized === 'pro') return 'Growth';
+  if (normalized === 'team') return 'Growth';
+  if (normalized === 'enterprise') return 'Scale';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 export const CATEGORY_META: Record<string, { label: string; color: string; bg: string }> = {
   BUYING_INTENT:          { label: 'Buying Intent',    color: 'text-green-400',  bg: 'bg-green-400/10 border-green-400/20' },
   RECOMMENDATION_REQUEST: { label: 'Recommendation',   color: 'text-blue-400',   bg: 'bg-blue-400/10 border-blue-400/20' },
@@ -47,10 +56,15 @@ export const STAGE_META: Record<string, { label: string; color: string; bg: stri
 };
 
 export const SOURCE_TYPE_META: Record<string, { label: string; icon: string }> = {
-  REDDIT:  { label: 'Reddit',  icon: '🤖' },
-  RSS:     { label: 'RSS',     icon: '📡' },
-  MANUAL:  { label: 'Manual',  icon: '📝' },
-  TWITTER: { label: 'X/Twitter', icon: '𝕏' },
+  REDDIT:        { label: 'Reddit',         icon: '🤖' },
+  REDDIT_SEARCH: { label: 'Reddit Search',  icon: '🔎' },
+  RSS:           { label: 'RSS',            icon: '📡' },
+  HN_SEARCH:     { label: 'HN Search',      icon: '🟧' },
+  GITHUB_SEARCH: { label: 'GitHub Search',  icon: '🐙' },
+  STACKOVERFLOW_SEARCH: { label: 'Stack Overflow', icon: '🧱' },
+  WEB_SEARCH:    { label: 'Web Search',     icon: '🌐' },
+  MANUAL:        { label: 'Manual',         icon: '📝' },
+  TWITTER:       { label: 'X/Twitter',      icon: '𝕏' },
 };
 
 export function getConfidenceColor(score: number | null) {
