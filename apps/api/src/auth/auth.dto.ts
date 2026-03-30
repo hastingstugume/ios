@@ -32,6 +32,15 @@ export class ResendVerificationDto {
   @ApiProperty() @IsEmail() email!: string;
 }
 
+export class RequestPasswordResetDto {
+  @ApiProperty() @IsEmail() email!: string;
+}
+
+export class ResetPasswordDto {
+  @ApiProperty() @IsString() token!: string;
+  @ApiProperty() @IsString() @MinLength(8) newPassword!: string;
+}
+
 export class CompleteOnboardingDto {
   @ApiProperty({ enum: AccountType }) @IsEnum(AccountType) accountType!: AccountType;
   @ApiProperty() @IsString() @MinLength(2) @MaxLength(80) workspaceName!: string;

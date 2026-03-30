@@ -12,6 +12,7 @@ const mockPrisma: any = {
   session: { create: jest.fn(), findUnique: jest.fn(), deleteMany: jest.fn(), delete: jest.fn() },
   invitation: { findUnique: jest.fn(), update: jest.fn() },
   emailVerificationToken: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
+  passwordResetToken: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
   auditLog: { create: jest.fn() },
   $transaction: jest.fn((arg: any) => {
     if (typeof arg === 'function') return arg(mockPrisma);
@@ -30,7 +31,7 @@ describe('AuthService', () => {
         AuthService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: ConfigService, useValue: { get: (k: string, d?: any) => d } },
-        { provide: NotificationsService, useValue: { sendVerificationEmail: jest.fn() } },
+        { provide: NotificationsService, useValue: { sendVerificationEmail: jest.fn(), sendPasswordResetEmail: jest.fn() } },
       ],
     }).compile();
     service = module.get(AuthService);
@@ -140,6 +141,41 @@ describe('AuthService', () => {
     await expect(service.verifyEmail('verify_123')).resolves.toEqual(
       expect.objectContaining({ token: 'ses_123' }),
     );
+  });
+
+  it('creates a password reset token for password users', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      email: 'test@test.com',
+      name: 'Test',
+      passwordHash: 'hash',
+    });
+    mockPrisma.passwordResetToken.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.passwordResetToken.create.mockResolvedValue({ id: 'prt_1', token: 'reset_123' });
+
+    await expect(service.requestPasswordReset('test@test.com')).resolves.toEqual({ success: true });
+    expect(mockPrisma.passwordResetToken.create).toHaveBeenCalled();
+  });
+
+  it('resets password and revokes sessions with a valid reset token', async () => {
+    mockPrisma.passwordResetToken.findUnique.mockResolvedValue({
+      id: 'prt_1',
+      userId: 'u1',
+      token: 'reset_123',
+      usedAt: null,
+      expiresAt: new Date(Date.now() + 10_000),
+      user: {
+        id: 'u1',
+        passwordHash: await require('bcryptjs').hash('current-pass', 1),
+      },
+    });
+    mockPrisma.user.update.mockResolvedValue({ id: 'u1' });
+    mockPrisma.passwordResetToken.update.mockResolvedValue({ id: 'prt_1' });
+    mockPrisma.session.deleteMany.mockResolvedValue({ count: 1 });
+
+    await expect(service.resetPassword('reset_123', 'new-password-123')).resolves.toEqual({ success: true });
+    expect(mockPrisma.passwordResetToken.update).toHaveBeenCalled();
+    expect(mockPrisma.session.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u1' } });
   });
 
   it('completes onboarding and creates a workspace for a new user without memberships', async () => {

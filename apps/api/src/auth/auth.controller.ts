@@ -4,7 +4,7 @@ import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { AuthGuard } from '../common/guards/auth.guard';
-import { RegisterDto, LoginDto, UpdateProfileDto, ChangePasswordDto, VerifyEmailDto, ResendVerificationDto, CompleteOnboardingDto } from './auth.dto';
+import { RegisterDto, LoginDto, UpdateProfileDto, ChangePasswordDto, VerifyEmailDto, ResendVerificationDto, CompleteOnboardingDto, RequestPasswordResetDto, ResetPasswordDto } from './auth.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -134,6 +134,21 @@ export class AuthController {
   @ApiOperation({ summary: 'Resend verification email' })
   async resendVerification(@Body() dto: ResendVerificationDto) {
     return this.auth.resendVerification(dto.email);
+  }
+
+  @Post('request-password-reset')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 5, ttl: 900000 } })
+  @ApiOperation({ summary: 'Request a password reset email' })
+  async requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
+    return this.auth.requestPasswordReset(dto.email);
+  }
+
+  @Post('reset-password')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Reset password using a reset token' })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.auth.resetPassword(dto.token, dto.newPassword);
   }
 
   @Post('onboarding')

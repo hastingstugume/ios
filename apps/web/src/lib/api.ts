@@ -42,6 +42,8 @@ export const authApi = {
     api.post('/auth/register', data),
   verifyEmail: (token: string) => api.post('/auth/verify-email', { token }),
   resendVerification: (email: string) => api.post('/auth/resend-verification', { email }),
+  requestPasswordReset: (email: string) => api.post('/auth/request-password-reset', { email }),
+  resetPassword: (data: { token: string; newPassword: string }) => api.post('/auth/reset-password', data),
   completeOnboarding: (data: { accountType: 'FREELANCER' | 'BUSINESS'; workspaceName: string }) => api.post('/auth/onboarding', data),
   logout: () => api.post('/auth/logout', {}),
   me: () => api.get<{ user: User; memberships: Membership[]; authState: { emailVerified: boolean; onboardingCompleted: boolean } }>('/auth/me'),

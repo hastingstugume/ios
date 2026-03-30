@@ -303,6 +303,48 @@ export class AuthService {
     return { success: true };
   }
 
+  async requestPasswordReset(email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user || !user.passwordHash) return { success: true };
+
+    const reset = await this.createPasswordResetToken(user.id);
+    await this.notifications.sendPasswordResetEmail(user.email, user.name || 'there', reset.token);
+    return { success: true };
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    const record = await this.prisma.passwordResetToken.findUnique({
+      where: { token },
+      include: { user: true },
+    });
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
+      throw new BadRequestException('Password reset link is invalid or expired');
+    }
+    if (!record.user.passwordHash) {
+      throw new BadRequestException('Password reset is unavailable for this account');
+    }
+
+    const matchesCurrent = await bcrypt.compare(newPassword, record.user.passwordHash);
+    if (matchesCurrent) {
+      throw new BadRequestException('New password must be different');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: record.userId },
+        data: { passwordHash },
+      }),
+      this.prisma.passwordResetToken.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      }),
+      this.prisma.session.deleteMany({ where: { userId: record.userId } }),
+    ]);
+
+    return { success: true };
+  }
+
   async completeOnboarding(userId: string, accountType: AccountType, workspaceName: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -357,6 +399,21 @@ export class AuthService {
         userId,
         token: `verify_${uuidv4().replace(/-/g, '')}`,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    });
+  }
+
+  private async createPasswordResetToken(userId: string) {
+    await this.prisma.passwordResetToken.updateMany({
+      where: { userId, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+
+    return this.prisma.passwordResetToken.create({
+      data: {
+        userId,
+        token: `reset_${uuidv4().replace(/-/g, '')}`,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
       },
     });
   }

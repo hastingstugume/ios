@@ -184,4 +184,31 @@ export class NotificationsService {
       html,
     });
   }
+
+  async sendPasswordResetEmail(email: string, name: string, token: string) {
+    const resetUrl = this.appUrl(`/reset-password?token=${token}`);
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 640px; margin: 0 auto;">
+        <div style="background: #0f172a; padding: 28px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: #f8fafc; margin: 0; font-size: 22px;">Reset your password</h1>
+          <p style="color: #94a3b8; margin: 10px 0 0; font-size: 14px; line-height: 1.6;">
+            Hi ${name}, use the secure link below to set a new password for your account.
+          </p>
+        </div>
+        <div style="background: #111827; padding: 28px; border-radius: 0 0 12px 12px;">
+          <a href="${resetUrl}" style="display: inline-block; background: linear-gradient(135deg,#0ea5e9,#22d3ee); color: white; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 15px; font-weight: 600;">Reset password</a>
+          <p style="color: #64748b; font-size: 12px; margin: 18px 0 0; line-height: 1.6;">
+            This link expires in 1 hour. If the button does not work, copy this link into your browser:<br />
+            <span style="color: #94a3b8;">${resetUrl}</span>
+          </p>
+        </div>
+      </div>
+    `;
+
+    await this.sendEmail({
+      to: email,
+      subject: 'Reset your password',
+      html,
+    });
+  }
 }

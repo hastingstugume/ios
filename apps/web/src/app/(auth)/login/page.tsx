@@ -91,7 +91,12 @@ export default function LoginPage() {
             {errors.email && <p className="text-destructive text-xs mt-1">{errors.email.message}</p>}
           </div>
           <div>
-            <label className="text-sm text-muted-foreground mb-1.5 block">Password</label>
+            <div className="mb-1.5 flex items-center justify-between gap-3">
+              <label className="text-sm text-muted-foreground block">Password</label>
+              <Link href="/reset-password" className="text-xs text-primary hover:underline">
+                Forgot password?
+              </Link>
+            </div>
             <div className="relative">
               <input
                 {...register('password')}
