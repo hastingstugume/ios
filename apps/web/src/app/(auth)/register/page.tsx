@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { authApi } from '@/lib/api';
-import { Radar, ArrowRight, Link2 } from 'lucide-react';
+import { Radar, ArrowRight, Link2, ChevronLeft } from 'lucide-react';
 
 const schema = z.object({
   name: z.string().min(2),
@@ -56,6 +56,12 @@ function RegisterPageContent() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(217_91%_60%/0.08)_0%,transparent_60%)] pointer-events-none" />
       <div className="w-full max-w-sm space-y-8 animate-fade-in">
+        <div>
+          <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
+            <ChevronLeft className="h-4 w-4" />
+            Back to home
+          </Link>
+        </div>
         <div className="text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 mb-4">
             <Radar className="w-6 h-6 text-primary" />
