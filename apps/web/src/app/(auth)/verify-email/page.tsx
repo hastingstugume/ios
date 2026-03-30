@@ -3,6 +3,7 @@ import { Suspense, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { authApi } from '@/lib/api';
+import { getVerifyEmailMode } from '@/lib/auth-page-helpers';
 import { MailCheck, ArrowRight, RefreshCw } from 'lucide-react';
 import { AuthShell } from '@/components/auth/AuthShell';
 
@@ -26,7 +27,7 @@ function VerifyEmailContent() {
     mutationFn: (targetEmail: string) => authApi.resendVerification(targetEmail),
   });
 
-  const canVerify = useMemo(() => token.trim().length > 0, [token]);
+  const mode = useMemo(() => getVerifyEmailMode(token), [token]);
 
   return (
     <AuthShell
@@ -45,7 +46,7 @@ function VerifyEmailContent() {
           </div>
         </div>
 
-        {canVerify ? (
+        {mode === 'verify' ? (
           <div className="space-y-4 rounded-xl border border-border bg-card p-5">
             <p className="text-sm text-muted-foreground">
               Your verification link is ready. Complete verification to start onboarding.

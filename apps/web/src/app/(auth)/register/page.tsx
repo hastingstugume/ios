@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { authApi } from '@/lib/api';
+import { getRegisterPageCopy } from '@/lib/auth-page-helpers';
 import { ArrowRight, Link2 } from 'lucide-react';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { OAuthButtons } from '@/components/auth/OAuthButtons';
@@ -23,6 +24,7 @@ function RegisterPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const invitationToken = searchParams.get('invitationToken') || undefined;
+  const copy = getRegisterPageCopy(invitationToken);
   const qc = useQueryClient();
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({ resolver: zodResolver(schema) });
 
@@ -55,13 +57,9 @@ function RegisterPageContent() {
 
   return (
     <AuthShell
-      eyebrow={invitationToken ? 'Accept Invitation' : 'Create Account'}
-      title={invitationToken ? 'Join your workspace' : 'Create your account'}
-      description={
-        invitationToken
-          ? 'Finish setup and we’ll connect you to the invited workspace.'
-          : 'Create your account first. Workspace setup comes next.'
-      }
+      eyebrow={copy.eyebrow}
+      title={copy.title}
+      description={copy.description}
     >
       <div className="space-y-4">
         <div className="space-y-1.5">
@@ -74,7 +72,7 @@ function RegisterPageContent() {
           </div>
         </div>
 
-        {invitationToken && (
+        {copy.showInvitationNotice && (
           <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 flex items-start gap-2">
             <Link2 className="w-4 h-4 text-primary mt-0.5" />
             <p className="text-xs text-primary/80">
@@ -122,7 +120,7 @@ function RegisterPageContent() {
             disabled={signup.isPending}
             className="w-full bg-primary text-primary-foreground rounded-lg py-2.5 text-sm font-medium flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
-            {signup.isPending ? 'Creating…' : (<>{invitationToken ? 'Join workspace' : 'Continue'} <ArrowRight className="w-4 h-4" /></>)}
+            {signup.isPending ? 'Creating…' : (<>{copy.submitLabel} <ArrowRight className="w-4 h-4" /></>)}
           </button>
         </form>
 

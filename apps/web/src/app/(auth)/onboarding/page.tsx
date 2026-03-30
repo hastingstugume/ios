@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { authApi } from '@/lib/api';
+import { getOnboardingWorkspaceSeed } from '@/lib/auth-page-helpers';
 import { useAuth } from '@/hooks/useAuth';
 import { Briefcase, UserRound, ArrowRight } from 'lucide-react';
 import { AuthShell } from '@/components/auth/AuthShell';
@@ -21,18 +22,16 @@ export default function OnboardingPage() {
   }, [isLoading, isAuthenticated, emailVerified, onboardingCompleted, router]);
 
   useEffect(() => {
-    if (currentOrg?.name) {
-      setWorkspaceName(currentOrg.name);
+    const nextValue = getOnboardingWorkspaceSeed({
+      currentOrgName: currentOrg?.name,
+      accountType,
+      workspaceName,
+      userName: user?.name,
+    });
+
+    if (nextValue !== workspaceName) {
+      setWorkspaceName(nextValue);
     }
-  }, [currentOrg?.name]);
-
-  useEffect(() => {
-    if (currentOrg?.name) return;
-    if (accountType !== 'FREELANCER') return;
-    if (workspaceName.trim()) return;
-    if (!user?.name?.trim()) return;
-
-    setWorkspaceName(user.name.trim());
   }, [accountType, currentOrg?.name, user?.name, workspaceName]);
 
   const complete = useMutation({
