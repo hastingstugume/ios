@@ -3,8 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { authApi, organizationsApi, type AuditLog, type Invitation, type OrganizationMember } from '@/lib/api';
+import { useTheme, type ThemeMode } from '@/components/theme-provider';
 import { formatDate, formatPlanName } from '@/lib/utils';
-import { User, Building2, Shield, Users, Clock3, Link as LinkIcon, Trash2, Plus, Pencil } from 'lucide-react';
+import { User, Building2, Shield, Users, Clock3, Link as LinkIcon, Trash2, Plus, Pencil, Sun, Moon, Monitor } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 
 const ROLE_OPTIONS = ['OWNER', 'ADMIN', 'ANALYST', 'VIEWER'] as const;
@@ -31,6 +32,7 @@ function RoleBadge({ role }: { role: string }) {
 
 export default function SettingsPage() {
   const { user, currentOrg, currentOrgId, role } = useAuth();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const qc = useQueryClient();
   const [name, setName] = useState('');
   const [orgName, setOrgName] = useState('');
@@ -126,6 +128,11 @@ export default function SettingsPage() {
   const members = membersQuery.data?.members || [];
   const invitations = membersQuery.data?.invitations || [];
   const auditLogs = auditQuery.data?.data || [];
+  const themeOptions: Array<{ value: ThemeMode; label: string; description: string; icon: any }> = [
+    { value: 'light', label: 'Light', description: 'Bright interface for daytime work.', icon: Sun },
+    { value: 'dark', label: 'Dark', description: 'Low-glare theme for focused sessions.', icon: Moon },
+    { value: 'system', label: 'System', description: `Currently following ${resolvedTheme} mode.`, icon: Monitor },
+  ];
 
   return (
     <div className="page-shell space-y-6 animate-fade-in">
@@ -169,6 +176,37 @@ export default function SettingsPage() {
           >
             {profileMutation.isPending ? 'Saving…' : 'Save profile'}
           </button>
+        </div>
+      </section>
+
+      <section className="section-card">
+        <SectionTitle icon={Sun} title="Appearance" subtitle="Choose how the app looks across this browser." />
+        <div className="space-y-4 px-5 py-5">
+          <div className="grid gap-3 md:grid-cols-3">
+            {themeOptions.map(({ value, label, description, icon: Icon }) => {
+              const active = theme === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTheme(value)}
+                  className={`rounded-xl border p-4 text-left transition-colors ${
+                    active
+                      ? 'border-primary/30 bg-primary/10'
+                      : 'border-border bg-secondary hover:bg-accent'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className={`rounded-lg border p-2 ${active ? 'border-primary/20 bg-background text-primary' : 'border-border text-muted-foreground'}`}>
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <span className="font-medium text-foreground">{label}</span>
+                  </div>
+                  <p className="mt-3 text-sm text-muted-foreground">{description}</p>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </section>
 
