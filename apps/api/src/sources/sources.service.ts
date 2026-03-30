@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SourceType, SourceStatus } from '@prisma/client';
 import { EntitlementsService } from '../entitlements/entitlements.service';
 import { IngestionService } from '../ingestion/ingestion.service';
+import { getSourceProfile } from './source-profiles';
 
 @Injectable()
 export class SourcesService {
@@ -80,6 +81,7 @@ export class SourcesService {
       return {
         ...source,
         errorMessage: this.toSafeSourceError(source.errorMessage),
+        sourceProfile: getSourceProfile(source.type),
         health: {
           score: healthScore,
           label: this.getHealthLabel(healthScore, source._count?.signals ?? 0, last7dSignals, source.status),

@@ -23,7 +23,18 @@ describe('IngestionService', () => {
 
   it('applies source weighting to confidence score', () => {
     const weighted = (service as any).applySourceWeighting(
-      { isOpportunity: true, category: 'BUYING_INTENT', confidenceScore: 80, whyItMatters: '', suggestedOutreach: null },
+      {
+        isOpportunity: true,
+        category: 'BUYING_INTENT',
+        confidenceScore: 80,
+        whyItMatters: '',
+        suggestedOutreach: null,
+        suggestedReply: null,
+        painPoint: null,
+        urgency: 'MEDIUM',
+        sentiment: 'NEUTRAL',
+        conversationType: 'BUYER_REQUEST',
+      },
       'WEB_SEARCH',
       { sourceWeight: 1.2 },
     );

@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ClassificationService } from '../classification/classification.service';
 import { ConfigService } from '@nestjs/config';
 import { SourceType } from '@prisma/client';
+import { getSourceProfile } from '../sources/source-profiles';
 
 type IngestionItem = {
   externalId: string;
@@ -197,32 +198,32 @@ export class IngestionService {
 
   private async fetchGitHubSearch(config: { query: string; repo?: string; type?: 'issues' | 'discussions'; limit?: number }) {
     const { query, repo, type = 'discussions', limit = 20 } = config;
-    const scopedQuery = repo ? `${query} repo:${repo}` : query;
+    const scopedQuery = `${repo ? `${query} repo:${repo}` : query} ${type === 'issues' ? 'is:issue' : 'is:discussion'}`.trim();
+    const githubToken = this.config.get('GITHUB_TOKEN', '');
 
     try {
-      const searchUrl = `https://github.com/search?q=${encodeURIComponent(scopedQuery)}&type=${type}`;
-      const response = await fetch(searchUrl, {
+      const response = await fetch(`https://api.github.com/search/issues?q=${encodeURIComponent(scopedQuery)}&per_page=${limit}`, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; InternetOpportunityScanner/0.1; +https://opportunity-scanner.local)',
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'InternetOpportunityScanner/0.1',
+          ...(githubToken ? { Authorization: `Bearer ${githubToken}` } : {}),
         },
       });
-      const html = await response.text();
+      if (!response.ok) {
+        throw new Error(`GitHub API returned ${response.status}`);
+      }
+      const data = await response.json() as any;
 
-      const linkMatches = [...html.matchAll(/<a[^>]*href="(\/[^"]+)"[^>]*class="[^"]*search-title[^"]*"[^>]*>([\s\S]*?)<\/a>/g)];
-      const snippetMatches = [...html.matchAll(/<div[^>]*class="[^"]*search-title[^"]*"[\s\S]*?<div[^>]*class="[^"]*search-match[^"]*"[^>]*>([\s\S]*?)<\/div>/g)];
-
-      return linkMatches.slice(0, limit).map((match, index) => {
-        const path = match[1];
-        const title = this.stripHtml(match[2]);
-        const snippet = this.stripHtml(snippetMatches[index]?.[1] || '');
+      return (data.items || []).slice(0, limit).map((item: any) => {
         return {
-          externalId: `gh-${path.replace(/[^\w/-]+/g, '').replace(/\//g, '-')}`,
-          title,
-          text: snippet || title,
-          url: `https://github.com${path}`,
-          publishedAt: new Date(),
+          externalId: `gh-${item.node_id || item.id}`,
+          title: this.stripHtml(item.title || scopedQuery),
+          text: this.stripHtml(item.body || item.title || scopedQuery).slice(0, 1500),
+          url: item.html_url,
+          author: item.user?.login || null,
+          publishedAt: item.created_at ? new Date(item.created_at) : new Date(),
         };
-      }).filter((item) => item.url && item.title);
+      }).filter((item: { url: string; title: string }) => item.url && item.title);
     } catch (err: any) {
       throw new Error(`GitHub search failed: ${err.message}`);
     }
@@ -460,7 +461,14 @@ export class IngestionService {
         passesFilters,
         category: classification?.category || null,
         confidenceScore: classification?.confidenceScore || null,
+        painPoint: classification?.painPoint || null,
+        urgency: classification?.urgency || null,
+        sentiment: classification?.sentiment || null,
+        conversationType: classification?.conversationType || null,
         whyItMatters: classification?.whyItMatters || null,
+        suggestedReply: classification?.suggestedReply || null,
+        suggestedOutreach: classification?.suggestedOutreach || null,
+        sourceProfile: getSourceProfile(sourceType),
       };
     }));
 
@@ -692,6 +700,11 @@ export class IngestionService {
       confidenceScore: number;
       whyItMatters: string;
       suggestedOutreach: string | null;
+      suggestedReply: string | null;
+      painPoint: string | null;
+      urgency: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+      sentiment: 'NEGATIVE' | 'NEUTRAL' | 'POSITIVE' | 'MIXED';
+      conversationType: 'BUYER_REQUEST' | 'RECOMMENDATION' | 'PAIN_REPORT' | 'HIRING' | 'PARTNERSHIP' | 'TREND' | 'OTHER';
     },
     sourceType: SourceType,
     sourceConfig: Record<string, any>,

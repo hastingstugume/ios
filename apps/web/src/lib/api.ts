@@ -118,6 +118,21 @@ export interface Signal {
   priorityScore?: number | null;
   rankingReasons?: string[];
   freshnessLabel?: string;
+  postedAgo?: string;
+  sourceLabel?: string;
+  painPoint?: string | null;
+  urgency?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  sentiment?: 'NEGATIVE' | 'NEUTRAL' | 'POSITIVE' | 'MIXED';
+  conversationType?: 'BUYER_REQUEST' | 'RECOMMENDATION' | 'PAIN_REPORT' | 'HIRING' | 'PARTNERSHIP' | 'TREND' | 'OTHER';
+  suggestedReply?: string | null;
+  sourceProfile?: {
+    platformLabel: string;
+    providerLabel: string;
+    acquisitionMode: string;
+    supportStatus: string;
+    badgeLabel: string;
+    complianceNotes: string;
+  } | null;
   source?: { id: string; name: string; type: string };
   assignee?: Pick<User, 'id' | 'name' | 'email' | 'avatarUrl'> | null;
   keywords?: Array<{ keyword: Keyword }>;
@@ -133,6 +148,14 @@ export interface Source {
   config: any;
   lastFetchedAt: string | null;
   errorMessage: string | null;
+  sourceProfile?: {
+    platformLabel: string;
+    providerLabel: string;
+    acquisitionMode: string;
+    supportStatus: string;
+    badgeLabel: string;
+    complianceNotes: string;
+  };
   _count?: { signals: number };
   health?: {
     score: number;
@@ -159,7 +182,21 @@ export interface SourcePreview {
     passesFilters: boolean;
     category: string | null;
     confidenceScore: number | null;
+    painPoint: string | null;
+    urgency: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | null;
+    sentiment: 'NEGATIVE' | 'NEUTRAL' | 'POSITIVE' | 'MIXED' | null;
+    conversationType: 'BUYER_REQUEST' | 'RECOMMENDATION' | 'PAIN_REPORT' | 'HIRING' | 'PARTNERSHIP' | 'TREND' | 'OTHER' | null;
     whyItMatters: string | null;
+    suggestedReply: string | null;
+    suggestedOutreach: string | null;
+    sourceProfile: {
+      platformLabel: string;
+      providerLabel: string;
+      acquisitionMode: string;
+      supportStatus: string;
+      badgeLabel: string;
+      complianceNotes: string;
+    };
   }>;
 }
 export interface AlertRule { id: string; name: string; isActive: boolean; minConfidence: number; categories: string[]; keywordIds: string[]; frequency: string; emailRecipients: string[]; lastTriggeredAt: string | null; }
