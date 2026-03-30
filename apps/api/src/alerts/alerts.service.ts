@@ -3,12 +3,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SignalCategory, AlertFrequency } from '@prisma/client';
+import { EntitlementsService } from '../entitlements/entitlements.service';
 
 @Injectable()
 export class AlertsService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private entitlements: EntitlementsService,
   ) {}
 
   async findAll(orgId: string) {
@@ -26,6 +28,7 @@ export class AlertsService {
     frequency?: AlertFrequency;
     emailRecipients: string[];
   }) {
+    await this.entitlements.assertCanCreateAlert(orgId);
     const rule = await this.prisma.alertRule.create({
       data: { organizationId: orgId, ...data },
     });

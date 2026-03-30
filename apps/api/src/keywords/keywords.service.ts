@@ -1,10 +1,14 @@
 // keywords.service.ts
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EntitlementsService } from '../entitlements/entitlements.service';
 
 @Injectable()
 export class KeywordsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private entitlements: EntitlementsService,
+  ) {}
 
   async findAll(orgId: string) {
     return this.prisma.keyword.findMany({
@@ -19,6 +23,7 @@ export class KeywordsService {
       where: { organizationId: orgId, phrase: { equals: phrase, mode: 'insensitive' } },
     });
     if (existing) throw new ConflictException('Keyword already exists');
+    await this.entitlements.assertCanCreateKeyword(orgId);
 
     return this.prisma.keyword.create({
       data: { organizationId: orgId, phrase, description },

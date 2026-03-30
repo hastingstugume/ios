@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Patch, Body, Req, Res, UseGuards, HttpCode } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { AuthGuard } from '../common/guards/auth.guard';
@@ -11,6 +12,7 @@ export class AuthController {
   constructor(private auth: AuthService) {}
 
   @Post('register')
+  @Throttle({ default: { limit: 10, ttl: 900000 } })
   @ApiOperation({ summary: 'Register and create organization' })
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
     const session = await this.auth.register(dto.email, dto.password, dto.name, dto.organizationName, dto.invitationToken);
@@ -20,6 +22,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
+  @Throttle({ default: { limit: 10, ttl: 900000 } })
   @ApiOperation({ summary: 'Login' })
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const session = await this.auth.login(dto.email, dto.password);

@@ -1,15 +1,17 @@
 // organizations.controller.ts
 import { Controller, Get, Post, Patch, Delete, Param, Body, Query, Req, UseGuards, DefaultValuePipe, ParseIntPipe } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { OrganizationsService } from './organizations.service';
 import { AuthGuard } from '../common/guards/auth.guard';
 import { OrgMemberGuard } from '../common/guards/org-member.guard';
-import { IsEmail, IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsEmail, IsEnum, IsOptional, IsString } from 'class-validator';
 import { UserRole } from '@prisma/client';
 
 class UpdateOrgDto {
   @IsOptional() @IsString() name?: string;
   @IsOptional() @IsString() logoUrl?: string;
+  @IsOptional() @IsArray() @IsString({ each: true }) negativeKeywords?: string[];
 }
 
 class InviteMemberDto {
@@ -48,11 +50,13 @@ export class OrganizationsController {
   }
 
   @Post('members')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   inviteMember(@Param('orgId') orgId: string, @Body() dto: InviteMemberDto, @Req() req: any) {
     return this.orgs.inviteMember(orgId, req.user.id, req.membership?.role, dto.email, dto.role);
   }
 
   @Patch('members/:memberId')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   updateMember(
     @Param('orgId') orgId: string,
     @Param('memberId') memberId: string,
@@ -63,6 +67,7 @@ export class OrganizationsController {
   }
 
   @Delete('members/:memberId')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   removeMember(@Param('orgId') orgId: string, @Param('memberId') memberId: string, @Req() req: any) {
     return this.orgs.removeMember(orgId, memberId, req.user.id, req.membership?.role);
   }

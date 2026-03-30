@@ -4,12 +4,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EntitlementsService } from '../entitlements/entitlements.service';
 
 @Injectable()
 export class OrganizationsService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private entitlements: EntitlementsService,
   ) {}
 
   async findOne(id: string) {
@@ -23,9 +25,21 @@ export class OrganizationsService {
     return org;
   }
 
-  async update(id: string, userId: string, role: UserRole, data: { name?: string; logoUrl?: string }) {
+  async update(id: string, userId: string, role: UserRole, data: { name?: string; logoUrl?: string; negativeKeywords?: string[] }) {
     this.assertAdmin(role);
-    const org = await this.prisma.organization.update({ where: { id }, data });
+    const org = await this.prisma.organization.update({
+      where: { id },
+      data: {
+        ...data,
+        ...(data.negativeKeywords
+          ? {
+              negativeKeywords: data.negativeKeywords
+                .map((term) => term.trim())
+                .filter(Boolean),
+            }
+          : {}),
+      },
+    });
     await this.prisma.auditLog.create({
       data: { organizationId: id, userId, action: 'ORG_SETTINGS_UPDATED' },
     });
@@ -92,6 +106,7 @@ export class OrganizationsService {
       });
       if (existingMembership) throw new BadRequestException('User is already a member of this workspace');
 
+      await this.entitlements.assertCanAddSeat(orgId);
       const member = await this.prisma.organizationMember.create({
         data: { organizationId: orgId, userId: existingUser.id, role },
         include: { user: { select: { id: true, name: true, email: true, avatarUrl: true, createdAt: true } } },
@@ -108,6 +123,7 @@ export class OrganizationsService {
       return { type: 'member', member };
     }
 
+    await this.entitlements.assertCanAddSeat(orgId);
     const invitation = await this.prisma.invitation.create({
       data: {
         organizationId: orgId,
