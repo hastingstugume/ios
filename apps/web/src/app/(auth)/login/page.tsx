@@ -56,7 +56,7 @@ export default function LoginPage() {
     <AuthShell
       eyebrow="Sign In"
       title="Welcome back"
-      description="Sign in to your workspace to review fresh intent signals, alerts, and team actions."
+      description="Sign in to review signals, alerts, and team activity."
     >
       <div className="space-y-4">
         <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">

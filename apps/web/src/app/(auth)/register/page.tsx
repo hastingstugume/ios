@@ -59,8 +59,8 @@ function RegisterPageContent() {
       title={invitationToken ? 'Join your workspace' : 'Create your account'}
       description={
         invitationToken
-          ? 'Finish account setup, verify your email, and we’ll connect you to the invited workspace.'
-          : 'Start with your account first. After email verification, we’ll help you choose freelancer or business and create the right workspace.'
+          ? 'Finish setup and we’ll connect you to the invited workspace.'
+          : 'Create your account first. Workspace setup comes next.'
       }
     >
       <div className="space-y-4">
