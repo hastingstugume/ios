@@ -35,13 +35,14 @@ export function Modal({
   if (!open || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
+    <div className="fixed inset-0 z-50 overflow-y-auto px-4 py-4 sm:py-6">
       <button
         aria-label="Close modal"
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative z-10 w-full max-w-2xl rounded-2xl border border-border bg-card shadow-2xl">
+      <div className="relative z-10 mx-auto flex min-h-full w-full items-start justify-center sm:items-center">
+        <div className="relative flex w-full max-w-2xl max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl sm:max-h-[calc(100vh-3rem)]">
         <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
           <div>
             <h2 className="text-lg font-semibold text-foreground">{title}</h2>
@@ -54,7 +55,8 @@ export function Modal({
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="px-5 py-5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
+        </div>
       </div>
     </div>,
     document.body,

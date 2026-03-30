@@ -79,6 +79,7 @@ export class SourcesService {
 
       return {
         ...source,
+        errorMessage: this.toSafeSourceError(source.errorMessage),
         health: {
           score: healthScore,
           label: this.getHealthLabel(healthScore, source._count?.signals ?? 0, last7dSignals, source.status),
@@ -243,5 +244,12 @@ export class SourcesService {
     if (score >= 75) return 'Strong';
     if (score >= 40) return last7dSignals > 0 ? 'Promising' : 'Stale';
     return last7dSignals > 0 ? 'Weak' : 'Stale';
+  }
+
+  private toSafeSourceError(message: string | null) {
+    if (!message) return null;
+    if (message.includes('organization.findUnique()')) return 'Workspace settings could not be loaded';
+    if (message.includes('negativeKeywords')) return 'Workspace filters could not be loaded';
+    return message;
   }
 }

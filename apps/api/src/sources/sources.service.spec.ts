@@ -47,10 +47,10 @@ describe('SourcesService', () => {
         id: 'src_2',
         name: 'Cold web search',
         type: 'WEB_SEARCH',
-        status: 'ACTIVE',
+        status: 'ERROR',
         config: {},
         lastFetchedAt: null,
-        errorMessage: null,
+        errorMessage: 'Invalid `this.prisma.organization.findUnique()` invocation in C:\\Users\\Hastings',
         _count: { signals: 1 },
       },
     ]);
@@ -79,9 +79,10 @@ describe('SourcesService', () => {
       savedSignals: 4,
     }));
     expect(result[1].health).toEqual(expect.objectContaining({
-      label: 'Stale',
+      label: 'Needs attention',
       last7dSignals: 0,
       highConfidenceSignals: 0,
     }));
+    expect(result[1].errorMessage).toBe('Workspace settings could not be loaded');
   });
 });

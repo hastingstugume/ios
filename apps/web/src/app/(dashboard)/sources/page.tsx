@@ -90,6 +90,8 @@ export default function SourcesPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [search, setSearch] = useState('');
   const [presetFeedback, setPresetFeedback] = useState<string | null>(null);
+  const [presetFeedbackTone, setPresetFeedbackTone] = useState<'success' | 'error'>('success');
+  const [installingPresetId, setInstallingPresetId] = useState<string | null>(null);
   const [previewFeedback, setPreviewFeedback] = useState<string | null>(null);
 
   const { data: sources = [], isLoading } = useQuery({
@@ -130,6 +132,10 @@ export default function SourcesPage() {
   });
 
   const installPreset = useMutation({
+    onMutate: (presetId: string) => {
+      setInstallingPresetId(presetId);
+      setPresetFeedback(null);
+    },
     mutationFn: async (presetId: string) => {
       const preset = SOURCE_PRESET_PACKS.find((item) => item.id === presetId);
       if (!preset || !currentOrgId) throw new Error('Preset unavailable');
@@ -181,11 +187,19 @@ export default function SourcesPage() {
       qc.invalidateQueries({ queryKey: ['sources', currentOrgId] });
       qc.invalidateQueries({ queryKey: ['keywords', currentOrgId] });
       qc.invalidateQueries({ queryKey: ['auth', 'me'] });
+      setPresetFeedbackTone(created > 0 || keywordsAdded > 0 || negativesAdded > 0 ? 'success' : 'error');
       setPresetFeedback(
-        created > 0
-          ? `${preset.name}: added ${created} source${created === 1 ? '' : 's'}${keywordsAdded ? `, ${keywordsAdded} keyword${keywordsAdded === 1 ? '' : 's'}` : ''}${negativesAdded ? `, ${negativesAdded} negative${negativesAdded === 1 ? '' : 's'}` : ''}${skipped ? `, skipped ${skipped}` : ''}.`
+        created > 0 || keywordsAdded > 0 || negativesAdded > 0
+          ? `${preset.name}: added ${created} source${created === 1 ? '' : 's'}${keywordsAdded ? `, ${keywordsAdded} keyword${keywordsAdded === 1 ? '' : 's'}` : ''}${negativesAdded ? `, ${negativesAdded} negative${negativesAdded === 1 ? '' : 's'}` : ''}${skipped ? `, skipped ${skipped}` : ''}${firstError ? ` (${firstError})` : ''}.`
           : `${preset.name}: no sources added${firstError ? ` (${firstError})` : ''}.`,
       );
+    },
+    onError: (error) => {
+      setPresetFeedbackTone('error');
+      setPresetFeedback((error as Error).message || 'Could not install preset.');
+    },
+    onSettled: () => {
+      setInstallingPresetId(null);
     },
   });
 
@@ -197,6 +211,7 @@ export default function SourcesPage() {
       const uniquePhrases = phrases.map((phrase) => phrase.trim()).filter(Boolean);
       let created = 0;
       let skipped = 0;
+      let firstError: string | null = null;
 
       for (const phrase of uniquePhrases) {
         if (existing.has(phrase.toLowerCase())) {
@@ -208,20 +223,26 @@ export default function SourcesPage() {
           await keywordsApi.create(currentOrgId, { phrase });
           existing.add(phrase.toLowerCase());
           created += 1;
-        } catch {
+        } catch (error) {
           skipped += 1;
+          if (!firstError) firstError = (error as Error).message;
         }
       }
 
-      return { created, skipped };
+      return { created, skipped, firstError };
     },
-    onSuccess: ({ created, skipped }) => {
+    onSuccess: ({ created, skipped, firstError }) => {
       qc.invalidateQueries({ queryKey: ['keywords', currentOrgId] });
+      setPresetFeedbackTone(firstError && created === 0 ? 'error' : 'success');
       setPresetFeedback(
         created > 0
-          ? `Added ${created} recommended keyword${created === 1 ? '' : 's'}${skipped ? `, skipped ${skipped}` : ''}.`
-          : `No new keywords added${skipped ? `, skipped ${skipped}` : ''}.`,
+          ? `Added ${created} recommended keyword${created === 1 ? '' : 's'}${skipped ? `, skipped ${skipped}` : ''}${firstError ? ` (${firstError})` : ''}.`
+          : `No new keywords added${skipped ? `, skipped ${skipped}` : ''}${firstError ? ` (${firstError})` : ''}.`,
       );
+    },
+    onError: (error) => {
+      setPresetFeedbackTone('error');
+      setPresetFeedback((error as Error).message || 'Could not add suggested keywords.');
     },
   });
 
@@ -243,7 +264,12 @@ export default function SourcesPage() {
     },
     onSuccess: ({ total }) => {
       qc.invalidateQueries({ queryKey: ['auth', 'me'] });
+      setPresetFeedbackTone('success');
       setPresetFeedback(`Applied recommended negatives. Workspace now has ${total} negative keyword${total === 1 ? '' : 's'}.`);
+    },
+    onError: (error) => {
+      setPresetFeedbackTone('error');
+      setPresetFeedback((error as Error).message || 'Could not apply suggested negatives.');
     },
   });
 
@@ -343,13 +369,22 @@ export default function SourcesPage() {
               <p className="mt-1 text-sm text-muted-foreground">Install a curated source pack by niche to start discovering pain points and lead opportunities faster.</p>
             </div>
             {presetFeedback ? (
-              <div className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary">
+              <div className={`rounded-lg px-3 py-2 text-sm ${
+                presetFeedbackTone === 'error'
+                  ? 'border border-destructive/20 bg-destructive/10 text-destructive'
+                  : 'border border-primary/20 bg-primary/10 text-primary'
+              }`}>
                 {presetFeedback}
               </div>
             ) : null}
             <div className="grid gap-3 lg:grid-cols-2">
               {SOURCE_PRESET_PACKS.map((preset) => (
                 <div key={preset.id} className="rounded-xl border border-border bg-secondary p-4">
+                  {installingPresetId === preset.id ? (
+                    <div className="mb-3 rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-xs text-primary">
+                      Installing preset into your live workspace...
+                    </div>
+                  ) : null}
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-foreground">{preset.name}</p>
@@ -371,6 +406,7 @@ export default function SourcesPage() {
                         ))}
                       </div>
                       <button
+                        type="button"
                         onClick={() => addRecommendedKeywords.mutate(preset.recommendedKeywords || [])}
                         disabled={addRecommendedKeywords.isPending}
                         className="mt-3 w-full rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50 sm:w-auto"
@@ -390,6 +426,7 @@ export default function SourcesPage() {
                         ))}
                       </div>
                       <button
+                        type="button"
                         onClick={() => applyRecommendedNegatives.mutate(preset.recommendedNegativeKeywords || [])}
                         disabled={applyRecommendedNegatives.isPending}
                         className="mt-3 w-full rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50 sm:w-auto"
@@ -406,11 +443,12 @@ export default function SourcesPage() {
                     ))}
                   </div>
                   <button
+                    type="button"
                     onClick={() => installPreset.mutate(preset.id)}
-                    disabled={installPreset.isPending}
+                    disabled={installingPresetId === preset.id}
                     className="mt-4 w-full rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 sm:w-auto"
                   >
-                    {installPreset.isPending ? 'Installing…' : 'Install preset'}
+                    {installingPresetId === preset.id ? 'Installing…' : 'Install preset'}
                   </button>
                 </div>
               ))}
@@ -426,6 +464,15 @@ export default function SourcesPage() {
         description="Add direct sources and search-driven discovery feeds so the scanner can find pain points, buying intent, and lead opportunities across more of the web."
       >
         <div className="space-y-4">
+          {presetFeedback ? (
+            <div className={`rounded-lg px-3 py-2 text-sm ${
+              presetFeedbackTone === 'error'
+                ? 'border border-destructive/20 bg-destructive/10 text-destructive'
+                : 'border border-primary/20 bg-primary/10 text-primary'
+            }`}>
+              {presetFeedback}
+            </div>
+          ) : null}
           <div className="grid gap-3 md:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs text-muted-foreground">Source type</label>

@@ -57,7 +57,7 @@ export class IngestionService {
       this.logger.error(`Failed to fetch source ${sourceId}: ${err.message}`);
       await this.prisma.source.update({
         where: { id: sourceId },
-        data: { errorMessage: err.message, status: 'ERROR' },
+        data: { errorMessage: this.toSafeSourceError(err?.message), status: 'ERROR' },
       });
     }
   }
@@ -508,6 +508,20 @@ export class IngestionService {
       this.logger.warn(`Failed to load workspace negative keywords for ${orgId}: ${error?.message || 'unknown error'}`);
       return [];
     }
+  }
+
+  private toSafeSourceError(message?: string) {
+    if (!message) return 'Fetch failed';
+
+    if (message.includes('organization.findUnique()')) {
+      return 'Workspace settings could not be loaded';
+    }
+
+    if (message.includes('negativeKeywords')) {
+      return 'Workspace filters could not be loaded';
+    }
+
+    return message;
   }
 
   private async getRedditAuthHeaders(label: string) {
