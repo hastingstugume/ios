@@ -249,6 +249,63 @@ describe('AuthService', () => {
     );
   });
 
+  it('resends verification by expiring prior tokens and issuing a fresh one', async () => {
+    const notifications = { sendVerificationEmail: jest.fn(), sendPasswordResetEmail: jest.fn() };
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AuthService,
+        { provide: PrismaService, useValue: mockPrisma },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (k: string, d?: any) => {
+              const values: Record<string, any> = {
+                GOOGLE_CLIENT_ID: 'google-client',
+                GOOGLE_CLIENT_SECRET: 'google-secret',
+                MICROSOFT_CLIENT_ID: 'microsoft-client',
+                MICROSOFT_CLIENT_SECRET: 'microsoft-secret',
+                GITHUB_CLIENT_ID: 'github-client',
+                GITHUB_CLIENT_SECRET: 'github-secret',
+                API_BASE_URL: 'http://localhost:3001',
+                MFA_ISSUER: 'Opportunity Scanner',
+              };
+
+              return k in values ? values[k] : d;
+            },
+          },
+        },
+        { provide: NotificationsService, useValue: notifications },
+      ],
+    }).compile();
+    service = module.get(AuthService);
+
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      email: 'test@test.com',
+      name: 'Test',
+      emailVerified: false,
+    });
+    mockPrisma.emailVerificationToken.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.emailVerificationToken.create.mockResolvedValue({
+      id: 'evt_2',
+      token: 'verify_456',
+      userId: 'u1',
+    });
+
+    await expect(service.resendVerification('test@test.com')).resolves.toEqual({ success: true });
+    expect(mockPrisma.emailVerificationToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'u1', usedAt: null },
+      data: { usedAt: expect.any(Date) },
+    });
+    expect(mockPrisma.emailVerificationToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: 'u1',
+        token: expect.stringMatching(/^verify_/),
+      }),
+    });
+    expect(notifications.sendVerificationEmail).toHaveBeenCalledWith('test@test.com', 'Test', 'verify_456');
+  });
+
   it('creates a password reset token for password users', async () => {
     mockPrisma.user.findUnique.mockResolvedValue({
       id: 'u1',
@@ -376,6 +433,47 @@ describe('AuthService', () => {
       }),
     });
     expect(mockPrisma.invitation.update).toHaveBeenCalled();
+  });
+
+  it('accepts an invitation during password registration when the email matches', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(null);
+    mockPrisma.user.create.mockResolvedValue({
+      id: 'u3',
+      email: 'invitee@test.com',
+      name: 'Invitee',
+    });
+    mockPrisma.invitation.findUnique.mockResolvedValue({
+      id: 'invite_2',
+      organizationId: 'org_2',
+      email: 'invitee@test.com',
+      role: 'ANALYST',
+      acceptedAt: null,
+      expiresAt: new Date(Date.now() + 10_000),
+      organization: { id: 'org_2' },
+    });
+    mockPrisma.organizationMember.create.mockResolvedValue({ id: 'member_2' });
+    mockPrisma.invitation.update.mockResolvedValue({ id: 'invite_2' });
+    mockPrisma.emailVerificationToken.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.emailVerificationToken.create.mockResolvedValue({ id: 'evt_3', token: 'verify_789' });
+
+    await expect(service.register('invitee@test.com', 'password-123', 'Invitee', 'invite-token')).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        requiresVerification: true,
+        joinedOrgId: 'org_2',
+      }),
+    );
+    expect(mockPrisma.organizationMember.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: 'u3',
+        organizationId: 'org_2',
+        role: 'ANALYST',
+      }),
+    });
+    expect(mockPrisma.invitation.update).toHaveBeenCalledWith({
+      where: { id: 'invite_2' },
+      data: { acceptedAt: expect.any(Date) },
+    });
   });
 
   it('resets password and revokes sessions with a valid reset token', async () => {
