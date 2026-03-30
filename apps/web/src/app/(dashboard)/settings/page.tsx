@@ -7,6 +7,8 @@ import { useTheme, type ThemeMode } from '@/components/theme-provider';
 import { formatDate, formatPlanName } from '@/lib/utils';
 import { User, Building2, Shield, Users, Clock3, Link as LinkIcon, Trash2, Plus, Pencil, Sun, Moon, Monitor } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
+import QRCode from 'qrcode';
+import { Switch } from '@/components/ui/switch';
 
 const ROLE_OPTIONS = ['OWNER', 'ADMIN', 'ANALYST', 'VIEWER'] as const;
 
@@ -38,6 +40,12 @@ export default function SettingsPage() {
   const [orgName, setOrgName] = useState('');
   const [negativeKeywords, setNegativeKeywords] = useState('');
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '' });
+  const [mfaSetup, setMfaSetup] = useState<{ secret: string; otpauthUri: string; issuer: string } | null>(null);
+  const [mfaQrCode, setMfaQrCode] = useState<string | null>(null);
+  const [mfaEnableCode, setMfaEnableCode] = useState('');
+  const [mfaDisableCode, setMfaDisableCode] = useState('');
+  const [mfaBackupCodes, setMfaBackupCodes] = useState<string[] | null>(null);
+  const [showDisableMfaWarning, setShowDisableMfaWarning] = useState(false);
   const [invite, setInvite] = useState({ email: '', role: 'ANALYST' });
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -54,6 +62,36 @@ export default function SettingsPage() {
   useEffect(() => {
     setNegativeKeywords((currentOrg?.negativeKeywords || []).join(', '));
   }, [currentOrg?.negativeKeywords]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function generateMfaQrCode() {
+      if (!mfaSetup?.otpauthUri) {
+        setMfaQrCode(null);
+        return;
+      }
+
+      try {
+        const dataUrl = await QRCode.toDataURL(mfaSetup.otpauthUri, {
+          margin: 1,
+          width: 180,
+          color: {
+            dark: '#E8EEF8',
+            light: '#111827',
+          },
+        });
+        if (!cancelled) setMfaQrCode(dataUrl);
+      } catch {
+        if (!cancelled) setMfaQrCode(null);
+      }
+    }
+
+    generateMfaQrCode();
+    return () => {
+      cancelled = true;
+    };
+  }, [mfaSetup]);
 
   const membersQuery = useQuery({
     queryKey: ['org-members', currentOrgId],
@@ -88,6 +126,37 @@ export default function SettingsPage() {
   const passwordMutation = useMutation({
     mutationFn: () => authApi.changePassword(passwords),
     onSuccess: () => setPasswords({ currentPassword: '', newPassword: '' }),
+  });
+
+  const setupMfaMutation = useMutation({
+    mutationFn: () => authApi.setupMfa(),
+    onSuccess: (result) => {
+      setMfaSetup(result);
+      setMfaQrCode(null);
+      setMfaEnableCode('');
+      setMfaBackupCodes(null);
+    },
+  });
+
+  const enableMfaMutation = useMutation({
+    mutationFn: () => authApi.enableMfa({ code: mfaEnableCode }),
+    onSuccess: async (result) => {
+      setMfaBackupCodes(result.backupCodes);
+      setMfaSetup(null);
+      setMfaEnableCode('');
+      await qc.invalidateQueries({ queryKey: ['auth', 'me'] });
+    },
+  });
+
+  const disableMfaMutation = useMutation({
+    mutationFn: () => authApi.disableMfa({ code: mfaDisableCode }),
+    onSuccess: async () => {
+      setShowDisableMfaWarning(false);
+      setMfaDisableCode('');
+      setMfaBackupCodes(null);
+      setMfaSetup(null);
+      await qc.invalidateQueries({ queryKey: ['auth', 'me'] });
+    },
   });
 
   const inviteMutation = useMutation({
@@ -446,30 +515,6 @@ export default function SettingsPage() {
       </Modal>
 
       <section className="section-card">
-        <SectionTitle icon={Clock3} title="Audit Log" subtitle="Review important workspace actions and administrative changes." />
-        <div className="space-y-3 px-5 py-5">
-          {auditLogs.map((entry: AuditLog) => (
-            <div key={entry.id} className="rounded-xl border border-border bg-secondary px-4 py-3">
-              <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-sm font-medium text-foreground">{entry.action.replaceAll('_', ' ')}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {entry.user?.name || entry.user?.email || 'System'} · {formatDate(entry.createdAt)}
-                  </p>
-                </div>
-                {entry.metadata && (
-                  <p className="text-xs text-muted-foreground max-w-md break-words">
-                    {Object.entries(entry.metadata).map(([key, value]) => `${key}: ${String(value)}`).join(' · ')}
-                  </p>
-                )}
-              </div>
-            </div>
-          ))}
-          {!auditLogs.length && <p className="text-sm text-muted-foreground">No audit activity yet.</p>}
-        </div>
-      </section>
-
-      <section className="section-card">
         <SectionTitle icon={Shield} title="Password" subtitle="Change your password with current-password verification." />
         <div className="space-y-4 px-5 py-5">
           {user?.hasPassword ? (
@@ -511,6 +556,249 @@ export default function SettingsPage() {
               </p>
             </div>
           )}
+        </div>
+      </section>
+
+      <section className="section-card">
+        <SectionTitle icon={Shield} title="Multi-factor authentication" subtitle="Recommended for stronger account protection, but optional for individual users." />
+        <div className="space-y-4 px-5 py-5">
+          {user?.hasPassword ? (
+            <>
+              <div className="rounded-xl border border-border bg-secondary px-4 py-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Authenticator app protection</p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {user?.mfaEnabled
+                        ? 'Your password sign-in is currently protected by an authenticator app or backup code.'
+                        : 'Keep sign-in simple or turn this on for stronger account protection.'}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={Boolean(user?.mfaEnabled)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        if (!user?.mfaEnabled) setupMfaMutation.mutate();
+                        return;
+                      }
+
+                      if (user?.mfaEnabled) {
+                        setShowDisableMfaWarning(true);
+                        return;
+                      }
+
+                      setMfaSetup(null);
+                      setMfaEnableCode('');
+                    }}
+                    aria-label="Toggle multi-factor authentication"
+                  />
+                </div>
+              </div>
+
+              {!user?.mfaEnabled && mfaSetup ? (
+                <div className="space-y-4 rounded-xl border border-border bg-secondary px-4 py-4">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-foreground">1. Add this account to your authenticator app</p>
+                    <p className="text-sm text-muted-foreground">
+                      Scan this QR code with Google Authenticator, Microsoft Authenticator, 1Password, or another compatible app.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-[200px_1fr] lg:items-center">
+                    <div className="flex justify-center">
+                      <div className="rounded-2xl border border-border bg-background p-3 shadow-sm">
+                        {mfaQrCode ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={mfaQrCode} alt="Authenticator app QR code" className="h-[180px] w-[180px] rounded-lg" />
+                        ) : (
+                          <div className="flex h-[180px] w-[180px] items-center justify-center rounded-lg bg-secondary text-sm text-muted-foreground">
+                            Preparing QR code…
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="mb-1 block text-xs text-muted-foreground">Can’t scan? Enter this key manually</label>
+                        <div className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono text-foreground break-all">
+                          {mfaSetup.secret}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => navigator.clipboard.writeText(mfaSetup.secret)}
+                          className="rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+                        >
+                          Copy secret key
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigator.clipboard.writeText(mfaSetup.otpauthUri)}
+                          className="rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+                        >
+                          Copy setup link
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">2. Enter the 6-digit code from your app</label>
+                    <input
+                      value={mfaEnableCode}
+                      onChange={(event) => setMfaEnableCode(event.target.value)}
+                      placeholder="123456"
+                      className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+
+                  {setupMfaMutation.error && <p className="text-sm text-destructive">{(setupMfaMutation.error as Error).message}</p>}
+                  {enableMfaMutation.error && <p className="text-sm text-destructive">{(enableMfaMutation.error as Error).message}</p>}
+
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => enableMfaMutation.mutate()}
+                      disabled={!mfaEnableCode.trim() || enableMfaMutation.isPending}
+                      className="rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      {enableMfaMutation.isPending ? 'Enabling…' : 'Enable MFA'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMfaSetup(null);
+                        setMfaEnableCode('');
+                      }}
+                      className="rounded-xl border border-border px-4 py-2.5 text-sm text-foreground transition-colors hover:bg-accent"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {user?.mfaEnabled ? (
+                <div className="space-y-4 rounded-xl border border-border bg-secondary px-4 py-4">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Recovery and disable controls</p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      If you ever need to switch this off, you’ll be asked to confirm with a current authenticator code or one of your backup codes.
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-3">
+                    <p className="text-sm text-amber-200">
+                      Turning MFA off removes the extra protection on password sign-in. Only do this if you still have another safe way to protect the account.
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
+              {mfaBackupCodes?.length ? (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-4">
+                  <p className="text-sm font-medium text-foreground">Save these backup codes now</p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Each code works once. Store them somewhere safe before leaving this page.
+                  </p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {mfaBackupCodes.map((code) => (
+                      <div key={code} className="rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm text-foreground">
+                        {code}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="rounded-xl border border-border bg-secondary px-4 py-4">
+              <p className="text-sm font-medium text-foreground">This account signs in with {providerLabel || 'an external provider'}.</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                We rely on {providerLabel || 'your identity provider'} for MFA and account security by default. You can continue using this account without app-level MFA unless your workspace later requires stricter controls.
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <Modal
+        open={showDisableMfaWarning}
+        onClose={() => {
+          if (disableMfaMutation.isPending) return;
+          setShowDisableMfaWarning(false);
+          setMfaDisableCode('');
+        }}
+        title="Disable multi-factor authentication?"
+        size="compact"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-3">
+            <p className="text-sm text-amber-200">
+              Disabling MFA means your account will go back to password-only sign-in. Make sure this is intentional before you continue.
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">Authentication or backup code</label>
+            <input
+              value={mfaDisableCode}
+              onChange={(event) => setMfaDisableCode(event.target.value)}
+              placeholder="123456 or ABCD-EF12"
+              className="w-full rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+
+          {disableMfaMutation.error ? (
+            <p className="text-sm text-destructive">{(disableMfaMutation.error as Error).message}</p>
+          ) : null}
+
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setShowDisableMfaWarning(false);
+                setMfaDisableCode('');
+              }}
+              className="rounded-xl border border-border px-4 py-2.5 text-sm text-foreground transition-colors hover:bg-accent"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => disableMfaMutation.mutate()}
+              disabled={!mfaDisableCode.trim() || disableMfaMutation.isPending}
+              className="rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            >
+              {disableMfaMutation.isPending ? 'Disabling…' : 'Disable MFA'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <section className="section-card">
+        <SectionTitle icon={Clock3} title="Audit Log" subtitle="Review important workspace actions and administrative changes." />
+        <div className="space-y-3 px-5 py-5">
+          {auditLogs.map((entry: AuditLog) => (
+            <div key={entry.id} className="rounded-xl border border-border bg-secondary px-4 py-3">
+              <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">{entry.action.replaceAll('_', ' ')}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {entry.user?.name || entry.user?.email || 'System'} · {formatDate(entry.createdAt)}
+                  </p>
+                </div>
+                {entry.metadata && (
+                  <p className="text-xs text-muted-foreground max-w-md break-words">
+                    {Object.entries(entry.metadata).map(([key, value]) => `${key}: ${String(value)}`).join(' · ')}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+          {!auditLogs.length && <p className="text-sm text-muted-foreground">No audit activity yet.</p>}
         </div>
       </section>
     </div>

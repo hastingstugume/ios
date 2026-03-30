@@ -123,6 +123,10 @@ model User {
   avatarUrl     String?
   emailVerified Boolean  @default(false)
   accountType   AccountType?
+  mfaSecret     String?
+  mfaPendingSecret String?
+  mfaEnabledAt  DateTime?
+  mfaBackupCodes String[] @default([])
   onboardingCompletedAt DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -130,6 +134,7 @@ model User {
   identities    UserIdentity[]
   memberships   OrganizationMember[]
   sessions      Session[]
+  mfaChallenges MfaChallenge[]
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens PasswordResetToken[]
   annotations   SignalAnnotation[]
@@ -166,6 +171,20 @@ model EmailVerificationToken {
 }
 
 model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+model MfaChallenge {
   id        String   @id @default(cuid())
   userId    String
   token     String   @unique

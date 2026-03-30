@@ -4,7 +4,7 @@ import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { AuthGuard } from '../common/guards/auth.guard';
-import { RegisterDto, LoginDto, UpdateProfileDto, ChangePasswordDto, VerifyEmailDto, ResendVerificationDto, CompleteOnboardingDto, RequestPasswordResetDto, ResetPasswordDto } from './auth.dto';
+import { RegisterDto, LoginDto, UpdateProfileDto, ChangePasswordDto, VerifyEmailDto, ResendVerificationDto, CompleteOnboardingDto, RequestPasswordResetDto, ResetPasswordDto, VerifyMfaLoginDto, EnableMfaDto, DisableMfaDto } from './auth.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -25,6 +25,10 @@ export class AuthController {
   @ApiOperation({ summary: 'Login' })
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const session = await this.auth.login(dto.email, dto.password);
+    if ('mfaRequired' in session && session.mfaRequired) {
+      res.clearCookie('session_token');
+      return session;
+    }
     this.setSessionCookie(res, session.token, session.expiresAt);
     return {
       success: true,
@@ -92,11 +96,18 @@ export class AuthController {
 
     const invitationToken = req.cookies?.oauth_invitation_token;
     const session = await this.auth.loginWithOAuth(provider, code, invitationToken);
-
-    this.setSessionCookie(res, session.token, session.expiresAt);
     res.clearCookie('oauth_state', { path: '/' });
     res.clearCookie('oauth_provider', { path: '/' });
     res.clearCookie('oauth_invitation_token', { path: '/' });
+
+    if ('mfaRequired' in session && session.mfaRequired) {
+      const mfaRedirect = new URL('/login', frontendUrl);
+      mfaRedirect.searchParams.set('mfa', '1');
+      mfaRedirect.searchParams.set('challenge', session.challengeToken);
+      return res.redirect(mfaRedirect.toString());
+    }
+
+    this.setSessionCookie(res, session.token, session.expiresAt);
 
     const destination = session.authState.onboardingCompleted ? '/dashboard' : '/onboarding';
     return res.redirect(new URL(destination, frontendUrl).toString());
@@ -151,6 +162,19 @@ export class AuthController {
     return this.auth.resetPassword(dto.token, dto.newPassword);
   }
 
+  @Post('mfa/verify')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Complete sign-in with a multi-factor authentication code' })
+  async verifyMfaLogin(@Body() dto: VerifyMfaLoginDto, @Res({ passthrough: true }) res: Response) {
+    const session = await this.auth.verifyMfaLogin(dto.challengeToken, dto.code);
+    this.setSessionCookie(res, session.token, session.expiresAt);
+    return {
+      success: true,
+      expiresAt: session.expiresAt,
+      authState: session.authState,
+    };
+  }
+
   @Post('onboarding')
   @UseGuards(AuthGuard)
   @HttpCode(200)
@@ -171,6 +195,30 @@ export class AuthController {
   @ApiOperation({ summary: 'Change current user password' })
   async changePassword(@Req() req: any, @Body() dto: ChangePasswordDto) {
     return this.auth.changePassword(req.user.id, dto.currentPassword, dto.newPassword);
+  }
+
+  @Post('mfa/setup')
+  @UseGuards(AuthGuard)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Prepare authenticator-based MFA setup' })
+  async setupMfa(@Req() req: any) {
+    return this.auth.setupMfa(req.user.id);
+  }
+
+  @Post('mfa/enable')
+  @UseGuards(AuthGuard)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Enable MFA after verifying an authenticator code' })
+  async enableMfa(@Req() req: any, @Body() dto: EnableMfaDto) {
+    return this.auth.enableMfa(req.user.id, dto.code);
+  }
+
+  @Post('mfa/disable')
+  @UseGuards(AuthGuard)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Disable MFA using a current authenticator or backup code' })
+  async disableMfa(@Req() req: any, @Body() dto: DisableMfaDto) {
+    return this.auth.disableMfa(req.user.id, dto.code);
   }
 
   private setSessionCookie(res: Response, token: string, expiresAt: Date) {

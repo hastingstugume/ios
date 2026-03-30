@@ -34,7 +34,7 @@ export const api = {
 // Typed API helpers
 export const authApi = {
   login: (email: string, password: string) =>
-    api.post<{ success: true; expiresAt: string; authState: { emailVerified: boolean; onboardingCompleted: boolean } }>(
+    api.post<{ success?: true; expiresAt?: string; authState: { emailVerified: boolean; onboardingCompleted: boolean }; mfaRequired?: boolean; challengeToken?: string }>(
       '/auth/login',
       { email, password },
     ),
@@ -44,11 +44,15 @@ export const authApi = {
   resendVerification: (email: string) => api.post('/auth/resend-verification', { email }),
   requestPasswordReset: (email: string) => api.post('/auth/request-password-reset', { email }),
   resetPassword: (data: { token: string; newPassword: string }) => api.post('/auth/reset-password', data),
+  verifyMfaLogin: (data: { challengeToken: string; code: string }) => api.post<{ success: true; expiresAt: string; authState: { emailVerified: boolean; onboardingCompleted: boolean } }>('/auth/mfa/verify', data),
   completeOnboarding: (data: { accountType: 'FREELANCER' | 'BUSINESS'; workspaceName: string }) => api.post('/auth/onboarding', data),
   logout: () => api.post('/auth/logout', {}),
   me: () => api.get<{ user: User; memberships: Membership[]; authState: { emailVerified: boolean; onboardingCompleted: boolean } }>('/auth/me'),
   updateMe: (data: { name: string }) => api.patch<User>('/auth/me', data),
   changePassword: (data: { currentPassword: string; newPassword: string }) => api.patch('/auth/password', data),
+  setupMfa: () => api.post<{ secret: string; otpauthUri: string; issuer: string }>('/auth/mfa/setup', {}),
+  enableMfa: (data: { code: string }) => api.post<{ success: true; backupCodes: string[] }>('/auth/mfa/enable', data),
+  disableMfa: (data: { code: string }) => api.post<{ success: true }>('/auth/mfa/disable', data),
   getOAuthStartUrl: (provider: OAuthProvider, invitationToken?: string) => {
     const params = new URLSearchParams();
     if (invitationToken) params.set('invitationToken', invitationToken);
@@ -119,6 +123,7 @@ export interface User {
   emailVerified?: boolean;
   accountType?: 'FREELANCER' | 'BUSINESS' | null;
   onboardingCompletedAt?: string | null;
+  mfaEnabled?: boolean;
   hasPassword?: boolean;
   authProviders?: Array<'google' | 'microsoft' | 'github'>;
 }

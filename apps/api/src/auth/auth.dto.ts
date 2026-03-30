@@ -45,3 +45,16 @@ export class CompleteOnboardingDto {
   @ApiProperty({ enum: AccountType }) @IsEnum(AccountType) accountType!: AccountType;
   @ApiProperty() @IsString() @MinLength(2) @MaxLength(80) workspaceName!: string;
 }
+
+export class VerifyMfaLoginDto {
+  @ApiProperty() @IsString() challengeToken!: string;
+  @ApiProperty() @IsString() @MinLength(6) code!: string;
+}
+
+export class EnableMfaDto {
+  @ApiProperty() @IsString() @MinLength(6) code!: string;
+}
+
+export class DisableMfaDto {
+  @ApiProperty() @IsString() @MinLength(6) code!: string;
+}

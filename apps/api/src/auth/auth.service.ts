@@ -6,6 +6,7 @@ import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { AccountType, UserRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
+import { generateBackupCodes, generateOtpAuthUri, generateTotpSecret, verifyTotpCode } from './totp.util';
 
 type OAuthProvider = 'google' | 'microsoft' | 'github';
 
@@ -30,6 +31,24 @@ type OAuthProviderConfig = {
   tokenUrl: string;
   scopes: string[];
   callbackUrl: string;
+};
+
+type AuthState = {
+  emailVerified: boolean;
+  onboardingCompleted: boolean;
+};
+
+type SessionResult = {
+  token: string;
+  expiresAt: Date;
+  authState: AuthState;
+  mfaRequired?: false;
+};
+
+type MfaChallengeResult = {
+  mfaRequired: true;
+  challengeToken: string;
+  authState: AuthState;
 };
 
 @Injectable()
@@ -105,7 +124,7 @@ export class AuthService {
     } satisfies OAuthStart;
   }
 
-  async login(email: string, password: string) {
+  async login(email: string, password: string): Promise<SessionResult | MfaChallengeResult> {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user || !user.passwordHash) throw new UnauthorizedException('Invalid credentials');
 
@@ -124,17 +143,16 @@ export class AuthService {
       });
     }
 
+    const authState = this.buildAuthState(user);
+    if (this.requiresMfa(user)) {
+      return this.createMfaChallenge(user.id, authState);
+    }
+
     const session = await this.createSession(user.id);
-    return {
-      ...session,
-      authState: {
-        emailVerified: Boolean(user.emailVerified),
-        onboardingCompleted: Boolean(user.onboardingCompletedAt),
-      },
-    };
+    return { ...session, authState };
   }
 
-  async loginWithOAuth(provider: string, code: string, invitationToken?: string) {
+  async loginWithOAuth(provider: string, code: string, invitationToken?: string): Promise<SessionResult | MfaChallengeResult> {
     const config = this.getOAuthProviderConfig(provider);
     const accessToken = await this.exchangeOAuthCode(config, code);
     const profile = await this.fetchOAuthProfile(config.id, accessToken);
@@ -165,14 +183,16 @@ export class AuthService {
       });
     }
 
+    const authState = this.buildAuthState({
+      emailVerified: true,
+      onboardingCompletedAt: user.onboardingCompletedAt,
+    });
+    if (this.requiresMfa(user)) {
+      return this.createMfaChallenge(user.id, authState);
+    }
+
     const session = await this.createSession(user.id);
-    return {
-      ...session,
-      authState: {
-        emailVerified: true,
-        onboardingCompleted: Boolean(user.onboardingCompletedAt),
-      },
-    };
+    return { ...session, authState };
   }
 
   async logout(token: string) {
@@ -203,6 +223,7 @@ export class AuthService {
         createdAt: true,
         emailVerified: true,
         accountType: true,
+        mfaEnabledAt: true,
         onboardingCompletedAt: true,
         passwordHash: true,
         identities: {
@@ -227,6 +248,7 @@ export class AuthService {
             emailVerified: user.emailVerified,
             accountType: user.accountType,
             onboardingCompletedAt: user.onboardingCompletedAt,
+            mfaEnabled: Boolean(user.mfaEnabledAt),
             hasPassword: Boolean(user.passwordHash),
             authProviders: user.identities.map((identity) => identity.provider),
           }
@@ -386,6 +408,139 @@ export class AuthService {
     }
 
     return { success: true, organizationId: orgId };
+  }
+
+  async setupMfa(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, emailVerified: true },
+    });
+    if (!user) throw new UnauthorizedException('User not found');
+    if (!user.emailVerified) throw new ForbiddenException('Verify your email before enabling multi-factor authentication');
+
+    const secret = generateTotpSecret();
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { mfaPendingSecret: secret },
+    });
+
+    const issuer = this.config.get<string>('MFA_ISSUER', 'Opportunity Scanner');
+    return {
+      secret,
+      otpauthUri: generateOtpAuthUri({
+        accountName: user.email,
+        issuer,
+        secret,
+      }),
+      issuer,
+    };
+  }
+
+  async enableMfa(userId: string, code: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, mfaPendingSecret: true },
+    });
+    if (!user?.mfaPendingSecret) {
+      throw new BadRequestException('Start MFA setup before verifying a code');
+    }
+    if (!verifyTotpCode(user.mfaPendingSecret, code)) {
+      throw new UnauthorizedException('Invalid authentication code');
+    }
+
+    const backupCodes = generateBackupCodes();
+    const hashedBackupCodes = await Promise.all(backupCodes.map((backupCode) => bcrypt.hash(backupCode, 8)));
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        mfaSecret: user.mfaPendingSecret,
+        mfaPendingSecret: null,
+        mfaEnabledAt: new Date(),
+        mfaBackupCodes: hashedBackupCodes,
+      },
+    });
+
+    return { success: true, backupCodes };
+  }
+
+  async disableMfa(userId: string, code: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, mfaSecret: true, mfaBackupCodes: true, mfaEnabledAt: true },
+    });
+    if (!user?.mfaSecret || !user.mfaEnabledAt) {
+      throw new BadRequestException('Multi-factor authentication is not enabled');
+    }
+
+    const nextBackupCodes = await this.consumeBackupCode(user.mfaBackupCodes, code);
+    const validCode = verifyTotpCode(user.mfaSecret, code) || Boolean(nextBackupCodes);
+    if (!validCode) {
+      throw new UnauthorizedException('Invalid authentication code');
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        mfaSecret: null,
+        mfaPendingSecret: null,
+        mfaEnabledAt: null,
+        mfaBackupCodes: [],
+      },
+    });
+
+    return { success: true };
+  }
+
+  async verifyMfaLogin(challengeToken: string, code: string) {
+    const challenge = await this.prisma.mfaChallenge.findUnique({
+      where: { token: challengeToken },
+      include: {
+        user: {
+          select: {
+            id: true,
+            emailVerified: true,
+            onboardingCompletedAt: true,
+            mfaSecret: true,
+            mfaBackupCodes: true,
+          },
+        },
+      },
+    });
+
+    if (!challenge || challenge.usedAt || challenge.expiresAt < new Date()) {
+      throw new BadRequestException('Multi-factor challenge is invalid or expired');
+    }
+    if (!challenge.user?.mfaSecret) {
+      throw new BadRequestException('Multi-factor authentication is not enabled for this account');
+    }
+
+    const nextBackupCodes = await this.consumeBackupCode(challenge.user.mfaBackupCodes, code);
+    const validCode = verifyTotpCode(challenge.user.mfaSecret, code) || Boolean(nextBackupCodes);
+    if (!validCode) {
+      throw new UnauthorizedException('Invalid authentication code');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.mfaChallenge.update({
+        where: { id: challenge.id },
+        data: { usedAt: new Date() },
+      }),
+      ...(nextBackupCodes
+        ? [
+            this.prisma.user.update({
+              where: { id: challenge.user.id },
+              data: { mfaBackupCodes: nextBackupCodes },
+            }),
+          ]
+        : []),
+    ]);
+
+    const session = await this.createSession(challenge.user.id);
+    return {
+      ...session,
+      authState: this.buildAuthState(challenge.user),
+    };
   }
 
   private async createVerificationToken(userId: string) {
@@ -673,6 +828,49 @@ export class AuthService {
       where: { id: invitation.id },
       data: { acceptedAt: invitation.acceptedAt ?? new Date() },
     });
+  }
+
+  private buildAuthState(user: { emailVerified?: boolean | null; onboardingCompletedAt?: Date | null }): AuthState {
+    return {
+      emailVerified: Boolean(user.emailVerified),
+      onboardingCompleted: Boolean(user.onboardingCompletedAt),
+    };
+  }
+
+  private requiresMfa(user: { mfaEnabledAt?: Date | null; mfaSecret?: string | null; passwordHash?: string | null }) {
+    return Boolean(user.passwordHash && user.mfaEnabledAt && user.mfaSecret);
+  }
+
+  private async createMfaChallenge(userId: string, authState: AuthState): Promise<MfaChallengeResult> {
+    await this.prisma.mfaChallenge.updateMany({
+      where: { userId, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+
+    const challenge = await this.prisma.mfaChallenge.create({
+      data: {
+        userId,
+        token: `mfa_${uuidv4().replace(/-/g, '')}`,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      },
+    });
+
+    return {
+      mfaRequired: true,
+      challengeToken: challenge.token,
+      authState,
+    };
+  }
+
+  private async consumeBackupCode(hashedCodes: string[], candidate: string) {
+    for (let index = 0; index < hashedCodes.length; index += 1) {
+      const hashedCode = hashedCodes[index];
+      if (await bcrypt.compare(candidate, hashedCode)) {
+        return hashedCodes.filter((_, codeIndex) => codeIndex !== index);
+      }
+    }
+
+    return null;
   }
 
   private async createSession(userId: string) {
