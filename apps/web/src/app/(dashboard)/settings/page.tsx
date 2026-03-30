@@ -118,6 +118,24 @@ export default function SettingsPage() {
     return `${window.location.origin}/register?invitationToken=`;
   }, []);
 
+  const authProviders = user?.authProviders || [];
+  const providerLabel = authProviders.length
+    ? authProviders
+        .map((provider) => {
+          switch (provider) {
+            case 'google':
+              return 'Google';
+            case 'microsoft':
+              return 'Microsoft';
+            case 'github':
+              return 'GitHub';
+            default:
+              return provider;
+          }
+        })
+        .join(', ')
+    : null;
+
   const copyInviteLink = async (invitation: Invitation) => {
     const fullLink = `${invitationLinkBase}${invitation.token}`;
     await navigator.clipboard.writeText(fullLink);
@@ -454,34 +472,45 @@ export default function SettingsPage() {
       <section className="section-card">
         <SectionTitle icon={Shield} title="Password" subtitle="Change your password with current-password verification." />
         <div className="space-y-4 px-5 py-5">
-          <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Current password</label>
-              <input
-                type="password"
-                value={passwords.currentPassword}
-                onChange={(e) => setPasswords((current) => ({ ...current, currentPassword: e.target.value }))}
-                className="w-full rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-              />
+          {user?.hasPassword ? (
+            <>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Current password</label>
+                  <input
+                    type="password"
+                    value={passwords.currentPassword}
+                    onChange={(e) => setPasswords((current) => ({ ...current, currentPassword: e.target.value }))}
+                    className="w-full rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">New password</label>
+                  <input
+                    type="password"
+                    value={passwords.newPassword}
+                    onChange={(e) => setPasswords((current) => ({ ...current, newPassword: e.target.value }))}
+                    className="w-full rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              </div>
+              {passwordMutation.error && <p className="text-sm text-destructive">{(passwordMutation.error as Error).message}</p>}
+              <button
+                disabled={!passwords.currentPassword || !passwords.newPassword || passwordMutation.isPending}
+                onClick={() => passwordMutation.mutate()}
+                className="rounded-xl border border-border bg-secondary px-4 py-2.5 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+              >
+                {passwordMutation.isPending ? 'Updating…' : 'Update password'}
+              </button>
+            </>
+          ) : (
+            <div className="rounded-xl border border-border bg-secondary px-4 py-4">
+              <p className="text-sm font-medium text-foreground">This account signs in with {providerLabel || 'an external provider'}.</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                There is no local password to change here. Manage your password in {providerLabel || 'your identity provider'}.
+              </p>
             </div>
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">New password</label>
-              <input
-                type="password"
-                value={passwords.newPassword}
-                onChange={(e) => setPasswords((current) => ({ ...current, newPassword: e.target.value }))}
-                className="w-full rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
-          </div>
-          {passwordMutation.error && <p className="text-sm text-destructive">{(passwordMutation.error as Error).message}</p>}
-          <button
-            disabled={!passwords.currentPassword || !passwords.newPassword || passwordMutation.isPending}
-            onClick={() => passwordMutation.mutate()}
-            className="rounded-xl border border-border bg-secondary px-4 py-2.5 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-50"
-          >
-            {passwordMutation.isPending ? 'Updating…' : 'Update password'}
-          </button>
+          )}
         </div>
       </section>
     </div>

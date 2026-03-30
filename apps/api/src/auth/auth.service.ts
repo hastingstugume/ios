@@ -204,6 +204,12 @@ export class AuthService {
         emailVerified: true,
         accountType: true,
         onboardingCompletedAt: true,
+        passwordHash: true,
+        identities: {
+          select: {
+            provider: true,
+          },
+        },
       },
     });
     const memberships = await this.prisma.organizationMember.findMany({
@@ -211,7 +217,20 @@ export class AuthService {
       include: { organization: true },
     });
     return {
-      user,
+      user: user
+        ? {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            avatarUrl: user.avatarUrl,
+            createdAt: user.createdAt,
+            emailVerified: user.emailVerified,
+            accountType: user.accountType,
+            onboardingCompletedAt: user.onboardingCompletedAt,
+            hasPassword: Boolean(user.passwordHash),
+            authProviders: user.identities.map((identity) => identity.provider),
+          }
+        : null,
       memberships,
       authState: {
         emailVerified: Boolean(user?.emailVerified),

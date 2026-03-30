@@ -117,6 +117,8 @@ export interface User {
   emailVerified?: boolean;
   accountType?: 'FREELANCER' | 'BUSINESS' | null;
   onboardingCompletedAt?: string | null;
+  hasPassword?: boolean;
+  authProviders?: Array<'google' | 'microsoft' | 'github'>;
 }
 export interface Membership { id: string; role: string; organization: Organization; joinedAt?: string; }
 export interface Organization { id: string; name: string; slug: string; plan: string; negativeKeywords?: string[]; }
