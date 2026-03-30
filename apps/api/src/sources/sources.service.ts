@@ -109,6 +109,7 @@ export class SourcesService {
     await this.prisma.auditLog.create({
       data: { organizationId: orgId, userId, action: 'SOURCE_CREATED', metadata: { name: data.name } },
     });
+    await this.ingestion.triggerManualFetch(orgId, source.id).catch(() => null);
     return source;
   }
 
@@ -124,7 +125,17 @@ export class SourcesService {
     if (data.config) {
       this.validateConfig(src.type, data.config);
     }
-    return this.prisma.source.update({ where: { id }, data });
+    const updated = await this.prisma.source.update({
+      where: { id },
+      data: {
+        ...data,
+        ...(data.status === SourceStatus.ACTIVE ? { errorMessage: null } : {}),
+      },
+    });
+    if (data.status === SourceStatus.ACTIVE && src.status !== SourceStatus.ACTIVE) {
+      await this.ingestion.triggerManualFetch(orgId, id).catch(() => null);
+    }
+    return updated;
   }
 
   async remove(orgId: string, id: string, userId: string) {

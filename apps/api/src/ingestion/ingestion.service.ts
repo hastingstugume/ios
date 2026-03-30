@@ -265,17 +265,13 @@ export class IngestionService {
     sourceConfig: Record<string, any>,
     items: IngestionItem[],
   ) {
-    const [keywords, organization] = await Promise.all([
+    const [keywords, workspaceNegativeKeywords] = await Promise.all([
       this.prisma.keyword.findMany({
         where: { organizationId: orgId, isActive: true },
       }),
-      this.prisma.organization.findUnique({
-        where: { id: orgId },
-        select: { negativeKeywords: true },
-      }),
+      this.getWorkspaceNegativeKeywords(orgId),
     ]);
     const kwPhrases = keywords.map((k) => k.phrase);
-    const workspaceNegativeKeywords = organization?.negativeKeywords || [];
 
     for (const item of items) {
       const content = `${item.title || ''} ${item.text}`.toLowerCase();
@@ -426,19 +422,15 @@ export class IngestionService {
     sourceType: SourceType,
     sourceConfig: Record<string, any>,
   ) {
-    const [items, keywords, organization] = await Promise.all([
+    const [items, keywords, workspaceNegativeKeywords] = await Promise.all([
       this.fetchItemsForSource(sourceType, sourceConfig),
       this.prisma.keyword.findMany({
         where: { organizationId: orgId, isActive: true },
       }),
-      this.prisma.organization.findUnique({
-        where: { id: orgId },
-        select: { negativeKeywords: true },
-      }),
+      this.getWorkspaceNegativeKeywords(orgId),
     ]);
 
     const kwPhrases = keywords.map((keyword) => keyword.phrase);
-    const workspaceNegativeKeywords = organization?.negativeKeywords || [];
     const previewItems = await Promise.all(items.slice(0, 8).map(async (item) => {
       const content = `${item.title || ''} ${item.text}`.toLowerCase();
       const matchedKeywords = keywords
@@ -503,6 +495,19 @@ export class IngestionService {
     }
 
     return [];
+  }
+
+  private async getWorkspaceNegativeKeywords(orgId: string) {
+    try {
+      const organization = await this.prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { negativeKeywords: true },
+      });
+      return organization?.negativeKeywords || [];
+    } catch (error: any) {
+      this.logger.warn(`Failed to load workspace negative keywords for ${orgId}: ${error?.message || 'unknown error'}`);
+      return [];
+    }
   }
 
   private async getRedditAuthHeaders(label: string) {

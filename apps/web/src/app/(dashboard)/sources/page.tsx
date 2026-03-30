@@ -134,8 +134,13 @@ export default function SourcesPage() {
       const preset = SOURCE_PRESET_PACKS.find((item) => item.id === presetId);
       if (!preset || !currentOrgId) throw new Error('Preset unavailable');
 
+      const existingKeywordSet = new Set(keywords.map((keyword) => keyword.phrase.trim().toLowerCase()));
+      const mergedNegativeKeywords = [...(currentOrg?.negativeKeywords || [])];
+      const existingNegativeSet = new Set(mergedNegativeKeywords.map((term) => term.trim().toLowerCase()));
       let created = 0;
       let skipped = 0;
+      let keywordsAdded = 0;
+      let negativesAdded = 0;
       let firstError: string | null = null;
 
       for (const source of preset.sources) {
@@ -148,13 +153,37 @@ export default function SourcesPage() {
         }
       }
 
-      return { preset, created, skipped, firstError };
+      for (const phrase of (preset.recommendedKeywords || []).map((item) => item.trim()).filter(Boolean)) {
+        if (existingKeywordSet.has(phrase.toLowerCase())) continue;
+        try {
+          await keywordsApi.create(currentOrgId, { phrase });
+          existingKeywordSet.add(phrase.toLowerCase());
+          keywordsAdded += 1;
+        } catch (error) {
+          if (!firstError) firstError = (error as Error).message;
+        }
+      }
+
+      for (const term of (preset.recommendedNegativeKeywords || []).map((item) => item.trim()).filter(Boolean)) {
+        if (existingNegativeSet.has(term.toLowerCase())) continue;
+        existingNegativeSet.add(term.toLowerCase());
+        mergedNegativeKeywords.push(term);
+        negativesAdded += 1;
+      }
+
+      if (negativesAdded > 0) {
+        await organizationsApi.update(currentOrgId, { negativeKeywords: mergedNegativeKeywords });
+      }
+
+      return { preset, created, skipped, keywordsAdded, negativesAdded, firstError };
     },
-    onSuccess: ({ preset, created, skipped, firstError }) => {
+    onSuccess: ({ preset, created, skipped, keywordsAdded, negativesAdded, firstError }) => {
       qc.invalidateQueries({ queryKey: ['sources', currentOrgId] });
+      qc.invalidateQueries({ queryKey: ['keywords', currentOrgId] });
+      qc.invalidateQueries({ queryKey: ['auth', 'me'] });
       setPresetFeedback(
         created > 0
-          ? `${preset.name}: added ${created} source${created === 1 ? '' : 's'}${skipped ? `, skipped ${skipped}` : ''}.`
+          ? `${preset.name}: added ${created} source${created === 1 ? '' : 's'}${keywordsAdded ? `, ${keywordsAdded} keyword${keywordsAdded === 1 ? '' : 's'}` : ''}${negativesAdded ? `, ${negativesAdded} negative${negativesAdded === 1 ? '' : 's'}` : ''}${skipped ? `, skipped ${skipped}` : ''}.`
           : `${preset.name}: no sources added${firstError ? ` (${firstError})` : ''}.`,
       );
     },
