@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Signal, signalsApi } from '@/lib/api';
 import { CATEGORY_META, SOURCE_TYPE_META, STAGE_META, getConfidenceColor, getConfidenceBg, formatDate, cn } from '@/lib/utils';
-import { Bookmark, EyeOff, Check, ExternalLink, MessageSquare, ChevronRight, UserRound, Workflow, Sparkles, Flame, Reply, Clock3 } from 'lucide-react';
+import { Bookmark, EyeOff, Check, ExternalLink, MessageSquare, ChevronRight, UserRound, Workflow, Sparkles, Flame, Reply, Clock3, SendHorizonal, Copy } from 'lucide-react';
 
 interface SignalCardProps {
   signal: Signal;
@@ -15,6 +15,7 @@ interface SignalCardProps {
 export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
   const qc = useQueryClient();
   const [replyCopied, setReplyCopied] = useState(false);
+  const [outreachCopied, setOutreachCopied] = useState(false);
   const cat = CATEGORY_META[signal.category || 'OTHER'] || CATEGORY_META.OTHER;
   const stage = STAGE_META[signal.stage] || STAGE_META.TO_REVIEW;
   const sourceType = SOURCE_TYPE_META[signal.source?.type || ''];
@@ -52,6 +53,15 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
     setReplyCopied(true);
     window.setTimeout(() => setReplyCopied(false), 1500);
   };
+
+  const copySuggestedOutreach = async () => {
+    if (!signal.suggestedOutreach || typeof navigator === 'undefined' || !navigator.clipboard) return;
+    await navigator.clipboard.writeText(signal.suggestedOutreach);
+    setOutreachCopied(true);
+    window.setTimeout(() => setOutreachCopied(false), 1500);
+  };
+
+  const canMoveToOutreach = !['OUTREACH', 'WON', 'LOST', 'ARCHIVED'].includes(signal.stage);
 
   return (
     <div className={cn(
@@ -223,51 +233,103 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 border-t border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-1">
-          <select
-            value={signal.stage}
-            disabled={updateWorkflow.isPending}
-            onChange={(e) => updateWorkflow.mutate(e.target.value)}
-            className="w-full rounded-md border border-border bg-secondary px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 sm:mr-2 sm:w-auto"
-          >
-            {Object.entries(STAGE_META).map(([value, meta]) => (
-              <option key={value} value={value}>{meta.label}</option>
-            ))}
-          </select>
-          <button
-            onClick={() => updateStatus.mutate(signal.status === 'SAVED' ? 'NEW' : 'SAVED')}
-            className={cn(
-              'flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md transition-colors',
-              signal.status === 'SAVED'
-                ? 'bg-green-400/10 text-green-400 border border-green-400/20'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent',
-            )}
-          >
-            <Check className="w-3.5 h-3.5" />
-            {signal.status === 'SAVED' ? 'Saved' : 'Save'}
-          </button>
+      <div className="flex flex-col gap-3 border-t border-border/60 px-4 py-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-1">
+            <select
+              value={signal.stage}
+              disabled={updateWorkflow.isPending}
+              onChange={(e) => updateWorkflow.mutate(e.target.value)}
+              className="w-full rounded-md border border-border bg-secondary px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 sm:mr-2 sm:w-auto"
+            >
+              {Object.entries(STAGE_META).map(([value, meta]) => (
+                <option key={value} value={value}>{meta.label}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => updateStatus.mutate(signal.status === 'SAVED' ? 'NEW' : 'SAVED')}
+              className={cn(
+                'flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md transition-colors',
+                signal.status === 'SAVED'
+                  ? 'bg-green-400/10 text-green-400 border border-green-400/20'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+              )}
+            >
+              <Check className="w-3.5 h-3.5" />
+              {signal.status === 'SAVED' ? 'Saved' : 'Save'}
+            </button>
 
-          <button
-            onClick={() => updateStatus.mutate(signal.status === 'BOOKMARKED' ? 'NEW' : 'BOOKMARKED')}
-            className={cn(
-              'flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md transition-colors',
-              signal.status === 'BOOKMARKED'
-                ? 'bg-amber-400/10 text-amber-400 border border-amber-400/20'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent',
-            )}
-          >
-            <Bookmark className="w-3.5 h-3.5" />
-            {signal.status === 'BOOKMARKED' ? 'Bookmarked' : 'Bookmark'}
-          </button>
+            <button
+              onClick={() => updateStatus.mutate(signal.status === 'BOOKMARKED' ? 'NEW' : 'BOOKMARKED')}
+              className={cn(
+                'flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md transition-colors',
+                signal.status === 'BOOKMARKED'
+                  ? 'bg-amber-400/10 text-amber-400 border border-amber-400/20'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+              )}
+            >
+              <Bookmark className="w-3.5 h-3.5" />
+              {signal.status === 'BOOKMARKED' ? 'Bookmarked' : 'Bookmark'}
+            </button>
 
-          <button
-            onClick={() => updateStatus.mutate(signal.status === 'IGNORED' ? 'NEW' : 'IGNORED')}
-            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-          >
-            <EyeOff className="w-3.5 h-3.5" />
-            {signal.status === 'IGNORED' ? 'Unignore' : 'Ignore'}
-          </button>
+            <button
+              onClick={() => updateStatus.mutate(signal.status === 'IGNORED' ? 'NEW' : 'IGNORED')}
+              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              <EyeOff className="w-3.5 h-3.5" />
+              {signal.status === 'IGNORED' ? 'Unignore' : 'Ignore'}
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {canMoveToOutreach ? (
+              <button
+                type="button"
+                disabled={updateWorkflow.isPending}
+                onClick={() => updateWorkflow.mutate('OUTREACH')}
+                className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2.5 py-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15 disabled:opacity-50"
+              >
+                <SendHorizonal className="w-3.5 h-3.5" />
+                Move to outreach
+              </button>
+            ) : null}
+            {signal.suggestedReply ? (
+              <button
+                type="button"
+                onClick={copySuggestedReply}
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <Reply className="w-3.5 h-3.5" />
+                {replyCopied ? 'Reply copied' : 'Copy reply'}
+              </button>
+            ) : null}
+            {signal.suggestedOutreach ? (
+              <button
+                type="button"
+                onClick={copySuggestedOutreach}
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                {outreachCopied ? 'Angle copied' : 'Copy angle'}
+              </button>
+            ) : null}
+            <a
+              href={signal.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Open source
+            </a>
+            <Link
+              href={`/signals/${signal.id}`}
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-primary"
+            >
+              Details
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         </div>
 
         <div className="flex items-center justify-end gap-1">
@@ -277,24 +339,6 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
               {signal._count.annotations}
             </span>
           ) : null}
-          {signal.suggestedReply ? (
-            <button
-              type="button"
-              onClick={copySuggestedReply}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <Reply className="w-3.5 h-3.5" />
-              {replyCopied ? 'Copied' : 'Reply'}
-            </button>
-          ) : null}
-          <a href={signal.sourceUrl} target="_blank" rel="noreferrer"
-            className="text-muted-foreground hover:text-foreground transition-colors p-1.5">
-            <ExternalLink className="w-4 h-4" />
-          </a>
-          <Link href={`/signals/${signal.id}`}
-            className="text-muted-foreground hover:text-primary transition-colors p-1.5">
-            <ChevronRight className="w-4 h-4" />
-          </Link>
         </div>
       </div>
     </div>
