@@ -1,12 +1,18 @@
 import { IngestionService } from './ingestion.service';
 
 describe('IngestionService', () => {
+  const configGet = jest.fn();
   const service = new IngestionService(
     {} as any,
     { normalize: jest.fn((text: string) => text), classify: jest.fn() } as any,
-    { get: jest.fn() } as any,
+    { get: configGet } as any,
     {} as any,
   );
+
+  beforeEach(() => {
+    configGet.mockReset();
+    configGet.mockImplementation((_key: string, defaultValue?: any) => defaultValue ?? '');
+  });
 
   it('canonicalizes URLs by removing tracking params and hashes', () => {
     const canonical = (service as any).canonicalizeUrl('https://example.com/path/?utm_source=x&utm_medium=y&id=123#section');
@@ -39,6 +45,29 @@ describe('IngestionService', () => {
       { sourceWeight: 1.2 },
     );
     expect(weighted.confidenceScore).toBe(82);
+  });
+
+  it('fails clearly when web search is disabled', async () => {
+    configGet.mockImplementation((key: string, defaultValue?: any) => {
+      if (key === 'WEB_SEARCH_PROVIDER') return 'disabled';
+      return defaultValue ?? '';
+    });
+
+    await expect(
+      (service as any).fetchWebSearch({ query: 'recommend consultant', domains: ['example.com'] }),
+    ).rejects.toThrow('Web search is disabled until an approved search provider is configured');
+  });
+
+  it('fails clearly when serpapi is selected without credentials', async () => {
+    configGet.mockImplementation((key: string, defaultValue?: any) => {
+      if (key === 'WEB_SEARCH_PROVIDER') return 'serpapi';
+      if (key === 'SERPAPI_API_KEY') return '';
+      return defaultValue ?? '';
+    });
+
+    await expect(
+      (service as any).fetchWebSearch({ query: 'recommend consultant', domains: ['example.com'] }),
+    ).rejects.toThrow('SerpApi is selected for web search, but SERPAPI_API_KEY is not configured');
   });
 
   it('excludes content when a workspace negative keyword matches', () => {

@@ -165,6 +165,24 @@ export class IngestionService {
   }
 
   private async fetchWebSearch(config: { query: string; domains?: string[]; limit?: number }) {
+    const provider = (this.config.get('WEB_SEARCH_PROVIDER', 'legacy') || 'legacy').toLowerCase();
+
+    if (provider === 'disabled') {
+      throw new Error('Web search is disabled until an approved search provider is configured');
+    }
+
+    if (provider === 'serpapi') {
+      return this.fetchSerpApiSearch(config);
+    }
+
+    if (provider !== 'legacy') {
+      throw new Error(`Unsupported web search provider "${provider}"`);
+    }
+
+    return this.fetchLegacyWebSearch(config);
+  }
+
+  private async fetchLegacyWebSearch(config: { query: string; domains?: string[]; limit?: number }) {
     const { query, domains = [], limit = 20 } = config;
     const domainQuery = domains.length
       ? `${query} ${domains.map((domain) => `site:${domain}`).join(' OR ')}`
@@ -191,6 +209,47 @@ export class IngestionService {
           publishedAt: new Date(),
         };
       }).filter((item) => item.url);
+    } catch (err: any) {
+      throw new Error(`Web search failed: ${err.message}`);
+    }
+  }
+
+  private async fetchSerpApiSearch(config: { query: string; domains?: string[]; limit?: number }) {
+    const { query, domains = [], limit = 20 } = config;
+    const apiKey = this.config.get('SERPAPI_API_KEY', '');
+    if (!apiKey) {
+      throw new Error('SerpApi is selected for web search, but SERPAPI_API_KEY is not configured');
+    }
+
+    const scopedQuery = domains.length
+      ? `${query} ${domains.map((domain) => `site:${domain}`).join(' OR ')}`
+      : query;
+
+    try {
+      const qs = new URLSearchParams({
+        q: scopedQuery,
+        api_key: apiKey,
+        engine: 'google',
+        num: String(Math.min(limit, 20)),
+      }).toString();
+
+      const response = await fetch(`https://serpapi.com/search.json?${qs}`, {
+        headers: {
+          'User-Agent': 'InternetOpportunityScanner/0.1',
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`SerpApi returned ${response.status}`);
+      }
+
+      const data = await response.json() as any;
+      return (data.organic_results || []).slice(0, limit).map((item: any, index: number) => ({
+        externalId: `serpapi-${Buffer.from(item.link || item.title || String(index)).toString('base64').slice(0, 32)}-${index}`,
+        title: item.title || query,
+        text: item.snippet || item.title || '',
+        url: item.link || '',
+        publishedAt: new Date(),
+      })).filter((item: { url: string }) => item.url);
     } catch (err: any) {
       throw new Error(`Web search failed: ${err.message}`);
     }

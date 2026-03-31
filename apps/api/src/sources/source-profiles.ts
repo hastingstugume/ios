@@ -74,11 +74,11 @@ const PROFILES: Record<SourceType, SourceProfile> = {
   },
   WEB_SEARCH: {
     platformLabel: 'Web Search',
-    providerLabel: 'Legacy Search Adapter',
-    acquisitionMode: 'legacy',
-    supportStatus: 'legacy',
-    badgeLabel: 'Legacy',
-    complianceNotes: 'This source type should be replaced by an approved search provider before wider rollout.',
+    providerLabel: 'Configured Search Provider',
+    acquisitionMode: 'provider_api',
+    supportStatus: 'limited',
+    badgeLabel: 'Search Provider',
+    complianceNotes: 'Requires an approved search provider in production. Legacy adapters should only be used for local testing.',
   },
   MANUAL: {
     platformLabel: 'Manual',
