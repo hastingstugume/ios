@@ -259,6 +259,9 @@ export class SignalsService {
       postedAgo: this.getRelativeAgeLabel(postedAt),
       sourceLabel: signal.source?.type ? sourceProfile?.platformLabel || signal.source.type : 'Unknown source',
       sourceProfile,
+      linkedDomain: this.extractLinkedDomain(signal),
+      accountHint: this.extractAccountHint(signal),
+      toolHints: this.extractToolHints(signal).slice(0, 3),
       painPoint: classification.painPoint || signal.whyItMatters || null,
       urgency: classification.urgency || 'MEDIUM',
       sentiment: classification.sentiment || 'NEUTRAL',
@@ -393,6 +396,88 @@ export class SignalsService {
     ]
       .filter(Boolean)
       .join(' ');
+  }
+
+  private extractLinkedDomain(signal: SignalForRanking) {
+    const domains = this.extractDomains(
+      [signal.sourceUrl, signal.originalTitle, signal.originalText].filter(Boolean).join(' '),
+    );
+
+    return domains.find((domain) => !this.isGenericCommunityDomain(domain)) || null;
+  }
+
+  private extractAccountHint(signal: SignalForRanking) {
+    const linkedDomain = this.extractLinkedDomain(signal);
+    if (linkedDomain) return linkedDomain;
+
+    const toolHints = this.extractToolHints(signal);
+    if (toolHints.length) return toolHints[0];
+
+    return null;
+  }
+
+  private extractToolHints(signal: SignalForRanking) {
+    const haystack = [signal.originalTitle, signal.originalText, signal.whyItMatters]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    const knownTools = [
+      'salesforce',
+      'hubspot',
+      'shopify',
+      'stripe',
+      'klaviyo',
+      'netsuite',
+      'snowflake',
+      'bigquery',
+      'quickbooks',
+      'zapier',
+      'notion',
+      'kubernetes',
+      'aws',
+      'azure',
+      'gcp',
+      'servicenow',
+    ];
+
+    return knownTools
+      .filter((tool) => new RegExp(`\\b${tool.replace(/\./g, '\\.') }\\b`, 'i').test(haystack))
+      .map((tool) => tool === 'gcp'
+        ? 'GCP'
+        : tool === 'aws'
+          ? 'AWS'
+          : tool === 'azure'
+            ? 'Azure'
+            : tool.charAt(0).toUpperCase() + tool.slice(1));
+  }
+
+  private extractDomains(text: string) {
+    const matches = text.match(/\b(?:[a-z0-9-]+\.)+(?:com|io|ai|co|dev|app|org|net|gov)\b/gi) || [];
+    const seen = new Set<string>();
+    const domains: string[] = [];
+
+    for (const match of matches) {
+      const normalized = match.toLowerCase().replace(/^www\./, '');
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      domains.push(normalized);
+    }
+
+    return domains;
+  }
+
+  private isGenericCommunityDomain(domain: string) {
+    return [
+      'github.com',
+      'stackoverflow.com',
+      'stackexchange.com',
+      'news.ycombinator.com',
+      'hn.algolia.com',
+      'reddit.com',
+      'sam.gov',
+      'meta.discourse.org',
+    ].includes(domain);
   }
 
   private getFreshnessLabel(fetchedAt: Date, publishedAt: Date | null) {

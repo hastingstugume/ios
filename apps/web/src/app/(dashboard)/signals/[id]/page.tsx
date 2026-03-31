@@ -196,8 +196,26 @@ export default function SignalDetailPage() {
         </div>
       </div>
 
-      {(signal.painPoint || signal.urgency || signal.sentiment || signal.conversationType || signal.sourceProfile) ? (
+      {(signal.painPoint || signal.urgency || signal.sentiment || signal.conversationType || signal.sourceProfile || signal.accountHint || signal.linkedDomain || (signal.toolHints || []).length) ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {signal.accountHint ? (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Account hint</p>
+              <p className="mt-2 text-sm font-medium text-foreground">{signal.accountHint}</p>
+            </div>
+          ) : null}
+          {signal.linkedDomain && signal.linkedDomain !== signal.accountHint ? (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Linked domain</p>
+              <p className="mt-2 text-sm font-medium text-foreground">{signal.linkedDomain}</p>
+            </div>
+          ) : null}
+          {(signal.toolHints || []).length ? (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Tool hints</p>
+              <p className="mt-2 text-sm font-medium text-foreground">{signal.toolHints?.join(', ')}</p>
+            </div>
+          ) : null}
           {signal.urgency ? (
             <div className="rounded-xl border border-border bg-card p-4">
               <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Urgency</p>

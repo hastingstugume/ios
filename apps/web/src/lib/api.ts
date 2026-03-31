@@ -192,6 +192,9 @@ export interface Signal {
   freshnessLabel?: string;
   postedAgo?: string;
   sourceLabel?: string;
+  linkedDomain?: string | null;
+  accountHint?: string | null;
+  toolHints?: string[];
   painPoint?: string | null;
   urgency?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   sentiment?: 'NEGATIVE' | 'NEUTRAL' | 'POSITIVE' | 'MIXED';

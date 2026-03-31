@@ -235,4 +235,38 @@ describe('SignalsService', () => {
       'Implementation or migration pain',
     ]));
   });
+
+  it('extracts lightweight account, domain, and tool hints from signals', async () => {
+    mockPrisma.signal.findMany.mockResolvedValue([
+      {
+        id: 'sig_hint',
+        organizationId: 'org_1',
+        sourceId: 'src_1',
+        externalId: 'ext_1',
+        sourceUrl: 'https://community.example.com/t/shopify-migration-help/12',
+        originalTitle: 'Need help with a Shopify migration',
+        originalText: 'We need implementation support for Shopify and Stripe before launch.',
+        normalizedText: 'We need implementation support for Shopify and Stripe before launch.',
+        fetchedAt: new Date(Date.now() - 60 * 60 * 1000),
+        publishedAt: new Date(Date.now() - 60 * 60 * 1000),
+        category: 'BUYING_INTENT',
+        confidenceScore: 84,
+        whyItMatters: null,
+        suggestedOutreach: null,
+        status: 'NEW',
+        stage: 'TO_REVIEW',
+        source: { id: 'src_1', name: 'Community', type: 'DISCOURSE' },
+        keywords: [{ keyword: { id: 'kw_1', phrase: 'migration' } }],
+        assignee: null,
+        _count: { annotations: 0 },
+      },
+    ]);
+    mockPrisma.signal.count.mockResolvedValue(1);
+
+    const result = await service.findAll('org_1', { page: 1, limit: 20 });
+
+    expect(result.data[0].linkedDomain).toBe('community.example.com');
+    expect(result.data[0].accountHint).toBe('community.example.com');
+    expect(result.data[0].toolHints).toEqual(expect.arrayContaining(['Shopify', 'Stripe']));
+  });
 });

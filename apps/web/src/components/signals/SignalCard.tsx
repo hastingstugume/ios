@@ -114,6 +114,24 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
           </p>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
+            {signal.accountHint ? (
+              <span className="rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1 text-[11px] text-primary">
+                Account hint: {signal.accountHint}
+              </span>
+            ) : null}
+            {signal.linkedDomain && signal.linkedDomain !== signal.accountHint ? (
+              <span className="rounded-lg border border-border bg-secondary px-2.5 py-1 text-[11px] text-muted-foreground">
+                Domain: {signal.linkedDomain}
+              </span>
+            ) : null}
+            {(signal.toolHints || []).map((tool) => (
+              <span key={tool} className="rounded-lg border border-border bg-secondary px-2.5 py-1 text-[11px] text-muted-foreground">
+                {tool}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             {signal.urgency ? (
               <span className={cn(
                 'rounded-lg border px-2.5 py-1 text-[11px] font-medium',
