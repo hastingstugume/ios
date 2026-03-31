@@ -707,7 +707,7 @@ export default function SourcesPage() {
                           <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[11px] text-emerald-300">
                             Likely match{item.confidenceScore !== null ? ` · ${item.confidenceScore}` : ''}
                           </span>
-                        ) : item.excludedByWorkspace || item.excludedBySource ? (
+                        ) : item.excludedByWorkspace || item.excludedBySource || item.excludedByLowSignal ? (
                           <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-[11px] text-amber-200">
                             Filtered out
                           </span>
@@ -761,6 +761,7 @@ export default function SourcesPage() {
                         {item.publishedAt ? <span>{formatDate(item.publishedAt)}</span> : null}
                         {item.excludedByWorkspace ? <span>Blocked by workspace negatives</span> : null}
                         {item.excludedBySource ? <span>Blocked by source exclusions</span> : null}
+                        {item.excludedByLowSignal ? <span>Filtered as low-signal chatter</span> : null}
                         <a href={item.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
                           Open result
                         </a>

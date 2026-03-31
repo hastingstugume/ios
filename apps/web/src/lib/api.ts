@@ -268,6 +268,7 @@ export interface SourcePreview {
     matchedKeywords: string[];
     excludedByWorkspace: boolean;
     excludedBySource: boolean;
+    excludedByLowSignal: boolean;
     passesFilters: boolean;
     category: string | null;
     confidenceScore: number | null;
