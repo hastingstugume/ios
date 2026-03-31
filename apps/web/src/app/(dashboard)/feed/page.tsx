@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { signalsApi, keywordsApi, sourcesApi, organizationsApi } from '@/lib/api';
 import { SignalCard } from '@/components/signals/SignalCard';
 import { CATEGORY_META, STAGE_META } from '@/lib/utils';
-import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, Zap, Bookmark, Target, Clock } from 'lucide-react';
+import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, Zap, Bookmark, Target, Clock, ShieldCheck, Siren } from 'lucide-react';
 
 const CATEGORIES = [
   { value: '', label: 'All categories' },
@@ -56,6 +56,33 @@ function StatChip({ label, value, icon: Icon }: { label: string; value: number; 
       </div>
       <p className="text-lg font-semibold text-foreground mt-1">{value}</p>
     </div>
+  );
+}
+
+function QuickFilterChip({
+  label,
+  active,
+  onClick,
+  icon: Icon,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  icon: any;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+        active
+          ? 'border-primary/20 bg-primary/10 text-primary'
+          : 'border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground'
+      }`}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </button>
   );
 }
 
@@ -114,6 +141,7 @@ export default function FeedPage() {
   const savedCount = data?.data?.filter((signal) => signal.status === 'SAVED').length ?? 0;
   const highConfidenceCount = data?.data?.filter((signal) => (signal.confidenceScore ?? 0) >= 85).length ?? 0;
   const inProgressCount = data?.data?.filter((signal) => ['IN_PROGRESS', 'OUTREACH', 'QUALIFIED'].includes(signal.stage)).length ?? 0;
+  const trustedSourceCount = data?.data?.filter((signal) => signal.sourceProfile?.supportStatus === 'production_ready').length ?? 0;
 
   return (
     <div className="page-shell animate-fade-in">
@@ -150,6 +178,36 @@ export default function FeedPage() {
           <StatChip label="High Confidence" value={highConfidenceCount} icon={Target} />
           <StatChip label="Saved" value={savedCount} icon={Bookmark} />
           <StatChip label="Active Pipeline" value={inProgressCount} icon={Zap} />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <QuickFilterChip
+            label="Urgent"
+            icon={Siren}
+            active={filters.search === 'urgent OR blocked OR migration'}
+            onClick={() => setFilter('search', filters.search === 'urgent OR blocked OR migration' ? '' : 'urgent OR blocked OR migration')}
+          />
+          <QuickFilterChip
+            label="Recommendations"
+            icon={Target}
+            active={filters.category === 'RECOMMENDATION_REQUEST'}
+            onClick={() => setFilter('category', filters.category === 'RECOMMENDATION_REQUEST' ? '' : 'RECOMMENDATION_REQUEST')}
+          />
+          <QuickFilterChip
+            label="Pain reports"
+            icon={Zap}
+            active={filters.category === 'PAIN_COMPLAINT'}
+            onClick={() => setFilter('category', filters.category === 'PAIN_COMPLAINT' ? '' : 'PAIN_COMPLAINT')}
+          />
+          <QuickFilterChip
+            label="85%+ confidence"
+            icon={ShieldCheck}
+            active={filters.minConfidence === '85'}
+            onClick={() => setFilter('minConfidence', filters.minConfidence === '85' ? '' : '85')}
+          />
+          <span className="text-xs text-muted-foreground sm:ml-auto">
+            {trustedSourceCount} on this page come from production-ready sources
+          </span>
         </div>
 
         <div className="relative">

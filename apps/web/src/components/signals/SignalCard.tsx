@@ -19,6 +19,7 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
   const stage = STAGE_META[signal.stage] || STAGE_META.TO_REVIEW;
   const sourceType = SOURCE_TYPE_META[signal.source?.type || ''];
   const priorityScore = signal.priorityScore ?? signal.confidenceScore ?? 0;
+  const sourceLabel = signal.source?.name || signal.sourceLabel || signal.sourceProfile?.platformLabel || 'Unknown source';
   const supportBadgeClass = signal.sourceProfile?.supportStatus === 'production_ready'
     ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
     : signal.sourceProfile?.supportStatus === 'limited'
@@ -79,11 +80,19 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
                 {signal.freshnessLabel}
               </span>
             ) : null}
-            {signal.source && (
-              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                {sourceType?.icon} {signal.source.name}
-              </span>
-            )}
+          </div>
+
+          <Link href={`/signals/${signal.id}`}>
+            <h3 className="text-base font-semibold text-foreground leading-snug group-hover:text-primary transition-colors line-clamp-2">
+              {signal.originalTitle || signal.normalizedText?.slice(0, 100) || 'Untitled signal'}
+            </h3>
+          </Link>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <span>{sourceType?.icon}</span>
+              <span>{sourceLabel}</span>
+            </span>
             {signal.sourceProfile ? (
               <span className="rounded border border-border bg-secondary px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
                 {signal.sourceProfile.badgeLabel}
@@ -94,17 +103,11 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
                 {signal.sourceProfile.supportStatus.replaceAll('_', ' ')}
               </span>
             ) : null}
-            <span className="text-[11px] text-muted-foreground sm:ml-auto flex items-center gap-1">
+            <span className="inline-flex items-center gap-1 sm:ml-auto">
               <Clock3 className="h-3.5 w-3.5" />
               Posted {signal.postedAgo || formatDate(signal.publishedAt || signal.fetchedAt)}
             </span>
           </div>
-
-          <Link href={`/signals/${signal.id}`}>
-            <h3 className="text-base font-semibold text-foreground leading-snug group-hover:text-primary transition-colors line-clamp-2">
-              {signal.originalTitle || signal.normalizedText?.slice(0, 100) || 'Untitled signal'}
-            </h3>
-          </Link>
 
           <p className="text-sm text-muted-foreground leading-7 line-clamp-2 mt-2">
             {signal.normalizedText || signal.originalText?.slice(0, 220)}
@@ -140,7 +143,7 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
               <Sparkles className="h-3.5 w-3.5" />
               Priority {priorityScore}
             </span>
-            {(signal.rankingReasons || []).slice(0, 3).map((reason) => (
+            {(signal.rankingReasons || []).slice(0, 2).map((reason) => (
               <span key={reason} className="rounded-lg border border-border bg-secondary px-2.5 py-1.5 text-[11px] text-muted-foreground">
                 {reason}
               </span>
