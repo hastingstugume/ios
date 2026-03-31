@@ -900,6 +900,64 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
       },
     ],
   },
+  {
+    id: 'trigger-event-funding-watch',
+    name: 'Funding and expansion watch',
+    audience: 'Agencies and consultants tracking companies likely to buy after funding or expansion milestones',
+    description: 'Looks for public posts and discussions about new funding, expansion, and implementation-heavy growth moments.',
+    recommendedKeywords: ['funding', 'seed round', 'series a', 'expansion'],
+    recommendedNegativeKeywords: ['newsletter', 'podcast', 'job board'],
+    sources: [
+      {
+        name: 'Founder funding chatter',
+        type: 'HN_SEARCH',
+        config: {
+          query: '"raised" OR funding OR "seed round" OR "series a"',
+          tags: 'story,comment',
+          sourceWeight: 0.95,
+        },
+      },
+      {
+        name: 'Growth trigger search',
+        type: 'WEB_SEARCH',
+        config: {
+          query: '"raised seed" OR "series a" OR "just raised" OR "expanding team"',
+          domains: ['news.ycombinator.com', 'indiehackers.com', 'techcrunch.com'],
+          excludeTerms: ['newsletter', 'podcast'],
+          sourceWeight: 0.85,
+        },
+      },
+    ],
+  },
+  {
+    id: 'trigger-event-hiring-watch',
+    name: 'Hiring and team-change watch',
+    audience: 'Service firms watching for companies entering a likely buying window after hiring or leadership changes',
+    description: 'Tracks hiring spikes and new growth, ops, and implementation leadership signals that often precede vendor demand.',
+    recommendedKeywords: ['hiring head of growth', 'new cmo', 'implementation manager', 'hiring revops'],
+    recommendedNegativeKeywords: ['recruiter', 'internship', 'career fair'],
+    sources: [
+      {
+        name: 'Leadership change search',
+        type: 'WEB_SEARCH',
+        config: {
+          query: '"new CMO" OR "new head of growth" OR "joined as" OR "hiring revops"',
+          domains: ['linkedin.com', 'news.ycombinator.com', 'indiehackers.com'],
+          excludeTerms: ['recruiter', 'career fair'],
+          sourceWeight: 0.85,
+        },
+      },
+      {
+        name: 'Ask HN hiring triggers',
+        type: 'HN_SEARCH',
+        config: {
+          query: '"hiring" OR "head of growth" OR "new team" OR "hiring ops"',
+          tags: 'story,comment',
+          sourceWeight: 0.9,
+        },
+      },
+    ],
+  },
 ];
 
 export const SOURCE_QUERY_TEMPLATES: Array<{

@@ -277,6 +277,7 @@ export class SignalsService {
     const recommendationBoost = /recommend|who should we hire|looking for (a|an)?\s?(consultant|agency|partner)|implementation partner/i.test(combinedText) ? 6 : 0;
     const urgentBoost = /urgent|asap|blocked|need help now|immediately|this week|stuck|incident|production issue/i.test(combinedText) ? 5 : 0;
     const migrationBoost = /migration|migrate|implementation|integration|rollout|cutover/i.test(combinedText) ? 4 : 0;
+    const triggerEventBoost = /\b(raised|raising|funding|series [abc]|seed round|hiring|hiring spree|hiring for|new cmo|new vp|new head of|joined as|just joined)\b/i.test(combinedText) ? 4 : 0;
     const hoursOld = Math.max(
       0,
       (Date.now() - new Date(signal.publishedAt || signal.fetchedAt).getTime()) / (1000 * 60 * 60),
@@ -317,6 +318,7 @@ export class SignalsService {
           recommendationBoost +
           urgentBoost +
           migrationBoost +
+          triggerEventBoost +
           (categoryBoost[signal.category || SignalCategory.OTHER] ?? 0) +
           (sourceBoost[signal.source?.type || ''] ?? 0) +
           statusAdjustment,
@@ -351,6 +353,10 @@ export class SignalsService {
 
     if (/migration|migrate|implementation|integration|rollout|cutover/i.test(combinedText)) {
       reasons.push('Implementation or migration pain');
+    }
+
+    if (/\b(raised|raising|funding|series [abc]|seed round|hiring|new cmo|new vp|new head of|joined as)\b/i.test(combinedText)) {
+      reasons.push('Trigger event suggests near-term demand');
     }
 
     if ((signal.confidenceScore ?? 0) >= 85) {

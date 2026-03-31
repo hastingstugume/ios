@@ -269,4 +269,61 @@ describe('SignalsService', () => {
     expect(result.data[0].accountHint).toBe('community.example.com');
     expect(result.data[0].toolHints).toEqual(expect.arrayContaining(['Shopify', 'Stripe']));
   });
+
+  it('boosts funding and hiring trigger-event language without outranking direct buyer asks excessively', async () => {
+    mockPrisma.signal.findMany.mockResolvedValue([
+      {
+        id: 'generic_signal',
+        organizationId: 'org_1',
+        sourceId: 'src_1',
+        externalId: 'ext_1',
+        sourceUrl: 'https://example.com/1',
+        originalTitle: 'General operations update',
+        originalText: 'We are sharing some internal updates.',
+        normalizedText: 'We are sharing some internal updates.',
+        fetchedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        category: 'OTHER',
+        confidenceScore: 70,
+        whyItMatters: null,
+        suggestedOutreach: null,
+        status: 'NEW',
+        stage: 'TO_REVIEW',
+        source: { id: 'src_1', name: 'Web', type: 'WEB_SEARCH' },
+        keywords: [{ keyword: { id: 'kw_1', phrase: 'growth' } }],
+        assignee: null,
+        _count: { annotations: 0 },
+      },
+      {
+        id: 'trigger_event',
+        organizationId: 'org_1',
+        sourceId: 'src_2',
+        externalId: 'ext_2',
+        sourceUrl: 'https://example.com/2',
+        originalTitle: 'Startup raises seed round and is hiring a Head of Growth',
+        originalText: 'The company just raised funding and is hiring for growth and implementation roles.',
+        normalizedText: 'The company just raised funding and is hiring for growth and implementation roles.',
+        fetchedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        category: 'MARKET_TREND',
+        confidenceScore: 70,
+        whyItMatters: null,
+        suggestedOutreach: null,
+        status: 'NEW',
+        stage: 'TO_REVIEW',
+        source: { id: 'src_2', name: 'RSS', type: 'RSS' },
+        keywords: [{ keyword: { id: 'kw_2', phrase: 'growth' } }],
+        assignee: null,
+        _count: { annotations: 0 },
+      },
+    ]);
+    mockPrisma.signal.count.mockResolvedValue(2);
+
+    const result = await service.findAll('org_1', { page: 1, limit: 20 });
+
+    expect(result.data[0].id).toBe('trigger_event');
+    expect(result.data[0].rankingReasons).toEqual(expect.arrayContaining([
+      'Trigger event suggests near-term demand',
+    ]));
+  });
 });
