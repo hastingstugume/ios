@@ -83,6 +83,62 @@ const EMPTY_FORM = {
   sourceWeight: '1.0',
 };
 
+const SOURCE_TYPE_SUPPORT: Record<string, {
+  providerLabel: string;
+  badgeLabel: string;
+  supportStatus: 'production_ready' | 'limited' | 'legacy' | 'planned';
+  complianceNotes: string;
+}> = {
+  REDDIT: {
+    providerLabel: 'Reddit Data API',
+    badgeLabel: 'Official API',
+    supportStatus: 'production_ready',
+    complianceNotes: 'Use only where Reddit access is approved for your use case.',
+  },
+  REDDIT_SEARCH: {
+    providerLabel: 'Reddit Data API',
+    badgeLabel: 'Official API',
+    supportStatus: 'production_ready',
+    complianceNotes: 'Search-based Reddit coverage, subject to Reddit approval requirements.',
+  },
+  RSS: {
+    providerLabel: 'Publisher Feed',
+    badgeLabel: 'RSS Feed',
+    supportStatus: 'production_ready',
+    complianceNotes: 'Publisher-provided feeds are the cleanest low-friction source type.',
+  },
+  HN_SEARCH: {
+    providerLabel: 'Public Search',
+    badgeLabel: 'Public Search',
+    supportStatus: 'limited',
+    complianceNotes: 'Useful for founder/operator demand, but lower assurance than official APIs and feeds.',
+  },
+  GITHUB_SEARCH: {
+    providerLabel: 'GitHub Search API',
+    badgeLabel: 'Official API',
+    supportStatus: 'production_ready',
+    complianceNotes: 'Strong choice for implementation pain, blockers, and community support requests.',
+  },
+  STACKOVERFLOW_SEARCH: {
+    providerLabel: 'Stack Exchange API',
+    badgeLabel: 'Official API',
+    supportStatus: 'production_ready',
+    complianceNotes: 'Good for urgent technical pain and recurring implementation issues.',
+  },
+  WEB_SEARCH: {
+    providerLabel: 'Configured Search Provider',
+    badgeLabel: 'Search Provider',
+    supportStatus: 'limited',
+    complianceNotes: 'Only use in production with an approved configured provider; otherwise treat as limited.',
+  },
+  MANUAL: {
+    providerLabel: 'Manual Import',
+    badgeLabel: 'Manual',
+    supportStatus: 'production_ready',
+    complianceNotes: 'Best when you already know the exact source and want full control.',
+  },
+};
+
 export default function SourcesPage() {
   const { currentOrgId, currentOrg } = useAuth();
   const router = useRouter();
@@ -275,6 +331,7 @@ export default function SourcesPage() {
   };
 
   const previewResults = previewSource.data?.previewItems || [];
+  const selectedTypeSupport = SOURCE_TYPE_SUPPORT[form.type] || SOURCE_TYPE_SUPPORT.MANUAL;
 
   return (
     <div className="page-shell space-y-6 animate-fade-in">
@@ -418,6 +475,22 @@ export default function SourcesPage() {
                 className="w-full rounded-lg border border-border bg-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
+          </div>
+          <div className="rounded-xl border border-border bg-background px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                {selectedTypeSupport.providerLabel}
+              </span>
+              <span className="rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                {selectedTypeSupport.badgeLabel}
+              </span>
+              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getSupportBadgeClass(selectedTypeSupport.supportStatus)}`}>
+                {selectedTypeSupport.supportStatus.replaceAll('_', ' ')}
+              </span>
+            </div>
+            <p className="mt-2 text-xs leading-6 text-muted-foreground">
+              {selectedTypeSupport.complianceNotes}
+            </p>
           </div>
           {selectedType.fields.map((field) => (
             <div key={field.key}>
@@ -610,7 +683,17 @@ export default function SourcesPage() {
                         {item.urgency ? <span className="rounded-full border border-border px-2 py-1 text-[11px] text-muted-foreground">{item.urgency.toLowerCase()} urgency</span> : null}
                         {item.sentiment ? <span className="rounded-full border border-border px-2 py-1 text-[11px] text-muted-foreground">{item.sentiment.toLowerCase()} tone</span> : null}
                         {item.sourceProfile ? <span className="rounded-full border border-border px-2 py-1 text-[11px] text-muted-foreground">{item.sourceProfile.badgeLabel}</span> : null}
+                        {item.sourceProfile ? (
+                          <span className={`rounded-full border px-2 py-1 text-[11px] font-medium ${getSupportBadgeClass(item.sourceProfile.supportStatus)}`}>
+                            {item.sourceProfile.supportStatus.replaceAll('_', ' ')}
+                          </span>
+                        ) : null}
                       </div>
+                      {item.sourceProfile?.complianceNotes ? (
+                        <p className="mt-2 text-[11px] leading-6 text-muted-foreground">
+                          {item.sourceProfile.complianceNotes}
+                        </p>
+                      ) : null}
                       {item.suggestedReply ? (
                         <div className="mt-2 rounded-lg border border-emerald-400/15 bg-emerald-400/5 px-3 py-2">
                           <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-300">Suggested reply</p>
