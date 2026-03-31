@@ -190,22 +190,16 @@ export default function AlertsPage() {
 
   return (
     <div className="page-shell space-y-6 animate-fade-in">
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-4">
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="space-y-3">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight text-foreground">Alerts</h1>
             <p className="mt-2 text-base text-muted-foreground">Route the right signals to the right people with confidence, category, and keyword rules.</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{liveRules}</span> active rules
-            </div>
-            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{immediateRules}</span> immediate
-            </div>
-            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{recipientCount}</span> recipients
-            </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+            <span><span className="font-medium text-foreground">{liveRules}</span> active</span>
+            <span><span className="font-medium text-foreground">{immediateRules}</span> immediate</span>
+            <span><span className="font-medium text-foreground">{recipientCount}</span> recipients</span>
           </div>
         </div>
         <button
@@ -218,7 +212,7 @@ export default function AlertsPage() {
       </section>
 
       <section className="section-card p-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative max-w-md flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -228,17 +222,10 @@ export default function AlertsPage() {
               className="w-full rounded-lg border border-border bg-secondary py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
-          <p className="text-sm text-muted-foreground">Use categories and keywords together when the same source covers many different intent types.</p>
-        </div>
-      </section>
-
-      <section className="section-card p-4">
-        <div className="flex flex-col gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-foreground">Quick-start alert presets</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Start from a common rule, then fine-tune recipients, keywords, and categories.</p>
-          </div>
-          <div className="grid gap-3 lg:grid-cols-3">
+          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+            <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Templates
+            </span>
             {ALERT_STARTERS.map((starter) => (
               <button
                 key={starter.name}
@@ -259,11 +246,9 @@ export default function AlertsPage() {
                   }));
                   setAdding(true);
                 }}
-                className="rounded-xl border border-border bg-card px-4 py-4 text-left transition-colors hover:border-primary/20 hover:bg-accent"
+                className="rounded-full border border-border bg-secondary px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/20 hover:bg-primary/10 hover:text-foreground"
               >
-                <p className="text-sm font-medium text-foreground">{starter.name}</p>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">{starter.description}</p>
-                <p className="mt-3 text-xs text-primary">Use preset</p>
+                {starter.name}
               </button>
             ))}
           </div>
@@ -454,91 +439,94 @@ export default function AlertsPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           {filteredRules.map((rule) => (
             <div key={rule.id} className="section-card px-5 py-5">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <span className={`mt-0.5 flex h-11 w-11 items-center justify-center rounded-xl border shrink-0 ${
-                  rule.isActive ? 'border-primary/20 bg-primary/10 text-primary' : 'border-border bg-secondary text-muted-foreground'
-                }`}>
-                  <Bell className="w-4 h-4" />
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-lg font-semibold ${rule.isActive ? 'text-foreground' : 'text-muted-foreground'}`}>{rule.name}</span>
-                    {!rule.isActive && <span className="rounded-full border border-border/80 bg-secondary/60 px-2.5 py-1 text-[11px] text-muted-foreground">Paused</span>}
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <span className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
+                    rule.isActive ? 'border-primary/20 bg-primary/10 text-primary' : 'border-border bg-secondary text-muted-foreground'
+                  }`}>
+                    <Bell className="w-4 h-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-lg font-semibold ${rule.isActive ? 'text-foreground' : 'text-muted-foreground'}`}>{rule.name}</span>
+                          {!rule.isActive && <span className="rounded-full border border-border/80 bg-secondary/60 px-2.5 py-1 text-[11px] text-muted-foreground">Paused</span>}
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <span>Score ≥ {rule.minConfidence}%</span>
+                          <span className="text-border">•</span>
+                          <span className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5" />{FREQ_LABELS[rule.frequency] || rule.frequency}
+                          </span>
+                          <span className="text-border">•</span>
+                          <span className="flex items-center gap-1.5">
+                            <Mail className="w-3.5 h-3.5" />{rule.emailRecipients.length} recipient{rule.emailRecipients.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 self-start">
+                        <button
+                          onClick={() => {
+                            setAdding(false);
+                            setEditingRule(rule);
+                            setForm({
+                              name: rule.name,
+                              minConfidence: rule.minConfidence,
+                              frequency: rule.frequency,
+                              emailRecipients: rule.emailRecipients.join(', '),
+                              categories: rule.categories,
+                              keywordIds: rule.keywordIds,
+                              autoStage: rule.autoStage || '',
+                              autoAssignUserId: rule.autoAssignUserId || '',
+                              autoNextStep: rule.autoNextStep || '',
+                            });
+                          }}
+                          className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => toggle.mutate({ id: rule.id, isActive: !rule.isActive })}
+                          className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+                          {rule.isActive ? <ToggleRight className="w-5 h-5 text-green-400" /> : <ToggleLeft className="w-5 h-5" />}
+                        </button>
+                        <button onClick={() => setDeleteCandidate(rule)}
+                          className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="rounded-full border border-border bg-secondary px-3 py-1.5 text-xs text-muted-foreground">Score ≥ {rule.minConfidence}%</span>
-                    <span className="flex items-center gap-1.5 rounded-full border border-border bg-secondary px-3 py-1.5 text-xs text-muted-foreground">
-                      <Clock className="w-3.5 h-3.5" />{FREQ_LABELS[rule.frequency] || rule.frequency}
-                    </span>
-                    <span className="flex items-center gap-1.5 rounded-full border border-border bg-secondary px-3 py-1.5 text-xs text-muted-foreground">
-                      <Mail className="w-3.5 h-3.5" />{rule.emailRecipients.length} recipient{rule.emailRecipients.length !== 1 ? 's' : ''}
-                    </span>
-                  </div>
+                </div>
+                <div className="pl-1">
                   {!!rule.categories.length && (
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {rule.categories.map((category) => (
-                        <span key={category} className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs text-primary">
+                        <span key={category} className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] text-primary">
                           {CATEGORY_META[category]?.label || category}
                         </span>
                       ))}
                     </div>
                   )}
-                  {!!rule.keywordIds.length && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {rule.keywordIds.map((keywordId) => (
-                        <span key={keywordId} className="rounded-full border border-border bg-secondary px-3 py-1.5 text-xs text-muted-foreground">
-                          {keywordLabelMap[keywordId] || 'Unknown keyword'}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <div className="mt-4 rounded-lg border border-border bg-secondary px-4 py-3">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rule scope</p>
-                    <p className="mt-1 text-sm text-foreground/85">{summarizeRuleScope(rule)}</p>
+                  <div className="mt-4 space-y-2 text-sm">
+                    <p className="text-foreground/85">{summarizeRuleScope(rule)}</p>
+                    {!!rule.keywordIds.length && (
+                      <p className="text-muted-foreground">
+                        Keywords: {rule.keywordIds.map((keywordId) => keywordLabelMap[keywordId] || 'Unknown keyword').join(', ')}
+                      </p>
+                    )}
+                    <p className="text-muted-foreground">
+                      Recipients: {rule.emailRecipients.join(', ')}
+                    </p>
                   </div>
                   {summarizeAutomation(rule) ? (
-                    <div className="mt-3 rounded-lg border border-primary/15 bg-primary/5 px-4 py-3">
-                      <p className="text-xs font-medium uppercase tracking-wide text-primary/80">Workflow automation</p>
-                      <p className="mt-1 text-sm text-foreground/85">{summarizeAutomation(rule)}</p>
-                    </div>
+                    <p className="mt-3 text-sm text-primary/90">
+                      Automation: {summarizeAutomation(rule)}
+                    </p>
                   ) : null}
-                  <div className="mt-3 rounded-lg border border-border bg-secondary px-4 py-3">
-                    <p className="text-xs text-muted-foreground">Recipients</p>
-                    <p className="mt-1 line-clamp-2 text-sm text-foreground/85">{rule.emailRecipients.join(', ')}</p>
-                  </div>
                   {rule.lastTriggeredAt && (
                     <p className="mt-3 text-xs text-muted-foreground">Last triggered {formatDate(rule.lastTriggeredAt)}</p>
                   )}
-                </div>
-                <div className="flex items-center gap-2 self-start sm:self-center">
-                  <button
-                    onClick={() => {
-                      setAdding(false);
-                      setEditingRule(rule);
-                      setForm({
-                        name: rule.name,
-                        minConfidence: rule.minConfidence,
-                        frequency: rule.frequency,
-                        emailRecipients: rule.emailRecipients.join(', '),
-                        categories: rule.categories,
-                        keywordIds: rule.keywordIds,
-                        autoStage: rule.autoStage || '',
-                        autoAssignUserId: rule.autoAssignUserId || '',
-                        autoNextStep: rule.autoNextStep || '',
-                      });
-                    }}
-                    className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => toggle.mutate({ id: rule.id, isActive: !rule.isActive })}
-                    className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
-                    {rule.isActive ? <ToggleRight className="w-5 h-5 text-green-400" /> : <ToggleLeft className="w-5 h-5" />}
-                  </button>
-                  <button onClick={() => setDeleteCandidate(rule)}
-                    className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
                 </div>
               </div>
             </div>
