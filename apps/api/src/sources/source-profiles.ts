@@ -48,6 +48,14 @@ const PROFILES: Record<SourceType, SourceProfile> = {
     badgeLabel: 'RSS Feed',
     complianceNotes: 'Uses publisher-provided RSS or Atom feeds.',
   },
+  DISCOURSE: {
+    platformLabel: 'Discourse',
+    providerLabel: 'Discourse JSON Endpoint',
+    acquisitionMode: 'provider_api',
+    supportStatus: 'limited',
+    badgeLabel: 'Public JSON',
+    complianceNotes: 'Uses public Discourse JSON endpoints where communities expose them without authentication.',
+  },
   HN_SEARCH: {
     platformLabel: 'Hacker News',
     providerLabel: 'HN Search',

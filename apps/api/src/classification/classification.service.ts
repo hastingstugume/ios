@@ -33,7 +33,7 @@ export interface SourceSuggestionPack {
   recommendedNegativeKeywords: string[];
   sources: Array<{
     name: string;
-    type: 'REDDIT_SEARCH' | 'WEB_SEARCH' | 'STACKOVERFLOW_SEARCH' | 'GITHUB_SEARCH' | 'HN_SEARCH' | 'RSS';
+    type: 'REDDIT_SEARCH' | 'WEB_SEARCH' | 'STACKOVERFLOW_SEARCH' | 'GITHUB_SEARCH' | 'HN_SEARCH' | 'RSS' | 'DISCOURSE';
     config: Record<string, any>;
   }>;
 }
@@ -75,7 +75,7 @@ Return ONLY a valid JSON array with exactly 3 template packs. Each item must mat
   "sources": [
     {
       "name": "source display name",
-      "type": one of "REDDIT_SEARCH" | "WEB_SEARCH" | "STACKOVERFLOW_SEARCH" | "GITHUB_SEARCH" | "HN_SEARCH" | "RSS",
+      "type": one of "REDDIT_SEARCH" | "WEB_SEARCH" | "STACKOVERFLOW_SEARCH" | "GITHUB_SEARCH" | "HN_SEARCH" | "RSS" | "DISCOURSE",
       "config": { source config object }
     }
   ]
@@ -297,7 +297,7 @@ Create three source template packs tailored for this workspace.`;
             if (!source || typeof source !== 'object') return null;
             const candidate = source as { type?: unknown; name?: unknown; config?: unknown };
             const type = String(candidate.type || '').toUpperCase();
-            if (!['REDDIT_SEARCH', 'WEB_SEARCH', 'STACKOVERFLOW_SEARCH', 'GITHUB_SEARCH', 'HN_SEARCH', 'RSS'].includes(type)) {
+            if (!['REDDIT_SEARCH', 'WEB_SEARCH', 'STACKOVERFLOW_SEARCH', 'GITHUB_SEARCH', 'HN_SEARCH', 'RSS', 'DISCOURSE'].includes(type)) {
               return null;
             }
 

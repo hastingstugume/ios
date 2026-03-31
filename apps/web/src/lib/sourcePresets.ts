@@ -762,10 +762,12 @@ export const SOURCE_QUERY_TEMPLATES: Array<{
   type: string;
   label: string;
   description?: string;
+  baseUrl?: string;
   query?: string;
   subreddit?: string;
   domains?: string[];
   tags?: string[];
+  postedWithinDays?: number;
   repo?: string;
   contentType?: string;
   stackTags?: string[];
@@ -774,6 +776,28 @@ export const SOURCE_QUERY_TEMPLATES: Array<{
   recommendedKeywords?: string[];
   recommendedNegativeKeywords?: string[];
 }> = [
+  {
+    type: 'DISCOURSE',
+    label: 'Operator Community Watch',
+    description: 'Public Discourse communities discussing consultants, migration help, and implementation support.',
+    baseUrl: 'https://meta.discourse.org',
+    query: '"need consultant" OR migration OR "implementation help"',
+    tags: ['support'],
+    postedWithinDays: 30,
+    recommendedKeywords: ['consultant', 'implementation help', 'migration'],
+    recommendedNegativeKeywords: ['release notes', 'feature request'],
+  },
+  {
+    type: 'DISCOURSE',
+    label: 'Recommendation Threads',
+    description: 'A starter query for recommendation-style posts in public Discourse communities.',
+    baseUrl: 'https://meta.discourse.org',
+    query: '"recommend" OR "looking for support" OR "who should we hire"',
+    tags: ['support'],
+    postedWithinDays: 30,
+    recommendedKeywords: ['recommend', 'support partner', 'who should we hire'],
+    recommendedNegativeKeywords: ['job board', 'newsletter'],
+  },
   {
     type: 'SAM_GOV',
     label: 'Open Solicitations',

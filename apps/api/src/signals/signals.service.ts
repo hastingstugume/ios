@@ -293,6 +293,7 @@ export class SignalsService {
       REDDIT: 5,
       REDDIT_SEARCH: 4,
       HN_SEARCH: 5,
+      DISCOURSE: 4,
       GITHUB_SEARCH: 3,
       STACKOVERFLOW_SEARCH: 3,
       WEB_SEARCH: 1,

@@ -33,6 +33,17 @@ const SOURCE_TYPES = [
     fields: [{ key: 'url', label: 'Feed URL', placeholder: 'https://hnrss.org/ask' }],
   },
   {
+    value: 'DISCOURSE',
+    label: 'Discourse Community',
+    recommended: true,
+    fields: [
+      { key: 'baseUrl', label: 'Community URL', placeholder: 'https://meta.discourse.org' },
+      { key: 'query', label: 'Optional query', placeholder: 'recommend consultant OR migration help' },
+      { key: 'discourseTags', label: 'Optional tags', placeholder: 'consulting, migration, agency' },
+      { key: 'discoursePostedWithinDays', label: 'Posted within', placeholder: '30', kind: 'select', options: ['7', '14', '30', '60', '90'] },
+    ],
+  },
+  {
     value: 'HN_SEARCH',
     label: 'Hacker News Search',
     recommended: false,
@@ -90,6 +101,7 @@ const EMPTY_FORM = {
   type: 'REDDIT',
   subreddit: '',
   url: '',
+  baseUrl: '',
   query: '',
   sort: 'new',
   tags: 'story',
@@ -97,6 +109,8 @@ const EMPTY_FORM = {
   contentType: 'discussions',
   stackTags: '',
   stackSort: 'activity',
+  discourseTags: '',
+  discoursePostedWithinDays: '30',
   naicsCode: '',
   agency: '',
   noticeTypes: 'solicitation',
@@ -129,6 +143,12 @@ const SOURCE_TYPE_SUPPORT: Record<string, {
     badgeLabel: 'RSS Feed',
     supportStatus: 'production_ready',
     complianceNotes: 'Publisher-provided feeds are the cleanest low-friction source type.',
+  },
+  DISCOURSE: {
+    providerLabel: 'Discourse JSON Endpoint',
+    badgeLabel: 'Public JSON',
+    supportStatus: 'limited',
+    complianceNotes: 'Good for public operator and SaaS communities that expose public Discourse JSON endpoints without auth.',
   },
   HN_SEARCH: {
     providerLabel: 'Public Search',
@@ -347,10 +367,13 @@ export default function SourcesPage() {
     setPreviewFeedback(null);
     setForm((current) => ({
       ...current,
+      baseUrl: template.baseUrl ?? current.baseUrl,
       query: template.query ?? current.query,
       subreddit: template.subreddit ?? current.subreddit,
       sort: template.sort ?? current.sort,
       tags: template.tags ? template.tags.join(',') : current.tags,
+      discourseTags: template.tags ? template.tags.join(', ') : current.discourseTags,
+      discoursePostedWithinDays: template.postedWithinDays ? String(template.postedWithinDays) : current.discoursePostedWithinDays,
       repo: template.repo ?? current.repo,
       contentType: template.contentType ?? current.contentType,
       stackTags: template.stackTags ? template.stackTags.join(', ') : current.stackTags,
@@ -540,7 +563,7 @@ export default function SourcesPage() {
               </select>
               {!editingId ? (
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Start with RSS, GitHub, Stack Overflow, or Manual unless you specifically need a limited or approval-dependent source.
+                  Start with RSS, GitHub, Stack Overflow, Discourse, or Manual unless you specifically need a limited or approval-dependent source.
                 </p>
               ) : null}
             </div>
@@ -866,6 +889,8 @@ export default function SourcesPage() {
                 ? `Query: ${src.config?.query || 'n/a'}${src.config?.subreddit ? ` in r/${src.config.subreddit}` : ''}`
               : src.type === 'RSS'
                 ? src.config?.url || 'Feed URL not set'
+                : src.type === 'DISCOURSE'
+                  ? `Discourse: ${src.config?.baseUrl || 'n/a'}${src.config?.query ? ` · ${src.config.query}` : ''}${src.config?.tags?.length ? ` · tags ${src.config.tags.join(', ')}` : ''}`
                 : src.type === 'HN_SEARCH'
                   ? `HN query: ${src.config?.query || 'n/a'}`
                   : src.type === 'GITHUB_SEARCH'
@@ -909,13 +934,16 @@ export default function SourcesPage() {
                                 type: src.type,
                                 subreddit: src.type === 'REDDIT' ? src.config?.subreddit || '' : '',
                                 url: src.type === 'RSS' ? src.config?.url || '' : '',
-                                query: src.type === 'REDDIT_SEARCH' || src.type === 'HN_SEARCH' || src.type === 'WEB_SEARCH' || src.type === 'GITHUB_SEARCH' || src.type === 'STACKOVERFLOW_SEARCH' ? src.config?.query || '' : '',
+                                baseUrl: src.type === 'DISCOURSE' ? src.config?.baseUrl || '' : '',
+                                query: src.type === 'REDDIT_SEARCH' || src.type === 'DISCOURSE' || src.type === 'HN_SEARCH' || src.type === 'WEB_SEARCH' || src.type === 'GITHUB_SEARCH' || src.type === 'STACKOVERFLOW_SEARCH' ? src.config?.query || '' : '',
                                 sort: src.type === 'REDDIT_SEARCH' ? src.config?.sort || 'new' : 'new',
                                 tags: src.type === 'HN_SEARCH' ? src.config?.tags || 'story' : 'story',
                                 repo: src.type === 'GITHUB_SEARCH' ? src.config?.repo || '' : '',
                                 contentType: src.type === 'GITHUB_SEARCH' ? src.config?.type || 'discussions' : 'discussions',
                                 stackTags: src.type === 'STACKOVERFLOW_SEARCH' ? (src.config?.tags || []).join(', ') : '',
                                 stackSort: src.type === 'STACKOVERFLOW_SEARCH' ? src.config?.sort || 'activity' : 'activity',
+                                discourseTags: src.type === 'DISCOURSE' ? (src.config?.tags || []).join(', ') : '',
+                                discoursePostedWithinDays: src.type === 'DISCOURSE' ? String(src.config?.postedWithinDays || '30') : '30',
                                 naicsCode: src.type === 'SAM_GOV' ? src.config?.naicsCode || '' : '',
                                 agency: src.type === 'SAM_GOV' ? src.config?.agency || '' : '',
                                 noticeTypes: src.type === 'SAM_GOV' ? (src.config?.noticeTypes?.[0] || 'solicitation') : 'solicitation',
@@ -1042,6 +1070,8 @@ function buildSourceConfig(form: typeof EMPTY_FORM) {
       ? rawValue.split(',').map((domain) => domain.trim()).filter(Boolean)
       : field.key === 'stackTags'
         ? rawValue.split(',').map((tag) => tag.trim()).filter(Boolean)
+        : field.key === 'discourseTags'
+          ? rawValue.split(',').map((tag) => tag.trim()).filter(Boolean)
         : field.key === 'noticeTypes'
           ? [rawValue]
         : rawValue;
@@ -1061,9 +1091,17 @@ function buildSourceConfig(form: typeof EMPTY_FORM) {
     config.tags = config.stackTags;
     delete config.stackTags;
   }
+  if (config.discourseTags) {
+    config.tags = config.discourseTags;
+    delete config.discourseTags;
+  }
   if (config.stackSort) {
     config.sort = config.stackSort;
     delete config.stackSort;
+  }
+  if (config.discoursePostedWithinDays) {
+    config.postedWithinDays = Number(config.discoursePostedWithinDays);
+    delete config.discoursePostedWithinDays;
   }
   if (config.postedWithinDays) {
     config.postedWithinDays = Number(config.postedWithinDays);

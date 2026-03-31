@@ -81,6 +81,50 @@ describe('IngestionService', () => {
     ).rejects.toThrow('SAM.gov is selected, but SAM_GOV_API_KEY is not configured');
   });
 
+  it('filters discourse latest topics using query and tags', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        users: [{ id: 7, username: 'alice' }],
+        topic_list: {
+          topics: [
+            {
+              id: 101,
+              slug: 'need-consultant-help',
+              title: 'Need consultant help with CRM migration',
+              excerpt: 'We need implementation support this month',
+              tags: ['consulting', 'migration'],
+              posters: [{ user_id: 7, description: 'Original Poster' }],
+              last_posted_at: new Date().toISOString(),
+            },
+            {
+              id: 102,
+              slug: 'weekly-community-roundup',
+              title: 'Weekly community roundup',
+              excerpt: 'General updates and links',
+              tags: ['roundup'],
+              posters: [{ user_id: 7, description: 'Original Poster' }],
+              last_posted_at: new Date().toISOString(),
+            },
+          ],
+        },
+      }),
+    } as any);
+
+    const results = await (service as any).fetchDiscourse({
+      baseUrl: 'https://community.example.com',
+      query: '"need consultant" OR migration',
+      tags: ['migration'],
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].title).toContain('Need consultant help');
+    expect(results[0].url).toBe('https://community.example.com/t/need-consultant-help/101');
+
+    global.fetch = originalFetch;
+  });
+
   it('filters weak low-signal web search snippets without clear buying intent', () => {
     const excluded = (service as any).shouldExcludeAsLowSignal(
       'WEB_SEARCH',

@@ -375,6 +375,23 @@ export class SourcesService {
         throw new BadRequestException('RSS sources require a valid feed URL');
       }
     }
+    if (type === SourceType.DISCOURSE) {
+      if (!config?.baseUrl || typeof config.baseUrl !== 'string' || !/^https?:\/\//.test(config.baseUrl)) {
+        throw new BadRequestException('Discourse sources require a valid community URL');
+      }
+      if (config.query !== undefined && typeof config.query !== 'string') {
+        throw new BadRequestException('Discourse query must be a string');
+      }
+      if (config.tags !== undefined && (!Array.isArray(config.tags) || config.tags.some((tag: unknown) => typeof tag !== 'string'))) {
+        throw new BadRequestException('Discourse tags must be an array of strings');
+      }
+      if (config.postedWithinDays !== undefined) {
+        const postedWithinDays = Number(config.postedWithinDays);
+        if (!Number.isFinite(postedWithinDays) || postedWithinDays < 1 || postedWithinDays > 365) {
+          throw new BadRequestException('Discourse posted-within window must be between 1 and 365 days');
+        }
+      }
+    }
     if (type === SourceType.HN_SEARCH) {
       if (!config?.query || typeof config.query !== 'string') {
         throw new BadRequestException('Hacker News search sources require a search query');

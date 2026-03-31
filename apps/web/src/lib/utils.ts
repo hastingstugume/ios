@@ -59,6 +59,7 @@ export const SOURCE_TYPE_META: Record<string, { label: string; icon: string }> =
   REDDIT:        { label: 'Reddit',         icon: '🤖' },
   REDDIT_SEARCH: { label: 'Reddit Search',  icon: '🔎' },
   RSS:           { label: 'RSS',            icon: '📡' },
+  DISCOURSE:     { label: 'Discourse',      icon: '💬' },
   HN_SEARCH:     { label: 'HN Search',      icon: '🟧' },
   GITHUB_SEARCH: { label: 'GitHub Search',  icon: '🐙' },
   STACKOVERFLOW_SEARCH: { label: 'Stack Overflow', icon: '🧱' },

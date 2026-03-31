@@ -214,6 +214,72 @@ export class IngestionService {
     }
   }
 
+  private async fetchDiscourse(config: {
+    baseUrl: string;
+    query?: string;
+    tags?: string[];
+    postedWithinDays?: number;
+    limit?: number;
+  }) {
+    const { baseUrl, query = '', tags = [], postedWithinDays = 30, limit = 25 } = config;
+    const communityBaseUrl = baseUrl.replace(/\/+$/, '');
+    const cutoffTime = Date.now() - postedWithinDays * 24 * 60 * 60 * 1000;
+
+    try {
+      const response = await fetch(`${communityBaseUrl}/latest.json`, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'InternetOpportunityScanner/0.1',
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`Discourse returned ${response.status}`);
+      }
+
+      const data = await response.json() as any;
+      const users = new Map<number, any>((data.users || []).map((user: any) => [user.id, user]));
+      const topics = data.topic_list?.topics || [];
+
+      return topics
+        .filter((topic: any) => {
+          const publishedAt = topic.last_posted_at || topic.created_at;
+          return !publishedAt || new Date(publishedAt).getTime() >= cutoffTime;
+        })
+        .filter((topic: any) => {
+          const topicTags = Array.isArray(topic.tags) ? topic.tags.map((tag: string) => tag.toLowerCase()) : [];
+          return !tags.length || tags.some((tag) => topicTags.includes(tag.toLowerCase()));
+        })
+        .filter((topic: any) => {
+          if (!query.trim()) return true;
+          const haystack = this.stripHtml(
+            [topic.title, topic.fancy_title, topic.excerpt, ...(topic.tags || [])].filter(Boolean).join(' '),
+          ).toLowerCase();
+          return this.matchesLooseSearchQuery(haystack, query);
+        })
+        .slice(0, limit)
+        .map((topic: any, index: number) => {
+          const primaryPoster = Array.isArray(topic.posters)
+            ? topic.posters.find((poster: any) => poster.description === 'Original Poster') || topic.posters[0]
+            : null;
+          const author = primaryPoster?.user_id ? users.get(primaryPoster.user_id)?.username : null;
+
+          return {
+            externalId: `discourse-${topic.id || index}`,
+            title: this.stripHtml(topic.title || query || 'Community discussion'),
+            text: this.stripHtml(
+              [topic.excerpt, topic.tags?.length ? `Tags: ${topic.tags.join(', ')}` : ''].filter(Boolean).join(' · '),
+            ).slice(0, 1500),
+            url: topic.slug && topic.id ? `${communityBaseUrl}/t/${topic.slug}/${topic.id}` : `${communityBaseUrl}/latest`,
+            author,
+            publishedAt: topic.last_posted_at ? new Date(topic.last_posted_at) : topic.created_at ? new Date(topic.created_at) : new Date(),
+          };
+        })
+        .filter((item: IngestionItem) => item.title && item.url);
+    } catch (err: any) {
+      throw new Error(`Discourse fetch failed: ${err.message}`);
+    }
+  }
+
   private async fetchSerpApiSearch(config: { query: string; domains?: string[]; limit?: number }) {
     const { query, domains = [], limit = 20 } = config;
     const apiKey = this.config.get('SERPAPI_API_KEY', '');
@@ -622,6 +688,9 @@ export class IngestionService {
     if (sourceType === SourceType.RSS) {
       return this.fetchRSS(sourceConfig as any);
     }
+    if (sourceType === SourceType.DISCOURSE) {
+      return this.fetchDiscourse(sourceConfig as any);
+    }
     if (sourceType === SourceType.HN_SEARCH) {
       return this.fetchHnSearch(sourceConfig as any);
     }
@@ -838,6 +907,7 @@ export class IngestionService {
     const typesWithStrongerNoiseFiltering = new Set<SourceType>([
       SourceType.WEB_SEARCH,
       SourceType.RSS,
+      SourceType.DISCOURSE,
       SourceType.HN_SEARCH,
     ]);
 
@@ -878,6 +948,16 @@ export class IngestionService {
     return false;
   }
 
+  private matchesLooseSearchQuery(text: string, query: string) {
+    const clauses = query
+      .split(/\s+OR\s+/i)
+      .map((clause) => clause.replace(/[()"]/g, '').trim().toLowerCase())
+      .filter(Boolean);
+
+    if (!clauses.length) return true;
+    return clauses.some((clause) => text.includes(clause));
+  }
+
   private applySourceWeighting(
     classification: {
       isOpportunity: boolean;
@@ -898,6 +978,7 @@ export class IngestionService {
       REDDIT: 1.05,
       REDDIT_SEARCH: 1.0,
       RSS: 0.95,
+      DISCOURSE: 0.95,
       HN_SEARCH: 1.05,
       GITHUB_SEARCH: 0.95,
       STACKOVERFLOW_SEARCH: 0.9,
