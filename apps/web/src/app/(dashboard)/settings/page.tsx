@@ -1,8 +1,9 @@
 'use client';
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
-import { authApi, organizationsApi, type AuditLog, type AuthSession, type Invitation, type OrganizationMember } from '@/lib/api';
+import { authApi, keywordsApi, organizationsApi, type AuditLog, type AuthSession, type Invitation, type OrganizationMember } from '@/lib/api';
 import { useTheme, type ThemeMode } from '@/components/theme-provider';
 import { formatDate, formatPlanName } from '@/lib/utils';
 import { User, Building2, Shield, Users, Clock3, Link as LinkIcon, Trash2, Plus, Pencil, Sun, Moon, Monitor } from 'lucide-react';
@@ -144,6 +145,11 @@ export default function SettingsPage() {
     queryFn: () => organizationsApi.auditLog(currentOrgId!, 1, 20),
     enabled: !!currentOrgId,
   });
+  const keywordsQuery = useQuery({
+    queryKey: ['keywords', currentOrgId],
+    queryFn: () => keywordsApi.list(currentOrgId!),
+    enabled: !!currentOrgId,
+  });
   const sessionsQuery = useQuery({
     queryKey: ['auth-sessions'],
     queryFn: () => authApi.sessions(),
@@ -276,6 +282,14 @@ export default function SettingsPage() {
     { value: 'dark', label: 'Dark', description: 'Low-glare theme for focused sessions.', icon: Moon },
     { value: 'system', label: 'System', description: `Currently following ${resolvedTheme} mode.`, icon: Monitor },
   ];
+  const trackedKeywordCount = keywordsQuery.data?.length || 0;
+  const profileChecklist = [
+    { label: 'Business focus', complete: Boolean((currentOrg?.businessFocus || businessFocus).trim()) },
+    { label: 'Target buyers', complete: Boolean((currentOrg?.targetAudience || targetAudience).trim()) },
+    { label: 'Tracked keywords', complete: trackedKeywordCount > 0 },
+    { label: 'Negative keywords', complete: Boolean((currentOrg?.negativeKeywords || negativeKeywords.split(',').map((term) => term.trim()).filter(Boolean)).length) },
+  ];
+  const completedProfileItems = profileChecklist.filter((item) => item.complete).length;
 
   return (
     <div className="page-shell space-y-6 animate-fade-in">
@@ -407,6 +421,42 @@ export default function SettingsPage() {
               className="w-full rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:text-muted-foreground"
             />
             <p className="mt-2 text-xs text-muted-foreground">Comma-separated phrases that should be filtered out across all discovery sources in this workspace.</p>
+          </div>
+          <div className="rounded-xl border border-border bg-secondary p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">Suggestion profile</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Template suggestions get better when this workspace clearly describes its niche, buyers, and filters.
+                </p>
+              </div>
+              <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
+                {completedProfileItems} of {profileChecklist.length} signals set
+              </span>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {profileChecklist.map((item) => (
+                <div key={item.label} className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                  <span className={item.complete ? 'text-foreground' : 'text-muted-foreground'}>
+                    {item.complete ? 'Done' : 'Add'} {item.label.toLowerCase()}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link
+                href="/sources/templates"
+                className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+              >
+                View suggested templates
+              </Link>
+              <Link
+                href="/keywords"
+                className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                Edit tracked keywords
+              </Link>
+            </div>
           </div>
           <div className="rounded-xl border border-border bg-secondary p-4">
             <label className="mb-2 block text-xs text-muted-foreground">Plan</label>

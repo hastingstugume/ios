@@ -97,6 +97,9 @@ export default function SourceTemplatesPage() {
   const maxSources = PLAN_SOURCE_LIMITS[normalizedPlan] ?? PLAN_SOURCE_LIMITS.free;
   const remainingSourceSlots = maxSources === null ? Number.POSITIVE_INFINITY : Math.max(maxSources - sources.length, 0);
   const existingSourceNames = new Set(sources.map((source) => source.name.trim().toLowerCase()));
+  const trackedKeywordCount = keywords.length;
+  const negativeKeywordCount = currentOrg?.negativeKeywords?.length || 0;
+  const hasSuggestionContext = Boolean(currentOrg?.businessFocus || currentOrg?.targetAudience || trackedKeywordCount || negativeKeywordCount);
 
   const getTemplateInstallBlocker = (preset: InstallableTemplate) => {
     const namespacedSourceNames = preset.sources.map((source) => `${preset.name} · ${source.name}`.trim().toLowerCase());
@@ -211,7 +214,42 @@ export default function SourceTemplatesPage() {
         </div>
       </section>
 
-      {!currentOrg?.businessFocus && !currentOrg?.targetAudience ? (
+      <section className="section-card p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-sm font-medium text-foreground">Suggestion context</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              These templates are ranked using your workspace niche, buyer profile, tracked keywords, and negative filters.
+            </p>
+          </div>
+          <Link
+            href="/settings"
+            className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+          >
+            Refine workspace profile
+          </Link>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {currentOrg?.businessFocus ? (
+            <span className="rounded-full border border-border bg-secondary px-3 py-1.5 text-xs text-foreground">
+              Focus: {currentOrg.businessFocus}
+            </span>
+          ) : null}
+          {currentOrg?.targetAudience ? (
+            <span className="rounded-full border border-border bg-secondary px-3 py-1.5 text-xs text-foreground">
+              Buyers: {currentOrg.targetAudience}
+            </span>
+          ) : null}
+          <span className="rounded-full border border-border bg-secondary px-3 py-1.5 text-xs text-muted-foreground">
+            {trackedKeywordCount} tracked keyword{trackedKeywordCount === 1 ? '' : 's'}
+          </span>
+          <span className="rounded-full border border-border bg-secondary px-3 py-1.5 text-xs text-muted-foreground">
+            {negativeKeywordCount} negative keyword{negativeKeywordCount === 1 ? '' : 's'}
+          </span>
+        </div>
+      </section>
+
+      {!hasSuggestionContext ? (
         <section className="section-card p-4">
           <p className="text-sm text-muted-foreground">
             Add a business focus and target buyers in Settings to make future template suggestions more specific to your niche.
