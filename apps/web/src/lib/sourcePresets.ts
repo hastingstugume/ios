@@ -168,6 +168,44 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
     ],
   },
   {
+    id: 'single-operator-community-watch',
+    name: 'Single-source operator community watch',
+    audience: 'Consultants looking for founder and operator pain outside purely technical forums',
+    description: 'A broader community search focused on operator pain, agency recommendations, and implementation asks.',
+    recommendedKeywords: ['recommend agency', 'need consultant', 'operations help'],
+    recommendedNegativeKeywords: ['job board', 'course'],
+    sources: [
+      {
+        name: 'Operator community demand',
+        type: 'WEB_SEARCH',
+        config: {
+          query: '"recommend agency" OR "need consultant" OR "operations help"',
+          domains: ['indiehackers.com', 'community.shopify.com', 'news.ycombinator.com'],
+          excludeTerms: ['job board', 'course'],
+          sourceWeight: 1.0,
+        },
+      },
+    ],
+  },
+  {
+    id: 'single-rss-founder-requests',
+    name: 'Single-source founder requests RSS',
+    audience: 'Agencies wanting a lightweight founder-focused RSS stream',
+    description: 'An RSS stream for fresh Ask HN and HN-style founder requests related to consultants, agencies, and implementation help.',
+    recommendedKeywords: ['consultant', 'agency', 'implementation help'],
+    recommendedNegativeKeywords: ['job', 'show hn'],
+    sources: [
+      {
+        name: 'Founder request RSS stream',
+        type: 'RSS',
+        config: {
+          url: 'https://hnrss.org/newest?q=consultant',
+          sourceWeight: 1.0,
+        },
+      },
+    ],
+  },
+  {
     id: 'two-source-recommendation',
     name: 'Recommendation requests',
     audience: 'Service businesses looking for high-intent referral and recommendation asks',
@@ -245,6 +283,34 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
         type: 'RSS',
         config: {
           url: 'https://hnrss.org/ask',
+          sourceWeight: 0.95,
+        },
+      },
+    ],
+  },
+  {
+    id: 'two-source-operator-communities',
+    name: 'Operator community demand',
+    audience: 'Service businesses chasing founder, operator, and small-business buying intent',
+    description: 'Pairs broader operator community search with an RSS founder stream for cleaner non-Reddit demand coverage.',
+    recommendedKeywords: ['recommend agency', 'need consultant', 'implementation help'],
+    recommendedNegativeKeywords: ['course', 'job board'],
+    sources: [
+      {
+        name: 'Operator community search',
+        type: 'WEB_SEARCH',
+        config: {
+          query: '"recommend agency" OR "need consultant" OR "implementation help"',
+          domains: ['indiehackers.com', 'community.shopify.com', 'news.ycombinator.com'],
+          excludeTerms: ['course', 'job board'],
+          sourceWeight: 1.0,
+        },
+      },
+      {
+        name: 'Founder request RSS',
+        type: 'RSS',
+        config: {
+          url: 'https://hnrss.org/newest?q=agency',
           sourceWeight: 0.95,
         },
       },

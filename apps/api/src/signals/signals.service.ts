@@ -25,6 +25,8 @@ type SignalForRanking = {
   fetchedAt: Date;
   publishedAt: Date | null;
   status: SignalStatus;
+  originalTitle?: string | null;
+  originalText?: string | null;
   sourceUrl?: string;
   whyItMatters?: string | null;
   classificationRaw?: any;
@@ -268,6 +270,10 @@ export class SignalsService {
   private calculatePriorityScore(signal: SignalForRanking) {
     const confidence = signal.confidenceScore ?? 0;
     const keywordCount = signal.keywords?.length ?? 0;
+    const combinedText = this.buildRankingText(signal);
+    const recommendationBoost = /recommend|who should we hire|looking for (a|an)?\s?(consultant|agency|partner)|implementation partner/i.test(combinedText) ? 6 : 0;
+    const urgentBoost = /urgent|asap|blocked|need help now|immediately|this week|stuck|incident|production issue/i.test(combinedText) ? 5 : 0;
+    const migrationBoost = /migration|migrate|implementation|integration|rollout|cutover/i.test(combinedText) ? 4 : 0;
     const hoursOld = Math.max(
       0,
       (Date.now() - new Date(signal.publishedAt || signal.fetchedAt).getTime()) / (1000 * 60 * 60),
@@ -304,6 +310,9 @@ export class SignalsService {
           confidence * 0.65 +
           freshnessBoost +
           keywordBoost +
+          recommendationBoost +
+          urgentBoost +
+          migrationBoost +
           (categoryBoost[signal.category || SignalCategory.OTHER] ?? 0) +
           (sourceBoost[signal.source?.type || ''] ?? 0) +
           statusAdjustment,
@@ -318,10 +327,27 @@ export class SignalsService {
   ) {
     const reasons: string[] = [];
     const keywordCount = signal.keywords?.length ?? 0;
+    const combinedText = this.buildRankingText(signal);
     const ageHours = Math.max(
       0,
       (Date.now() - new Date(signal.publishedAt || signal.fetchedAt).getTime()) / (1000 * 60 * 60),
     );
+
+    if (signal.category === SignalCategory.BUYING_INTENT) {
+      reasons.push('Clear buying-intent category');
+    } else if (signal.category === SignalCategory.RECOMMENDATION_REQUEST) {
+      reasons.push('Active recommendation request');
+    } else if (signal.category === SignalCategory.PAIN_COMPLAINT) {
+      reasons.push('Explicit pain/problem discussion');
+    }
+
+    if (/recommend|who should we hire|looking for (a|an)?\s?(consultant|agency|partner)|implementation partner/i.test(combinedText)) {
+      reasons.push('Explicit recommendation or partner search');
+    }
+
+    if (/migration|migrate|implementation|integration|rollout|cutover/i.test(combinedText)) {
+      reasons.push('Implementation or migration pain');
+    }
 
     if ((signal.confidenceScore ?? 0) >= 85) {
       reasons.push('Very high intent score');
@@ -335,20 +361,6 @@ export class SignalsService {
       reasons.push(`Matched ${keywordCount} tracked keyword${keywordCount === 1 ? '' : 's'}`);
     }
 
-    if (signal.category === SignalCategory.BUYING_INTENT) {
-      reasons.push('Clear buying-intent category');
-    } else if (signal.category === SignalCategory.RECOMMENDATION_REQUEST) {
-      reasons.push('Active recommendation request');
-    } else if (signal.category === SignalCategory.PAIN_COMPLAINT) {
-      reasons.push('Explicit pain/problem discussion');
-    }
-
-    if (ageHours <= 24) {
-      reasons.push('Fresh opportunity');
-    } else if (ageHours <= 72) {
-      reasons.push('Still recent');
-    }
-
     if (signal.source?.type === 'REDDIT' || signal.source?.type === 'HN_SEARCH') {
       reasons.push(`High-signal ${signal.source.type === 'REDDIT' ? 'community' : 'founder'} source`);
     }
@@ -357,11 +369,29 @@ export class SignalsService {
       reasons.push('Urgent buyer conversation');
     }
 
+    if (ageHours <= 24) {
+      reasons.push('Fresh opportunity');
+    } else if (ageHours <= 72) {
+      reasons.push('Still recent');
+    }
+
     if (priorityScore >= 90) {
       reasons.unshift('Top priority lead');
     }
 
     return reasons.slice(0, 4);
+  }
+
+  private buildRankingText(signal: SignalForRanking) {
+    return [
+      signal.originalTitle,
+      signal.originalText,
+      signal.whyItMatters,
+      signal.classificationRaw?.painPoint,
+      signal.classificationRaw?.conversationType,
+    ]
+      .filter(Boolean)
+      .join(' ');
   }
 
   private getFreshnessLabel(fetchedAt: Date, publishedAt: Date | null) {

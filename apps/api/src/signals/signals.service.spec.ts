@@ -175,4 +175,64 @@ describe('SignalsService', () => {
       'Strong confidence signal',
     ]));
   });
+
+  it('boosts recommendation and migration language in ranking reasons and priority', async () => {
+    mockPrisma.signal.findMany.mockResolvedValue([
+      {
+        id: 'generic_signal',
+        organizationId: 'org_1',
+        sourceId: 'src_1',
+        externalId: 'ext_1',
+        sourceUrl: 'https://example.com/1',
+        originalTitle: 'General tooling question',
+        originalText: 'We are exploring some tooling options.',
+        normalizedText: 'We are exploring some tooling options.',
+        fetchedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        category: 'OTHER',
+        confidenceScore: 70,
+        whyItMatters: null,
+        suggestedOutreach: null,
+        status: 'NEW',
+        stage: 'TO_REVIEW',
+        source: { id: 'src_1', name: 'Web', type: 'WEB_SEARCH' },
+        keywords: [{ keyword: { id: 'kw_1', phrase: 'tooling' } }],
+        assignee: null,
+        _count: { annotations: 0 },
+      },
+      {
+        id: 'migration_recommendation',
+        organizationId: 'org_1',
+        sourceId: 'src_2',
+        externalId: 'ext_2',
+        sourceUrl: 'https://example.com/2',
+        originalTitle: 'Who should we hire for this migration?',
+        originalText: 'We need an implementation partner immediately for a CRM migration rollout.',
+        normalizedText: 'We need an implementation partner immediately for a CRM migration rollout.',
+        fetchedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        category: 'RECOMMENDATION_REQUEST',
+        confidenceScore: 70,
+        whyItMatters: null,
+        suggestedOutreach: null,
+        status: 'NEW',
+        stage: 'TO_REVIEW',
+        source: { id: 'src_2', name: 'HN', type: 'HN_SEARCH' },
+        keywords: [{ keyword: { id: 'kw_2', phrase: 'migration' } }],
+        assignee: null,
+        _count: { annotations: 0 },
+      },
+    ]);
+    mockPrisma.signal.count.mockResolvedValue(2);
+
+    const result = await service.findAll('org_1', { page: 1, limit: 20 });
+
+    expect(result.data[0].id).toBe('migration_recommendation');
+    expect(result.data[0].priorityScore).toBeGreaterThan(result.data[1].priorityScore);
+    expect(result.data[0].rankingReasons).toEqual(expect.arrayContaining([
+      'Active recommendation request',
+      'Explicit recommendation or partner search',
+      'Implementation or migration pain',
+    ]));
+  });
 });
