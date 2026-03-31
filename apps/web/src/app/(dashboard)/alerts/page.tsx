@@ -50,7 +50,7 @@ const ALERT_STARTERS = [
 ];
 
 export default function AlertsPage() {
-  const { currentOrgId } = useAuth();
+  const { currentOrgId, user } = useAuth();
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [editingRule, setEditingRule] = useState<AlertRule | null>(null);
@@ -95,7 +95,7 @@ export default function AlertsPage() {
       name: '',
       minConfidence: 75,
       frequency: 'IMMEDIATE',
-      emailRecipients: '',
+      emailRecipients: user?.email || '',
       categories: [],
       keywordIds: [],
       autoStage: '',
@@ -250,6 +250,7 @@ export default function AlertsPage() {
                     name: starter.name,
                     minConfidence: starter.minConfidence,
                     frequency: starter.frequency,
+                    emailRecipients: current.emailRecipients || user?.email || '',
                     categories: starter.categories,
                     keywordIds: starter.keywordIds,
                     autoStage: '',
