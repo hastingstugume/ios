@@ -308,46 +308,34 @@ export default function SourcesPage() {
 
       {showEmptySourceState ? (
         <section className="section-card p-6 md:p-8">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-center">
-            <div className="max-w-2xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                <BrainCircuit className="h-3.5 w-3.5" />
-                Source setup
-              </div>
-              <h2 className="mt-4 text-2xl font-semibold tracking-tight text-foreground">Start with a template, then add exact sources as you learn what converts.</h2>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                We can suggest source packs based on your workspace name, focus, target buyers, and tracked keywords. Start with a ready-made template, or add a source manually if you already know exactly what you want to monitor.
-              </p>
-              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => router.push('/sources/templates')}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                >
-                  Use a suggested template
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAdding(true)}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-                >
-                  <Plus className="h-4 w-4" />
-                  Create a source manually
-                </button>
-              </div>
+          <div className="max-w-3xl space-y-5">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+              <BrainCircuit className="h-3.5 w-3.5" />
+              Source setup
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-              <div className="rounded-xl border border-border bg-secondary p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Use templates when</p>
-                <p className="mt-2 text-sm font-medium text-foreground">You want coverage fast</p>
-                <p className="mt-2 text-sm text-muted-foreground">Templates install multiple search sources plus suggested keywords and negatives in one pass.</p>
-              </div>
-              <div className="rounded-xl border border-border bg-secondary p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Add manually when</p>
-                <p className="mt-2 text-sm font-medium text-foreground">You know the exact source already</p>
-                <p className="mt-2 text-sm text-muted-foreground">Perfect for specific feeds, subreddits, repositories, or niche search queries you already trust.</p>
-              </div>
+            <div className="space-y-3">
+              <h2 className="text-2xl font-semibold tracking-tight text-foreground">Start with a template or create your first source.</h2>
+              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                Templates are the fastest way to get coverage. Manual setup is better when you already know the exact feed, subreddit, or search query you want to monitor.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => router.push('/sources/templates')}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                Use a template
+                <ArrowRight className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdding(true)}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+              >
+                <Plus className="h-4 w-4" />
+                Create a source manually
+              </button>
             </div>
           </div>
         </section>
