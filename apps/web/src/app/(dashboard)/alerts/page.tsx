@@ -16,6 +16,33 @@ const FREQ_LABELS: Record<string, string> = {
 
 const CATEGORY_OPTIONS = Object.entries(CATEGORY_META).map(([value, meta]) => ({ value, label: meta.label }));
 
+const ALERT_STARTERS = [
+  {
+    name: 'High-intent buyer signals',
+    minConfidence: 85,
+    frequency: 'IMMEDIATE',
+    categories: ['BUYING_INTENT', 'RECOMMENDATION_REQUEST'],
+    keywordIds: [] as string[],
+    description: 'Best for urgent, obvious buying intent and recommendation requests.',
+  },
+  {
+    name: 'Urgent pain and rescue work',
+    minConfidence: 75,
+    frequency: 'IMMEDIATE',
+    categories: ['PAIN_COMPLAINT'],
+    keywordIds: [] as string[],
+    description: 'Catches blocked teams, migration pain, and implementation rescue signals.',
+  },
+  {
+    name: 'Daily market watch',
+    minConfidence: 70,
+    frequency: 'DAILY',
+    categories: [],
+    keywordIds: [] as string[],
+    description: 'A calmer digest for teams that want coverage without constant pings.',
+  },
+];
+
 export default function AlertsPage() {
   const { currentOrgId } = useAuth();
   const qc = useQueryClient();
@@ -30,6 +57,7 @@ export default function AlertsPage() {
     keywordIds: [] as string[],
   });
   const [search, setSearch] = useState('');
+  const [deleteCandidate, setDeleteCandidate] = useState<AlertRule | null>(null);
 
   const { data: rules = [], isLoading } = useQuery({
     queryKey: ['alerts', currentOrgId],
@@ -96,6 +124,17 @@ export default function AlertsPage() {
   const toggleSelection = (list: string[], value: string) =>
     list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
 
+  const summarizeRuleScope = (rule: Pick<AlertRule, 'categories' | 'keywordIds' | 'minConfidence'>) => {
+    const categorySummary = rule.categories.length
+      ? rule.categories.map((category) => CATEGORY_META[category]?.label || category).join(', ')
+      : 'all categories';
+    const keywordSummary = rule.keywordIds.length
+      ? `${rule.keywordIds.length} tracked keyword${rule.keywordIds.length === 1 ? '' : 's'}`
+      : 'any tracked keyword';
+
+    return `Score ${rule.minConfidence}%+, ${categorySummary}, ${keywordSummary}.`;
+  };
+
   return (
     <div className="page-shell space-y-6 animate-fade-in">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -137,6 +176,40 @@ export default function AlertsPage() {
             />
           </div>
           <p className="text-sm text-muted-foreground">Use categories and keywords together when the same source covers many different intent types.</p>
+        </div>
+      </section>
+
+      <section className="section-card p-4">
+        <div className="flex flex-col gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Quick-start alert presets</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Start from a common rule, then fine-tune recipients, keywords, and categories.</p>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-3">
+            {ALERT_STARTERS.map((starter) => (
+              <button
+                key={starter.name}
+                type="button"
+                onClick={() => {
+                  setEditingRule(null);
+                  setForm((current) => ({
+                    ...current,
+                    name: starter.name,
+                    minConfidence: starter.minConfidence,
+                    frequency: starter.frequency,
+                    categories: starter.categories,
+                    keywordIds: starter.keywordIds,
+                  }));
+                  setAdding(true);
+                }}
+                className="rounded-xl border border-border bg-card px-4 py-4 text-left transition-colors hover:border-primary/20 hover:bg-accent"
+              >
+                <p className="text-sm font-medium text-foreground">{starter.name}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{starter.description}</p>
+                <p className="mt-3 text-xs text-primary">Use preset</p>
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -221,6 +294,46 @@ export default function AlertsPage() {
         </div>
       </Modal>
 
+      <Modal
+        open={!!deleteCandidate}
+        onClose={() => {
+          if (remove.isPending) return;
+          setDeleteCandidate(null);
+        }}
+        title="Delete alert rule?"
+        description={
+          deleteCandidate
+            ? `${deleteCandidate.name} will stop sending notifications for this workspace.`
+            : 'This alert rule will stop sending notifications for this workspace.'
+        }
+        size="compact"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-3 text-sm text-destructive">
+            This can’t be undone. You can create a new rule later if needed.
+          </div>
+          {remove.error ? <p className="text-sm text-destructive">{(remove.error as Error).message}</p> : null}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setDeleteCandidate(null)}
+              disabled={remove.isPending}
+              className="rounded-xl border border-border px-4 py-2.5 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => deleteCandidate && remove.mutate(deleteCandidate.id)}
+              disabled={remove.isPending}
+              className="rounded-xl bg-destructive px-4 py-2.5 text-sm text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-50"
+            >
+              {remove.isPending ? 'Deleting…' : 'Delete rule'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       {isLoading ? (
         <div className="space-y-3">{[...Array(2)].map((_, i) => <div key={i} className="h-28 rounded-xl border border-border bg-card animate-pulse" />)}</div>
       ) : !filteredRules.length ? (
@@ -271,6 +384,10 @@ export default function AlertsPage() {
                     </div>
                   )}
                   <div className="mt-4 rounded-lg border border-border bg-secondary px-4 py-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rule scope</p>
+                    <p className="mt-1 text-sm text-foreground/85">{summarizeRuleScope(rule)}</p>
+                  </div>
+                  <div className="mt-3 rounded-lg border border-border bg-secondary px-4 py-3">
                     <p className="text-xs text-muted-foreground">Recipients</p>
                     <p className="mt-1 line-clamp-2 text-sm text-foreground/85">{rule.emailRecipients.join(', ')}</p>
                   </div>
@@ -300,7 +417,7 @@ export default function AlertsPage() {
                     className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
                     {rule.isActive ? <ToggleRight className="w-5 h-5 text-green-400" /> : <ToggleLeft className="w-5 h-5" />}
                   </button>
-                  <button onClick={() => confirm('Delete this alert rule?') && remove.mutate(rule.id)}
+                  <button onClick={() => setDeleteCandidate(rule)}
                     className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive">
                     <Trash2 className="w-4 h-4" />
                   </button>
