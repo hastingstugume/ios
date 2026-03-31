@@ -37,4 +37,44 @@ describe('ClassificationService (fallback)', () => {
     const long = 'a'.repeat(5000);
     expect(service.normalize(long).length).toBeLessThanOrEqual(1000);
   });
+
+  it('builds non-reddit fallback source suggestions for freelancer workspaces', async () => {
+    const suggestions = await service.generateSourceSuggestions({
+      organizationName: 'Solo Ops',
+      accountType: 'FREELANCER',
+      businessFocus: 'automation',
+      targetAudience: 'founders',
+      trackedKeywords: ['automation consultant'],
+      negativeKeywords: ['course'],
+    });
+
+    expect(suggestions).toHaveLength(3);
+    const sourceTypes = suggestions.flatMap((pack) => pack.sources.map((source) => source.type));
+    expect(sourceTypes).not.toContain('REDDIT_SEARCH');
+    const webDomains = suggestions
+      .flatMap((pack) => pack.sources)
+      .filter((source) => source.type === 'WEB_SEARCH')
+      .flatMap((source) => (source.config.domains || []) as string[]);
+    expect(webDomains).not.toContain('reddit.com');
+  });
+
+  it('builds non-reddit fallback source suggestions for business workspaces', async () => {
+    const suggestions = await service.generateSourceSuggestions({
+      organizationName: 'Pipeline Partners',
+      accountType: 'BUSINESS',
+      businessFocus: 'crm implementation',
+      targetAudience: 'operators',
+      trackedKeywords: ['crm migration'],
+      negativeKeywords: ['job'],
+    });
+
+    expect(suggestions).toHaveLength(3);
+    const sourceTypes = suggestions.flatMap((pack) => pack.sources.map((source) => source.type));
+    expect(sourceTypes).not.toContain('REDDIT_SEARCH');
+    const webDomains = suggestions
+      .flatMap((pack) => pack.sources)
+      .filter((source) => source.type === 'WEB_SEARCH')
+      .flatMap((source) => (source.config.domains || []) as string[]);
+    expect(webDomains).not.toContain('reddit.com');
+  });
 });

@@ -66,7 +66,7 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
         type: 'WEB_SEARCH',
         config: {
           query: '"looking for consultant" OR "need agency" OR "implementation partner"',
-          domains: ['reddit.com', 'news.ycombinator.com', 'stackoverflow.com'],
+          domains: ['news.ycombinator.com', 'stackoverflow.com', 'github.com'],
           excludeTerms: ['course', 'job board'],
           sourceWeight: 1.0,
         },
@@ -434,7 +434,7 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
         type: 'WEB_SEARCH',
         config: {
           query: '"need automation consultant" OR "recommend automation agency" OR "looking for AI developer"',
-          domains: ['reddit.com', 'news.ycombinator.com', 'stackoverflow.com'],
+          domains: ['news.ycombinator.com', 'stackoverflow.com', 'github.com'],
           excludeTerms: ['course', 'affiliate'],
           sourceWeight: 0.95,
         },
@@ -773,7 +773,7 @@ export const SOURCE_QUERY_TEMPLATES: Array<{
     label: 'Agency Recommendations',
     description: 'Searches broad communities for recommendation-style buying signals.',
     query: '"recommend" "automation agency" OR "recommend devops consultant"',
-    domains: ['reddit.com', 'news.ycombinator.com'],
+    domains: ['news.ycombinator.com', 'github.com'],
     recommendedKeywords: ['automation agency', 'devops consultant'],
   },
   {
@@ -781,7 +781,7 @@ export const SOURCE_QUERY_TEMPLATES: Array<{
     label: 'Implementation Help',
     description: 'Finds requests for migrations, partners, and systems help.',
     query: '"need implementation partner" OR "integration consultant" OR "migration help"',
-    domains: ['reddit.com', 'stackoverflow.com'],
+    domains: ['stackoverflow.com', 'github.com', 'news.ycombinator.com'],
     recommendedKeywords: ['implementation partner', 'integration consultant'],
     recommendedNegativeKeywords: ['template', 'course'],
   },

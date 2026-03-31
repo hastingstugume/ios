@@ -347,8 +347,8 @@ Create three source template packs tailored for this workspace.`;
           recommendedKeywords: Array.from(new Set([...baseKeywords, 'freelancer', 'consultant', 'implementation help'])).slice(0, 5),
           recommendedNegativeKeywords: commonNegatives,
           sources: [
-            { name: 'Reddit freelancer demand', type: 'REDDIT_SEARCH', config: { query: `"need freelancer" OR "looking for consultant" OR "recommend ${focus}"`, sort: 'new', sourceWeight: 1.1 } },
-            { name: 'Web search specialist requests', type: 'WEB_SEARCH', config: { query: `"recommend ${focus}" OR "need help with ${focus}"`, domains: ['reddit.com', 'stackoverflow.com'], excludeTerms: commonNegatives, sourceWeight: 0.95 } },
+            { name: 'Ask HN freelancer demand', type: 'HN_SEARCH', config: { query: `"need freelancer" OR "looking for consultant" OR "recommend ${focus}"`, tags: 'story,comment', sourceWeight: 1.05 } },
+            { name: 'Web search specialist requests', type: 'WEB_SEARCH', config: { query: `"recommend ${focus}" OR "need help with ${focus}"`, domains: ['news.ycombinator.com', 'stackoverflow.com', 'github.com'], excludeTerms: commonNegatives, sourceWeight: 0.95 } },
             { name: 'Stack Overflow buyer pain', type: 'STACKOVERFLOW_SEARCH', config: { query: `"need help" OR consultant OR migration`, stackSort: 'activity', sourceWeight: 0.9 } },
           ],
         },
@@ -359,7 +359,7 @@ Create three source template packs tailored for this workspace.`;
           recommendedKeywords: Array.from(new Set([...baseKeywords, 'urgent help', 'fix', 'migration'])).slice(0, 5),
           recommendedNegativeKeywords: commonNegatives,
           sources: [
-            { name: 'Reddit urgent blockers', type: 'REDDIT_SEARCH', config: { query: `"urgent" ${focus} OR "blocked" ${focus} OR "need help now"`, sort: 'new', sourceWeight: 1.15 } },
+            { name: 'Ask HN urgent blockers', type: 'HN_SEARCH', config: { query: `"urgent" ${focus} OR "blocked" ${focus} OR "need help now"`, tags: 'story,comment', sourceWeight: 1.05 } },
             { name: 'HN technical pain', type: 'HN_SEARCH', config: { query: `${focus} OR migration OR incident OR consultant`, tags: 'story,comment', sourceWeight: 0.95 } },
             { name: 'GitHub implementation pain', type: 'GITHUB_SEARCH', config: { query: `"need support" OR "looking for help" OR migration`, contentType: 'issues', sourceWeight: 0.85 } },
           ],
@@ -371,8 +371,8 @@ Create three source template packs tailored for this workspace.`;
           recommendedKeywords: Array.from(new Set([...baseKeywords, 'recommend', 'agency', 'expert'])).slice(0, 5),
           recommendedNegativeKeywords: commonNegatives,
           sources: [
-            { name: 'Reddit recommendation requests', type: 'REDDIT_SEARCH', config: { query: `"recommend" ${focus} OR "who should I hire" consultant`, sort: 'new', sourceWeight: 1.1 } },
-            { name: 'Web vendor search', type: 'WEB_SEARCH', config: { query: `"recommend ${focus} consultant" OR "best ${focus} agency"`, domains: ['reddit.com', 'news.ycombinator.com'], excludeTerms: commonNegatives, sourceWeight: 0.9 } },
+            { name: 'Ask HN recommendation requests', type: 'HN_SEARCH', config: { query: `"recommend" ${focus} OR "who should I hire" consultant`, tags: 'story,comment', sourceWeight: 1.05 } },
+            { name: 'Web vendor search', type: 'WEB_SEARCH', config: { query: `"recommend ${focus} consultant" OR "best ${focus} agency"`, domains: ['news.ycombinator.com', 'github.com'], excludeTerms: commonNegatives, sourceWeight: 0.9 } },
             { name: 'HN vendor comparisons', type: 'HN_SEARCH', config: { query: `${focus} consultant OR agency OR recommendation`, tags: 'story', sourceWeight: 0.85 } },
           ],
         },
@@ -387,8 +387,8 @@ Create three source template packs tailored for this workspace.`;
         recommendedKeywords: Array.from(new Set([...baseKeywords, 'consultant', 'agency', 'implementation partner'])).slice(0, 5),
         recommendedNegativeKeywords: commonNegatives,
         sources: [
-          { name: 'Reddit buyer intent', type: 'REDDIT_SEARCH', config: { query: `"looking for" consultant OR "need help" ${focus} OR "recommend" agency`, sort: 'new', sourceWeight: 1.1 } },
-          { name: 'Web buyer search', type: 'WEB_SEARCH', config: { query: `"need ${focus} help" OR "recommend ${focus} consultant"`, domains: ['reddit.com', 'news.ycombinator.com', 'stackoverflow.com'], excludeTerms: commonNegatives, sourceWeight: 0.95 } },
+          { name: 'Ask HN buyer intent', type: 'HN_SEARCH', config: { query: `"looking for" consultant OR "need help" ${focus} OR "recommend" agency`, tags: 'story,comment', sourceWeight: 1.05 } },
+          { name: 'Web buyer search', type: 'WEB_SEARCH', config: { query: `"need ${focus} help" OR "recommend ${focus} consultant"`, domains: ['news.ycombinator.com', 'stackoverflow.com', 'github.com'], excludeTerms: commonNegatives, sourceWeight: 0.95 } },
           { name: 'HN buying signals', type: 'HN_SEARCH', config: { query: `${focus} consultant OR implementation OR agency`, tags: 'story,comment', sourceWeight: 0.9 } },
         ],
       },
@@ -401,7 +401,7 @@ Create three source template packs tailored for this workspace.`;
         sources: [
           { name: 'Stack Overflow implementation pain', type: 'STACKOVERFLOW_SEARCH', config: { query: `"need help" OR "production issue" OR migration OR consultant`, stackSort: 'activity', sourceWeight: 0.95 } },
           { name: 'GitHub community pain', type: 'GITHUB_SEARCH', config: { query: `"looking for help" OR migration OR consultant`, contentType: 'discussions', sourceWeight: 0.85 } },
-          { name: 'Reddit ops rescue', type: 'REDDIT_SEARCH', config: { query: `"stuck" ${focus} OR "need help" ${focus}`, sort: 'new', sourceWeight: 1.05 } },
+          { name: 'Ask HN ops rescue', type: 'HN_SEARCH', config: { query: `"stuck" ${focus} OR "need help" ${focus}`, tags: 'story,comment', sourceWeight: 1.0 } },
         ],
       },
       {
@@ -411,8 +411,8 @@ Create three source template packs tailored for this workspace.`;
         recommendedKeywords: Array.from(new Set([...baseKeywords, 'vendor', 'who to hire', 'specialist'])).slice(0, 5),
         recommendedNegativeKeywords: commonNegatives,
         sources: [
-          { name: 'Reddit who-to-hire threads', type: 'REDDIT_SEARCH', config: { query: `"who should I hire" OR "best agency" ${focus} OR "recommend consultant"`, sort: 'new', sourceWeight: 1.1 } },
-          { name: 'Web recommendation search', type: 'WEB_SEARCH', config: { query: `"best ${focus} agency" OR "recommend ${focus} consultant"`, domains: ['reddit.com', 'news.ycombinator.com'], excludeTerms: commonNegatives, sourceWeight: 0.9 } },
+          { name: 'Ask HN who-to-hire threads', type: 'HN_SEARCH', config: { query: `"who should I hire" OR "best agency" ${focus} OR "recommend consultant"`, tags: 'story,comment', sourceWeight: 1.05 } },
+          { name: 'Web recommendation search', type: 'WEB_SEARCH', config: { query: `"best ${focus} agency" OR "recommend ${focus} consultant"`, domains: ['news.ycombinator.com', 'github.com'], excludeTerms: commonNegatives, sourceWeight: 0.9 } },
           { name: 'HN tool/vendor evaluation', type: 'HN_SEARCH', config: { query: `${focus} OR vendor OR implementation partner`, tags: 'story', sourceWeight: 0.85 } },
         ],
       },
