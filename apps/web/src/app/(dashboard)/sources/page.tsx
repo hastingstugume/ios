@@ -13,11 +13,13 @@ const SOURCE_TYPES = [
   {
     value: 'REDDIT',
     label: 'Reddit Subreddit',
+    recommended: false,
     fields: [{ key: 'subreddit', label: 'Subreddit name', placeholder: 'entrepreneur' }],
   },
   {
     value: 'REDDIT_SEARCH',
     label: 'Reddit Search',
+    recommended: false,
     fields: [
       { key: 'query', label: 'Search query', placeholder: 'looking for AI automation agency' },
       { key: 'subreddit', label: 'Optional subreddit', placeholder: 'smallbusiness' },
@@ -27,11 +29,13 @@ const SOURCE_TYPES = [
   {
     value: 'RSS',
     label: 'RSS / Atom Feed',
+    recommended: true,
     fields: [{ key: 'url', label: 'Feed URL', placeholder: 'https://hnrss.org/ask' }],
   },
   {
     value: 'HN_SEARCH',
     label: 'Hacker News Search',
+    recommended: false,
     fields: [
       { key: 'query', label: 'Search query', placeholder: 'need devops consultant' },
       { key: 'tags', label: 'Tags', placeholder: 'story', kind: 'select', options: ['story', 'comment', 'story,comment'] },
@@ -40,6 +44,7 @@ const SOURCE_TYPES = [
   {
     value: 'GITHUB_SEARCH',
     label: 'GitHub Search',
+    recommended: true,
     fields: [
       { key: 'query', label: 'Search query', placeholder: 'looking for kubernetes consultant' },
       { key: 'repo', label: 'Optional repo/org', placeholder: 'vercel/next.js' },
@@ -49,6 +54,7 @@ const SOURCE_TYPES = [
   {
     value: 'STACKOVERFLOW_SEARCH',
     label: 'Stack Overflow Search',
+    recommended: true,
     fields: [
       { key: 'query', label: 'Search query', placeholder: 'need help with devops pipeline' },
       { key: 'stackTags', label: 'Optional tags', placeholder: 'kubernetes, devops, docker' },
@@ -58,12 +64,13 @@ const SOURCE_TYPES = [
   {
     value: 'WEB_SEARCH',
     label: 'Web Search',
+    recommended: false,
     fields: [
       { key: 'query', label: 'Search query', placeholder: 'recommend kubernetes consultant' },
       { key: 'domains', label: 'Optional domains', placeholder: 'reddit.com, stackoverflow.com, news.ycombinator.com' },
     ],
   },
-  { value: 'MANUAL', label: 'Manual Import', fields: [] },
+  { value: 'MANUAL', label: 'Manual Import', recommended: true, fields: [] },
 ];
 
 const EMPTY_FORM = {
@@ -332,6 +339,13 @@ export default function SourcesPage() {
 
   const previewResults = previewSource.data?.previewItems || [];
   const selectedTypeSupport = SOURCE_TYPE_SUPPORT[form.type] || SOURCE_TYPE_SUPPORT.MANUAL;
+  const orderedSourceTypes = [
+    ...SOURCE_TYPES.filter((type) => type.recommended && SOURCE_TYPE_SUPPORT[type.value]?.supportStatus === 'production_ready'),
+    ...SOURCE_TYPES.filter((type) => type.recommended && SOURCE_TYPE_SUPPORT[type.value]?.supportStatus !== 'production_ready'),
+    ...SOURCE_TYPES.filter((type) => !type.recommended),
+  ];
+  const recommendedSourceTypes = orderedSourceTypes.filter((type) => type.recommended);
+  const secondarySourceTypes = orderedSourceTypes.filter((type) => !type.recommended);
 
   return (
     <div className="page-shell space-y-6 animate-fade-in">
@@ -449,6 +463,28 @@ export default function SourcesPage() {
           <div className="grid gap-3 md:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs text-muted-foreground">Source type</label>
+              {!editingId ? (
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {recommendedSourceTypes.map((type) => (
+                    <button
+                      key={type.value}
+                      type="button"
+                      onClick={() => {
+                        previewSource.reset();
+                        setPreviewFeedback(null);
+                        setForm((f) => ({ ...f, type: type.value }));
+                      }}
+                      className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                        form.type === type.value
+                          ? 'border-primary/20 bg-primary/10 text-primary'
+                          : 'border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground'
+                      }`}
+                    >
+                      {type.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <select
                 value={form.type}
                 onChange={(e) => {
@@ -459,8 +495,28 @@ export default function SourcesPage() {
                 disabled={!!editingId}
                 className="w-full rounded-lg border border-border bg-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               >
-                {SOURCE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                <optgroup label="Recommended">
+                  {recommendedSourceTypes.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label} · {SOURCE_TYPE_SUPPORT[t.value]?.supportStatus.replaceAll('_', ' ')}
+                    </option>
+                  ))}
+                </optgroup>
+                {secondarySourceTypes.length ? (
+                  <optgroup label="Other sources">
+                    {secondarySourceTypes.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label} · {SOURCE_TYPE_SUPPORT[t.value]?.supportStatus.replaceAll('_', ' ')}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
               </select>
+              {!editingId ? (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Start with RSS, GitHub, Stack Overflow, or Manual unless you specifically need a limited or approval-dependent source.
+                </p>
+              ) : null}
             </div>
             <div>
               <label className="mb-1 block text-xs text-muted-foreground">Display name</label>
