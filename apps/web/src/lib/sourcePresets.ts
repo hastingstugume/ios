@@ -16,41 +16,39 @@ export interface SourcePresetPack {
 
 export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
   {
-    id: 'single-reddit-freelancer',
+    id: 'single-freelancer-radar',
     name: 'Single-source freelancer radar',
     audience: 'Freelancers who want one fast source to validate demand',
-    description: 'A minimal starting point that watches Reddit for direct freelancer and consultant requests.',
+    description: 'A minimal starting point that watches Ask HN for direct freelancer and consultant requests.',
     recommendedKeywords: ['need freelancer', 'consultant', 'implementation help'],
     recommendedNegativeKeywords: ['internship', 'junior role'],
     sources: [
       {
-        name: 'Reddit freelancer demand',
-        type: 'REDDIT_SEARCH',
+        name: 'Ask HN freelancer demand',
+        type: 'HN_SEARCH',
         config: {
           query: '"need freelancer" OR "looking for consultant" OR "implementation help"',
-          sort: 'new',
-          excludeTerms: ['internship', 'full-time'],
-          sourceWeight: 1.1,
+          tags: 'story,comment',
+          sourceWeight: 1.0,
         },
       },
     ],
   },
   {
-    id: 'single-reddit-recommendations',
+    id: 'single-community-recommendations',
     name: 'Single-source recommendations',
     audience: 'Consultants and agencies looking for recommendation-style buying intent',
-    description: 'A lightweight Reddit-only pack for people asking who to hire or what consultant to use.',
+    description: 'A lightweight Hacker News pack for people asking who to hire or what consultant to use.',
     recommendedKeywords: ['recommend consultant', 'recommend agency', 'who should we hire'],
     recommendedNegativeKeywords: ['course', 'template'],
     sources: [
       {
-        name: 'Reddit recommendation demand',
-        type: 'REDDIT_SEARCH',
+        name: 'Ask HN recommendation demand',
+        type: 'HN_SEARCH',
         config: {
           query: '"recommend consultant" OR "recommend agency" OR "who should we hire"',
-          sort: 'new',
-          excludeTerms: ['course', 'template'],
-          sourceWeight: 1.1,
+          tags: 'story,comment',
+          sourceWeight: 1.0,
         },
       },
     ],
@@ -114,29 +112,139 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
     ],
   },
   {
+    id: 'single-github-discussions',
+    name: 'Single-source GitHub discussions',
+    audience: 'Teams selling implementation help into developer communities',
+    description: 'A GitHub-only pack for support, migration, and delivery pain described in discussions.',
+    recommendedKeywords: ['need help', 'migration', 'support'],
+    recommendedNegativeKeywords: ['feature request', 'documentation'],
+    sources: [
+      {
+        name: 'GitHub discussion pain',
+        type: 'GITHUB_SEARCH',
+        config: {
+          query: '"need help" OR migration OR "looking for support"',
+          type: 'discussions',
+          sourceWeight: 1.0,
+        },
+      },
+    ],
+  },
+  {
+    id: 'single-github-issues',
+    name: 'Single-source GitHub issues',
+    audience: 'Technical consultants solving urgent implementation and reliability problems',
+    description: 'A focused GitHub issues pack for operational blockers, migrations, and help requests.',
+    recommendedKeywords: ['blocked', 'incident', 'migration'],
+    recommendedNegativeKeywords: ['chore', 'typo'],
+    sources: [
+      {
+        name: 'GitHub issue blockers',
+        type: 'GITHUB_SEARCH',
+        config: {
+          query: '"blocked" OR incident OR migration OR "need support"',
+          type: 'issues',
+          sourceWeight: 1.0,
+        },
+      },
+    ],
+  },
+  {
+    id: 'single-rss-ask-hn',
+    name: 'Single-source Ask HN RSS',
+    audience: 'Freelancers and agencies who want one low-friction RSS feed to monitor',
+    description: 'A single RSS source following Ask HN posts for new operator and founder demand.',
+    recommendedKeywords: ['consultant', 'need help', 'implementation'],
+    recommendedNegativeKeywords: ['job', 'show hn'],
+    sources: [
+      {
+        name: 'Ask HN RSS feed',
+        type: 'RSS',
+        config: {
+          url: 'https://hnrss.org/ask',
+          sourceWeight: 1.0,
+        },
+      },
+    ],
+  },
+  {
     id: 'two-source-recommendation',
     name: 'Recommendation requests',
     audience: 'Service businesses looking for high-intent referral and recommendation asks',
-    description: 'Two focused sources for buyer conversations where people explicitly ask who to hire.',
+    description: 'Two focused non-Reddit sources for buyer conversations where people explicitly ask who to hire.',
     recommendedKeywords: ['recommend agency', 'recommend consultant', 'who should we hire'],
     recommendedNegativeKeywords: ['course', 'template'],
     sources: [
       {
-        name: 'Reddit recommendation asks',
-        type: 'REDDIT_SEARCH',
+        name: 'Ask HN recommendation asks',
+        type: 'HN_SEARCH',
         config: {
           query: '"recommend" consultant OR "recommend" agency OR "who should we hire"',
-          sort: 'new',
-          sourceWeight: 1.1,
+          tags: 'story,comment',
+          sourceWeight: 1.0,
         },
       },
       {
-        name: 'Web recommendation scan',
-        type: 'WEB_SEARCH',
+        name: 'GitHub recommendation pain',
+        type: 'GITHUB_SEARCH',
         config: {
-          query: '"recommend consultant" OR "recommend agency" OR "who should we hire"',
-          domains: ['reddit.com', 'news.ycombinator.com'],
-          excludeTerms: ['course', 'template'],
+          query: '"recommend" OR "who should we hire" OR "looking for support"',
+          type: 'discussions',
+          sourceWeight: 0.95,
+        },
+      },
+    ],
+  },
+  {
+    id: 'two-source-github-stackoverflow',
+    name: 'Engineering rescue',
+    audience: 'Consultants solving technical blockers, migrations, and implementation pain',
+    description: 'Combines GitHub and Stack Overflow to capture both community pain and practical delivery issues.',
+    recommendedKeywords: ['migration help', 'blocked', 'need support'],
+    recommendedNegativeKeywords: ['tutorial', 'homework'],
+    sources: [
+      {
+        name: 'GitHub delivery blockers',
+        type: 'GITHUB_SEARCH',
+        config: {
+          query: '"blocked" OR migration OR "need support"',
+          type: 'discussions',
+          sourceWeight: 1.05,
+        },
+      },
+      {
+        name: 'Stack Overflow technical rescue',
+        type: 'STACKOVERFLOW_SEARCH',
+        config: {
+          query: '"need help" OR migration OR incident OR consultant',
+          sort: 'activity',
+          sourceWeight: 0.95,
+        },
+      },
+    ],
+  },
+  {
+    id: 'two-source-founder-demand',
+    name: 'Founder demand signals',
+    audience: 'Agencies looking for founder and operator buying intent',
+    description: 'Combines Ask HN search with the Ask HN RSS feed for fast-moving founder demand.',
+    recommendedKeywords: ['consultant', 'recommend agency', 'need help'],
+    recommendedNegativeKeywords: ['job', 'show hn'],
+    sources: [
+      {
+        name: 'Ask HN buyer search',
+        type: 'HN_SEARCH',
+        config: {
+          query: '"consultant" OR "recommend agency" OR "need help"',
+          tags: 'story,comment',
+          sourceWeight: 1.05,
+        },
+      },
+      {
+        name: 'Ask HN RSS watch',
+        type: 'RSS',
+        config: {
+          url: 'https://hnrss.org/ask',
           sourceWeight: 0.95,
         },
       },
@@ -146,18 +254,17 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
     id: 'two-source-urgent-support',
     name: 'Urgent support requests',
     audience: 'Freelancers and consultants solving urgent blockers quickly',
-    description: 'A compact two-source pack for rescue work, operational pain, and help-now conversations.',
+    description: 'A compact non-Reddit pack for rescue work, operational pain, and help-now conversations.',
     recommendedKeywords: ['urgent help', 'blocked', 'need help now'],
     recommendedNegativeKeywords: ['job', 'hiring full-time'],
     sources: [
       {
-        name: 'Reddit urgent blockers',
-        type: 'REDDIT_SEARCH',
+        name: 'GitHub urgent blockers',
+        type: 'GITHUB_SEARCH',
         config: {
-          query: '"urgent" freelancer OR "blocked" freelancer OR "need help now"',
-          sort: 'new',
-          excludeTerms: ['job', 'hiring full-time'],
-          sourceWeight: 1.15,
+          query: '"urgent" OR "blocked" OR "need help now"',
+          type: 'issues',
+          sourceWeight: 1.05,
         },
       },
       {
@@ -175,7 +282,7 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
     id: 'ai-automation',
     name: 'AI Automation Agency',
     audience: 'Agencies building workflows, agents, and internal automations',
-    description: 'Covers founder pain, ops automation demand, AI tooling evaluation, and direct consultant requests.',
+    description: 'Covers founder pain, ops automation demand, AI tooling evaluation, and direct consultant requests without relying on Reddit.',
     recommendedKeywords: [
       'AI automation agency',
       'workflow automation',
@@ -190,16 +297,6 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
       'wordpress',
     ],
     sources: [
-      {
-        name: 'AI Ops Buyer Intent',
-        type: 'REDDIT_SEARCH',
-        config: {
-          query: '"looking for" AI automation agency OR "need" automation consultant OR "workflow automation" help',
-          sort: 'new',
-          excludeTerms: ['job board', 'newsletter'],
-          sourceWeight: 1.15,
-        },
-      },
       {
         name: 'Ask HN Automation Demand',
         type: 'HN_SEARCH',
@@ -228,13 +325,22 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
           sourceWeight: 0.9,
         },
       },
+      {
+        name: 'Stack Overflow Automation Problems',
+        type: 'STACKOVERFLOW_SEARCH',
+        config: {
+          query: '"automation" OR "workflow" OR "internal tools" OR consultant',
+          sort: 'activity',
+          sourceWeight: 0.95,
+        },
+      },
     ],
   },
   {
     id: 'devops-consultancy',
     name: 'DevOps Consultancy',
     audience: 'Teams selling DevOps, platform, cloud, and SRE implementation work',
-    description: 'Targets Kubernetes, CI/CD, platform reliability, AWS migration, and DevOps rescue opportunities.',
+    description: 'Targets Kubernetes, CI/CD, platform reliability, AWS migration, and DevOps rescue opportunities across cleaner engineering communities.',
     recommendedKeywords: [
       'DevOps consultant',
       'Kubernetes help',
@@ -250,12 +356,11 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
     ],
     sources: [
       {
-        name: 'Reddit DevOps Rescue',
-        type: 'REDDIT_SEARCH',
+        name: 'GitHub DevOps Rescue',
+        type: 'GITHUB_SEARCH',
         config: {
-          query: '"need DevOps consultant" OR "Kubernetes help" OR "CI/CD pipeline" consultant',
-          sort: 'new',
-          excludeTerms: ['hiring full-time'],
+          query: '"need DevOps consultant" OR "Kubernetes help" OR "CI/CD pipeline" OR "platform engineering"',
+          type: 'discussions',
           sourceWeight: 1.15,
         },
       },
@@ -283,7 +388,7 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
         type: 'WEB_SEARCH',
         config: {
           query: '"looking for kubernetes consultant" OR "need AWS migration help" OR "recommend DevOps agency"',
-          domains: ['reddit.com', 'news.ycombinator.com'],
+          domains: ['news.ycombinator.com', 'stackoverflow.com', 'github.com'],
           excludeTerms: ['tutorial', 'course'],
           sourceWeight: 0.9,
         },
@@ -294,7 +399,7 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
     id: 'software-implementation',
     name: 'Software Implementation Partner',
     audience: 'Teams implementing CRMs, internal tools, integrations, and business systems',
-    description: 'Finds requests for integrations, process cleanup, tooling migrations, and implementation partners.',
+    description: 'Finds requests for integrations, process cleanup, tooling migrations, and implementation partners without leaning on Reddit.',
     recommendedKeywords: [
       'implementation partner',
       'integration consultant',
@@ -310,11 +415,11 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
     ],
     sources: [
       {
-        name: 'Reddit Systems Implementation',
-        type: 'REDDIT_SEARCH',
+        name: 'GitHub Systems Implementation',
+        type: 'GITHUB_SEARCH',
         config: {
           query: '"implement" CRM OR "integration help" OR "looking for implementation partner"',
-          sort: 'new',
+          type: 'discussions',
           sourceWeight: 1.1,
         },
       },
@@ -323,7 +428,7 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
         type: 'WEB_SEARCH',
         config: {
           query: '"need implementation partner" OR "recommend integration consultant" OR "system migration help"',
-          domains: ['reddit.com', 'news.ycombinator.com', 'stackoverflow.com'],
+          domains: ['news.ycombinator.com', 'stackoverflow.com', 'github.com'],
           excludeTerms: ['template', 'job opening'],
           sourceWeight: 0.9,
         },
@@ -343,7 +448,7 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
     id: 'freelance-b2b',
     name: 'Freelance B2B Builder',
     audience: 'Freelancers hunting technical pain and short consulting engagements',
-    description: 'Focuses on recommendation requests, urgent pain, and technical implementation work that can convert fast.',
+    description: 'Focuses on recommendation requests, urgent pain, and technical implementation work that can convert fast across engineering-friendly communities.',
     recommendedKeywords: [
       'need freelancer',
       'recommend developer',
@@ -359,12 +464,11 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
     ],
     sources: [
       {
-        name: 'Reddit Freelancer Leads',
-        type: 'REDDIT_SEARCH',
+        name: 'Ask HN Freelancer Leads',
+        type: 'HN_SEARCH',
         config: {
           query: '"recommend developer" OR "need freelancer" OR "looking for consultant"',
-          sort: 'new',
-          excludeTerms: ['full-time', 'internship'],
+          tags: 'story,comment',
           sourceWeight: 1.15,
         },
       },
@@ -392,16 +496,16 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
     id: 'four-source-buyer-intent',
     name: 'Full buyer-intent coverage',
     audience: 'Teams that want broader intent coverage across multiple communities',
-    description: 'A broader pack for testing multi-source installs across Reddit, HN, web, and GitHub.',
+    description: 'A broader pack for testing multi-source installs across HN, web, Stack Overflow, and GitHub.',
     recommendedKeywords: ['consultant', 'agency', 'implementation partner', 'need help'],
     recommendedNegativeKeywords: ['course', 'job board', 'bootcamp'],
     sources: [
       {
-        name: 'Reddit buyer intent',
-        type: 'REDDIT_SEARCH',
+        name: 'Ask HN buyer intent',
+        type: 'HN_SEARCH',
         config: {
           query: '"looking for consultant" OR "need agency" OR "implementation partner"',
-          sort: 'new',
+          tags: 'story,comment',
           sourceWeight: 1.1,
         },
       },
@@ -419,7 +523,7 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
         type: 'WEB_SEARCH',
         config: {
           query: '"looking for consultant" OR "need agency" OR "implementation partner"',
-          domains: ['reddit.com', 'news.ycombinator.com', 'stackoverflow.com'],
+          domains: ['news.ycombinator.com', 'stackoverflow.com', 'github.com'],
           excludeTerms: ['course', 'job board'],
           sourceWeight: 0.9,
         },
@@ -430,6 +534,51 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
         config: {
           query: '"need help" OR "looking for support" OR "migration"',
           type: 'discussions',
+          sourceWeight: 0.9,
+        },
+      },
+    ],
+  },
+  {
+    id: 'community-intent-network',
+    name: 'Community intent network',
+    audience: 'Teams that want broad, cleaner community coverage without depending on Reddit',
+    description: 'A multi-source pack across GitHub, Stack Overflow, Hacker News, and RSS feeds for stronger early demand coverage.',
+    recommendedKeywords: ['consultant', 'need help', 'migration', 'recommend'],
+    recommendedNegativeKeywords: ['course', 'job board', 'tutorial'],
+    sources: [
+      {
+        name: 'GitHub discussion intent',
+        type: 'GITHUB_SEARCH',
+        config: {
+          query: '"need help" OR "looking for support" OR migration',
+          type: 'discussions',
+          sourceWeight: 1.0,
+        },
+      },
+      {
+        name: 'Stack Overflow operational pain',
+        type: 'STACKOVERFLOW_SEARCH',
+        config: {
+          query: '"need help" OR incident OR migration OR consultant',
+          sort: 'activity',
+          sourceWeight: 0.95,
+        },
+      },
+      {
+        name: 'Ask HN founder asks',
+        type: 'HN_SEARCH',
+        config: {
+          query: '"consultant" OR "recommend agency" OR "need help"',
+          tags: 'story,comment',
+          sourceWeight: 1.0,
+        },
+      },
+      {
+        name: 'Ask HN RSS stream',
+        type: 'RSS',
+        config: {
+          url: 'https://hnrss.org/ask',
           sourceWeight: 0.9,
         },
       },

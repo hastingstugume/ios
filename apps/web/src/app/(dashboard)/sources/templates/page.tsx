@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { keywordsApi, organizationsApi, sourcesApi, type SourceTemplateSuggestion } from '@/lib/api';
@@ -22,6 +23,7 @@ export default function SourceTemplatesPage() {
   const { currentOrgId, currentOrg } = useAuth();
   const router = useRouter();
   const qc = useQueryClient();
+  const [activeFilter, setActiveFilter] = useState<'all' | 'single' | 'double' | 'multi' | 'github' | 'hn' | 'stackoverflow' | 'rss'>('all');
 
   const { data: keywords = [] } = useQuery({
     queryKey: ['keywords', currentOrgId],
@@ -68,6 +70,20 @@ export default function SourceTemplatesPage() {
     ...suggestedTemplates.map((preset) => ({ ...preset, templateKind: 'suggested' as const })),
     ...curatedTemplates.map((preset) => ({ ...preset, templateKind: 'starter' as const })),
   ];
+
+  const visibleTemplates = useMemo(() => {
+    return allTemplates.filter((preset) => {
+      if (activeFilter === 'all') return true;
+      if (activeFilter === 'single') return preset.sources.length === 1;
+      if (activeFilter === 'double') return preset.sources.length === 2;
+      if (activeFilter === 'multi') return preset.sources.length >= 3;
+      if (activeFilter === 'github') return preset.sources.some((source) => source.type === 'GITHUB_SEARCH');
+      if (activeFilter === 'hn') return preset.sources.some((source) => source.type === 'HN_SEARCH');
+      if (activeFilter === 'stackoverflow') return preset.sources.some((source) => source.type === 'STACKOVERFLOW_SEARCH');
+      if (activeFilter === 'rss') return preset.sources.some((source) => source.type === 'RSS');
+      return true;
+    });
+  }, [activeFilter, allTemplates]);
 
   const suggestionsLabel = suggestionsQuery.data?.source === 'generated'
     ? 'AI-generated for this workspace'
@@ -223,8 +239,33 @@ export default function SourceTemplatesPage() {
               <p className="mt-1 text-sm text-muted-foreground">Suggested, saved, and starter templates in one place.</p>
             </div>
           </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              ['all', 'All'],
+              ['single', '1 source'],
+              ['double', '2 sources'],
+              ['multi', '3+ sources'],
+              ['github', 'GitHub'],
+              ['hn', 'HN'],
+              ['stackoverflow', 'Stack Overflow'],
+              ['rss', 'RSS'],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setActiveFilter(value as typeof activeFilter)}
+                className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                  activeFilter === value
+                    ? 'border-primary/20 bg-primary/10 text-primary'
+                    : 'border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="grid gap-4 lg:grid-cols-2">
-            {allTemplates.map((preset) => (
+            {visibleTemplates.map((preset) => (
               <div key={preset.id} className="section-card p-5">
                 {installPreset.variables?.id === preset.id && installPreset.isPending ? (
                   <div className="mb-3 rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-xs text-primary">
@@ -315,6 +356,11 @@ export default function SourceTemplatesPage() {
               </div>
             ))}
           </div>
+          {!visibleTemplates.length ? (
+            <div className="section-card p-8 text-center text-sm text-muted-foreground">
+              No templates match this filter.
+            </div>
+          ) : null}
         </section>
       )}
     </div>
