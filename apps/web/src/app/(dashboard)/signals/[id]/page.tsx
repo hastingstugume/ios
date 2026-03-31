@@ -75,6 +75,14 @@ export default function SignalDetailPage() {
   const stage = STAGE_META[signal.stage] || STAGE_META.TO_REVIEW;
   const sourceType = SOURCE_TYPE_META[signal.source?.type || ''];
   const priorityScore = signal.priorityScore ?? signal.confidenceScore ?? 0;
+  const sourceLabel = signal.source?.name || signal.sourceLabel || signal.sourceProfile?.platformLabel || 'Unknown source';
+  const supportBadgeClass = signal.sourceProfile?.supportStatus === 'production_ready'
+    ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+    : signal.sourceProfile?.supportStatus === 'limited'
+      ? 'border-amber-400/20 bg-amber-400/10 text-amber-300'
+      : signal.sourceProfile?.supportStatus === 'legacy'
+        ? 'border-destructive/20 bg-destructive/10 text-destructive'
+        : 'border-border bg-secondary text-muted-foreground';
 
   const actionBtn = (status: 'SAVED' | 'BOOKMARKED' | 'IGNORED', icon: any, label: string, activeClass: string) => {
     const Icon = icon;
@@ -118,14 +126,6 @@ export default function SignalDetailPage() {
             <span className={cn('inline-flex items-center text-xs font-semibold uppercase tracking-wide px-2 py-1 rounded border', stage.bg, stage.color)}>
               {stage.label}
             </span>
-            {signal.source && (
-              <span className="text-xs text-muted-foreground">{sourceType?.icon} {signal.source.name}</span>
-            )}
-            {signal.sourceProfile ? (
-              <span className="rounded-full border border-border px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                {signal.sourceProfile.badgeLabel}
-              </span>
-            ) : null}
           </div>
           <div className={cn('flex flex-col items-center px-3 py-2 rounded-xl border shrink-0', getConfidenceBg(signal.confidenceScore))}>
             <span className={cn('text-2xl font-bold tabular-nums', getConfidenceColor(signal.confidenceScore))}>
@@ -139,7 +139,21 @@ export default function SignalDetailPage() {
           {signal.originalTitle || 'Untitled signal'}
         </h1>
 
-        <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <span>{sourceType?.icon}</span>
+            <span>{sourceLabel}</span>
+          </span>
+          {signal.sourceProfile ? (
+            <span className="rounded-full border border-border px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              {signal.sourceProfile.badgeLabel}
+            </span>
+          ) : null}
+          {signal.sourceProfile ? (
+            <span className={cn('rounded-full border px-2 py-1 text-[10px] uppercase tracking-wide', supportBadgeClass)}>
+              {signal.sourceProfile.supportStatus.replaceAll('_', ' ')}
+            </span>
+          ) : null}
           {signal.authorHandle && <span>@{signal.authorHandle}</span>}
           <span className="inline-flex items-center gap-1">
             <Clock3 className="w-3.5 h-3.5" />
@@ -173,7 +187,7 @@ export default function SignalDetailPage() {
               <Sparkles className="h-3.5 w-3.5" />
               Priority {priorityScore}
             </span>
-            {(signal.rankingReasons || []).map((reason) => (
+            {(signal.rankingReasons || []).slice(0, 2).map((reason) => (
               <span key={reason} className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-muted-foreground">
                 {reason}
               </span>
@@ -181,6 +195,35 @@ export default function SignalDetailPage() {
           </div>
         </div>
       </div>
+
+      {(signal.painPoint || signal.urgency || signal.sentiment || signal.conversationType || signal.sourceProfile) ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {signal.urgency ? (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Urgency</p>
+              <p className="mt-2 text-sm font-medium text-foreground">{signal.urgency.toLowerCase()} urgency</p>
+            </div>
+          ) : null}
+          {signal.conversationType ? (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Conversation type</p>
+              <p className="mt-2 text-sm font-medium text-foreground">{signal.conversationType.replaceAll('_', ' ').toLowerCase()}</p>
+            </div>
+          ) : null}
+          {signal.sentiment ? (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Tone</p>
+              <p className="mt-2 text-sm font-medium text-foreground">{signal.sentiment.toLowerCase()}</p>
+            </div>
+          ) : null}
+          {signal.sourceProfile ? (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Source trust</p>
+              <p className="mt-2 text-sm font-medium text-foreground">{signal.sourceProfile.supportStatus.replaceAll('_', ' ')}</p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="bg-card border border-border rounded-xl p-4">
         <div className="flex items-center gap-2 mb-4">
@@ -273,30 +316,6 @@ export default function SignalDetailPage() {
                   <p className="text-foreground/80 leading-relaxed">{signal.painPoint}</p>
                 </div>
               ) : null}
-              <div className="flex flex-wrap gap-2">
-                {signal.urgency ? (
-                  <span className={cn(
-                    'rounded-lg border px-2.5 py-1 text-xs font-medium',
-                    signal.urgency === 'CRITICAL' || signal.urgency === 'HIGH'
-                      ? 'border-rose-400/20 bg-rose-400/10 text-rose-300'
-                      : signal.urgency === 'MEDIUM'
-                        ? 'border-amber-400/20 bg-amber-400/10 text-amber-300'
-                        : 'border-border bg-secondary text-muted-foreground',
-                  )}>
-                    {signal.urgency} urgency
-                  </span>
-                ) : null}
-                {signal.sentiment ? (
-                  <span className="rounded-lg border border-border bg-secondary px-2.5 py-1 text-xs text-muted-foreground">
-                    {signal.sentiment.toLowerCase()} tone
-                  </span>
-                ) : null}
-                {signal.conversationType ? (
-                  <span className="rounded-lg border border-border bg-secondary px-2.5 py-1 text-xs text-muted-foreground">
-                    {signal.conversationType.replaceAll('_', ' ').toLowerCase()}
-                  </span>
-                ) : null}
-              </div>
             </div>
           </div>
 
