@@ -318,6 +318,72 @@ export class IngestionService {
     }
   }
 
+  private async fetchSamGov(config: {
+    query: string;
+    naicsCode?: string;
+    agency?: string;
+    noticeTypes?: string[];
+    postedWithinDays?: number;
+    limit?: number;
+  }) {
+    const { query, naicsCode, agency, noticeTypes = [], postedWithinDays = 30, limit = 20 } = config;
+    const apiKey = this.config.get('SAM_GOV_API_KEY', '');
+    if (!apiKey) {
+      throw new Error('SAM.gov is selected, but SAM_GOV_API_KEY is not configured');
+    }
+
+    const toIsoDate = (date: Date) => date.toISOString().slice(0, 10);
+    const postedTo = new Date();
+    const postedFrom = new Date(Date.now() - postedWithinDays * 24 * 60 * 60 * 1000);
+
+    try {
+      const qs = new URLSearchParams({
+        api_key: apiKey,
+        keyword: query,
+        postedFrom: toIsoDate(postedFrom),
+        postedTo: toIsoDate(postedTo),
+        limit: String(Math.min(limit, 50)),
+      });
+
+      if (naicsCode) qs.set('ncode', naicsCode);
+      if (agency) qs.set('organizationName', agency);
+      if (noticeTypes.length) qs.set('ptype', noticeTypes.join(','));
+
+      const response = await fetch(`https://api.sam.gov/prod/opportunities/v2/search?${qs.toString()}`, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'InternetOpportunityScanner/0.1',
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`SAM.gov API returned ${response.status}`);
+      }
+
+      const data = await response.json() as any;
+      const opportunities = data?.opportunitiesData || data?.opportunities || [];
+
+      return opportunities.slice(0, limit).map((item: any, index: number) => ({
+        externalId: `sam-${item.noticeId || item.solicitationNumber || item.id || index}`,
+        title: this.stripHtml(item.title || item.opportunityTitle || query),
+        text: this.stripHtml(
+          [
+            item.description,
+            item.fullParentPathName,
+            item.organizationName,
+            item.departmentName,
+            item.naicsDescription,
+            item.placeOfPerformance,
+          ].filter(Boolean).join(' · '),
+        ).slice(0, 1500),
+        url: item.uiLink || item.link || 'https://sam.gov/search/?index=opp',
+        author: item.organizationName || item.departmentName || null,
+        publishedAt: item.postedDate ? new Date(item.postedDate) : new Date(),
+      })).filter((item: IngestionItem) => item.title && item.url);
+    } catch (err: any) {
+      throw new Error(`SAM.gov fetch failed: ${err.message}`);
+    }
+  }
+
   private async processItems(
     sourceId: string,
     orgId: string,
@@ -564,6 +630,9 @@ export class IngestionService {
     }
     if (sourceType === SourceType.STACKOVERFLOW_SEARCH) {
       return this.fetchStackOverflowSearch(sourceConfig as any);
+    }
+    if (sourceType === SourceType.SAM_GOV) {
+      return this.fetchSamGov(sourceConfig as any);
     }
     if (sourceType === SourceType.WEB_SEARCH) {
       return this.fetchWebSearch(sourceConfig as any);
@@ -832,6 +901,7 @@ export class IngestionService {
       HN_SEARCH: 1.05,
       GITHUB_SEARCH: 0.95,
       STACKOVERFLOW_SEARCH: 0.9,
+      SAM_GOV: 1.15,
       WEB_SEARCH: 0.85,
       MANUAL: 1.0,
       TWITTER: 0.9,

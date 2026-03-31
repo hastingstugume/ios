@@ -16,6 +16,26 @@ export interface SourcePresetPack {
 
 export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
   {
+    id: 'single-sam-gov-procurement',
+    name: 'Single-source procurement watch',
+    audience: 'Agencies and consultants looking for direct public-sector buying intent',
+    description: 'A focused SAM.gov source for current contract and procurement demand with real timelines.',
+    recommendedKeywords: ['implementation support', 'migration services', 'technical consulting'],
+    recommendedNegativeKeywords: ['janitorial', 'construction'],
+    sources: [
+      {
+        name: 'SAM.gov consulting demand',
+        type: 'SAM_GOV',
+        config: {
+          query: '"implementation support" OR "technical consulting" OR "migration services"',
+          postedWithinDays: 30,
+          noticeTypes: ['solicitation'],
+          sourceWeight: 1.1,
+        },
+      },
+    ],
+  },
+  {
     id: 'single-freelancer-radar',
     name: 'Single-source freelancer radar',
     audience: 'Freelancers who want one fast source to validate demand',

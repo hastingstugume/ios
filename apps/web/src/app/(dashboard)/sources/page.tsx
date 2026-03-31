@@ -62,6 +62,18 @@ const SOURCE_TYPES = [
     ],
   },
   {
+    value: 'SAM_GOV',
+    label: 'SAM.gov Opportunities',
+    recommended: true,
+    fields: [
+      { key: 'query', label: 'Keyword query', placeholder: 'cybersecurity support, CRM implementation, data migration' },
+      { key: 'agency', label: 'Optional agency', placeholder: 'Department of Veterans Affairs' },
+      { key: 'naicsCode', label: 'Optional NAICS code', placeholder: '541512' },
+      { key: 'noticeTypes', label: 'Notice types', placeholder: 'presolicitation, solicitation', kind: 'select', options: ['solicitation', 'presolicitation', 'sources_sought', 'combined_synopsis_solicitation'] },
+      { key: 'postedWithinDays', label: 'Posted within', placeholder: '30', kind: 'select', options: ['7', '14', '30', '60', '90'] },
+    ],
+  },
+  {
     value: 'WEB_SEARCH',
     label: 'Web Search',
     recommended: false,
@@ -85,6 +97,10 @@ const EMPTY_FORM = {
   contentType: 'discussions',
   stackTags: '',
   stackSort: 'activity',
+  naicsCode: '',
+  agency: '',
+  noticeTypes: 'solicitation',
+  postedWithinDays: '30',
   domains: '',
   excludeTerms: '',
   sourceWeight: '1.0',
@@ -131,6 +147,12 @@ const SOURCE_TYPE_SUPPORT: Record<string, {
     badgeLabel: 'Official API',
     supportStatus: 'production_ready',
     complianceNotes: 'Good for urgent technical pain and recurring implementation issues.',
+  },
+  SAM_GOV: {
+    providerLabel: 'SAM.gov Opportunities API',
+    badgeLabel: 'Public API',
+    supportStatus: 'production_ready',
+    complianceNotes: 'Strong for active public-sector demand, procurement notices, and contract opportunities with real deadlines.',
   },
   WEB_SEARCH: {
     providerLabel: 'Configured Search Provider',
@@ -333,6 +355,10 @@ export default function SourcesPage() {
       contentType: template.contentType ?? current.contentType,
       stackTags: template.stackTags ? template.stackTags.join(', ') : current.stackTags,
       stackSort: template.stackSort ?? current.stackSort,
+      naicsCode: current.naicsCode,
+      agency: current.agency,
+      noticeTypes: current.noticeTypes,
+      postedWithinDays: current.postedWithinDays,
       domains: template.domains ? template.domains.join(', ') : current.domains,
     }));
   };
@@ -844,8 +870,10 @@ export default function SourcesPage() {
                   ? `HN query: ${src.config?.query || 'n/a'}`
                   : src.type === 'GITHUB_SEARCH'
                     ? `GitHub ${src.config?.type || 'discussions'}: ${src.config?.query || 'n/a'}${src.config?.repo ? ` in ${src.config.repo}` : ''}`
-                    : src.type === 'STACKOVERFLOW_SEARCH'
+                  : src.type === 'STACKOVERFLOW_SEARCH'
                       ? `Stack Overflow: ${src.config?.query || 'n/a'}${src.config?.tags?.length ? ` tagged ${src.config.tags.join(', ')}` : ''}`
+                  : src.type === 'SAM_GOV'
+                      ? `SAM.gov: ${src.config?.query || 'n/a'}${src.config?.agency ? ` · ${src.config.agency}` : ''}${src.config?.naicsCode ? ` · NAICS ${src.config.naicsCode}` : ''}`
                   : src.type === 'WEB_SEARCH'
                     ? `Web query: ${src.config?.query || 'n/a'}${src.config?.domains?.length ? ` on ${src.config.domains.join(', ')}` : ''}`
                 : 'Manual source';
@@ -888,6 +916,10 @@ export default function SourcesPage() {
                                 contentType: src.type === 'GITHUB_SEARCH' ? src.config?.type || 'discussions' : 'discussions',
                                 stackTags: src.type === 'STACKOVERFLOW_SEARCH' ? (src.config?.tags || []).join(', ') : '',
                                 stackSort: src.type === 'STACKOVERFLOW_SEARCH' ? src.config?.sort || 'activity' : 'activity',
+                                naicsCode: src.type === 'SAM_GOV' ? src.config?.naicsCode || '' : '',
+                                agency: src.type === 'SAM_GOV' ? src.config?.agency || '' : '',
+                                noticeTypes: src.type === 'SAM_GOV' ? (src.config?.noticeTypes?.[0] || 'solicitation') : 'solicitation',
+                                postedWithinDays: src.type === 'SAM_GOV' ? String(src.config?.postedWithinDays || '30') : '30',
                                 domains: src.type === 'WEB_SEARCH' ? (src.config?.domains || []).join(', ') : '',
                                 excludeTerms: (src.config?.excludeTerms || []).join(', '),
                                 sourceWeight: String(src.config?.sourceWeight ?? 1.0),
@@ -1010,6 +1042,8 @@ function buildSourceConfig(form: typeof EMPTY_FORM) {
       ? rawValue.split(',').map((domain) => domain.trim()).filter(Boolean)
       : field.key === 'stackTags'
         ? rawValue.split(',').map((tag) => tag.trim()).filter(Boolean)
+        : field.key === 'noticeTypes'
+          ? [rawValue]
         : rawValue;
   });
 
@@ -1030,6 +1064,9 @@ function buildSourceConfig(form: typeof EMPTY_FORM) {
   if (config.stackSort) {
     config.sort = config.stackSort;
     delete config.stackSort;
+  }
+  if (config.postedWithinDays) {
+    config.postedWithinDays = Number(config.postedWithinDays);
   }
 
   return config;

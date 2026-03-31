@@ -70,6 +70,17 @@ describe('IngestionService', () => {
     ).rejects.toThrow('SerpApi is selected for web search, but SERPAPI_API_KEY is not configured');
   });
 
+  it('fails clearly when SAM.gov is selected without credentials', async () => {
+    configGet.mockImplementation((key: string, defaultValue?: any) => {
+      if (key === 'SAM_GOV_API_KEY') return '';
+      return defaultValue ?? '';
+    });
+
+    await expect(
+      (service as any).fetchSamGov({ query: 'cybersecurity support' }),
+    ).rejects.toThrow('SAM.gov is selected, but SAM_GOV_API_KEY is not configured');
+  });
+
   it('filters weak low-signal web search snippets without clear buying intent', () => {
     const excluded = (service as any).shouldExcludeAsLowSignal(
       'WEB_SEARCH',

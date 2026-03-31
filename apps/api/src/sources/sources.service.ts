@@ -396,6 +396,26 @@ export class SourcesService {
         throw new BadRequestException('Stack Overflow tags must be an array of strings');
       }
     }
+    if (type === SourceType.SAM_GOV) {
+      if (!config?.query || typeof config.query !== 'string') {
+        throw new BadRequestException('SAM.gov sources require a keyword query');
+      }
+      if (config.noticeTypes !== undefined && (!Array.isArray(config.noticeTypes) || config.noticeTypes.some((type: unknown) => typeof type !== 'string'))) {
+        throw new BadRequestException('SAM.gov notice types must be an array of strings');
+      }
+      if (config.postedWithinDays !== undefined) {
+        const postedWithinDays = Number(config.postedWithinDays);
+        if (!Number.isFinite(postedWithinDays) || postedWithinDays < 1 || postedWithinDays > 365) {
+          throw new BadRequestException('SAM.gov posted-within window must be between 1 and 365 days');
+        }
+      }
+      if (config.naicsCode && typeof config.naicsCode !== 'string') {
+        throw new BadRequestException('SAM.gov NAICS code must be a string');
+      }
+      if (config.agency && typeof config.agency !== 'string') {
+        throw new BadRequestException('SAM.gov agency must be a string');
+      }
+    }
     if (type === SourceType.WEB_SEARCH) {
       if (!config?.query || typeof config.query !== 'string') {
         throw new BadRequestException('Web search sources require a search query');

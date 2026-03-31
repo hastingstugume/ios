@@ -62,6 +62,7 @@ export const SOURCE_TYPE_META: Record<string, { label: string; icon: string }> =
   HN_SEARCH:     { label: 'HN Search',      icon: '🟧' },
   GITHUB_SEARCH: { label: 'GitHub Search',  icon: '🐙' },
   STACKOVERFLOW_SEARCH: { label: 'Stack Overflow', icon: '🧱' },
+  SAM_GOV:       { label: 'SAM.gov',        icon: '🏛️' },
   WEB_SEARCH:    { label: 'Web Search',     icon: '🌐' },
   MANUAL:        { label: 'Manual',         icon: '📝' },
   TWITTER:       { label: 'X/Twitter',      icon: '𝕏' },

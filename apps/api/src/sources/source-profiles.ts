@@ -72,6 +72,14 @@ const PROFILES: Record<SourceType, SourceProfile> = {
     badgeLabel: 'Official API',
     complianceNotes: 'Uses the Stack Exchange public API with attribution requirements.',
   },
+  SAM_GOV: {
+    platformLabel: 'SAM.gov',
+    providerLabel: 'SAM.gov Opportunities API',
+    acquisitionMode: 'official_api',
+    supportStatus: 'production_ready',
+    badgeLabel: 'Public API',
+    complianceNotes: 'Uses the public procurement opportunities API for contract and bid discovery.',
+  },
   WEB_SEARCH: {
     platformLabel: 'Web Search',
     providerLabel: 'Configured Search Provider',
