@@ -317,6 +317,63 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
     ],
   },
   {
+    id: 'two-source-ecommerce-operators',
+    name: 'Ecommerce operator demand',
+    audience: 'Consultants and agencies helping ecommerce brands with implementation, migration, and rescue work',
+    description: 'Tracks ecommerce operator communities and founder streams for platform pain, agency recommendations, and implementation requests.',
+    recommendedKeywords: ['shopify consultant', 'migration help', 'recommend agency'],
+    recommendedNegativeKeywords: ['theme', 'job board'],
+    sources: [
+      {
+        name: 'Ecommerce operator search',
+        type: 'WEB_SEARCH',
+        config: {
+          query: '"shopify consultant" OR "migration help" OR "recommend agency"',
+          domains: ['community.shopify.com', 'support.bigcommerce.com', 'news.ycombinator.com'],
+          excludeTerms: ['theme', 'job board'],
+          sourceWeight: 1.0,
+        },
+      },
+      {
+        name: 'Ecommerce founder RSS',
+        type: 'RSS',
+        config: {
+          url: 'https://hnrss.org/newest?q=shopify',
+          sourceWeight: 0.9,
+        },
+      },
+    ],
+  },
+  {
+    id: 'two-source-revops-crm',
+    name: 'RevOps and CRM implementation',
+    audience: 'Teams selling CRM, RevOps, and integration implementation services',
+    description: 'Combines business-system community search with technical integration pain for real implementation demand.',
+    recommendedKeywords: ['hubspot consultant', 'salesforce migration', 'integration help'],
+    recommendedNegativeKeywords: ['template', 'course'],
+    sources: [
+      {
+        name: 'CRM community demand',
+        type: 'WEB_SEARCH',
+        config: {
+          query: '"hubspot consultant" OR "salesforce migration" OR "integration help"',
+          domains: ['community.hubspot.com', 'trailhead.salesforce.com', 'news.ycombinator.com'],
+          excludeTerms: ['template', 'course'],
+          sourceWeight: 1.0,
+        },
+      },
+      {
+        name: 'Integration implementation pain',
+        type: 'STACKOVERFLOW_SEARCH',
+        config: {
+          query: '"integration help" OR "CRM migration" OR "webhook" OR "sync issue"',
+          sort: 'activity',
+          sourceWeight: 0.9,
+        },
+      },
+    ],
+  },
+  {
     id: 'two-source-urgent-support',
     name: 'Urgent support requests',
     audience: 'Freelancers and consultants solving urgent blockers quickly',

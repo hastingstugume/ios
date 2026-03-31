@@ -19,6 +19,13 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
   const stage = STAGE_META[signal.stage] || STAGE_META.TO_REVIEW;
   const sourceType = SOURCE_TYPE_META[signal.source?.type || ''];
   const priorityScore = signal.priorityScore ?? signal.confidenceScore ?? 0;
+  const supportBadgeClass = signal.sourceProfile?.supportStatus === 'production_ready'
+    ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+    : signal.sourceProfile?.supportStatus === 'limited'
+      ? 'border-amber-400/20 bg-amber-400/10 text-amber-300'
+      : signal.sourceProfile?.supportStatus === 'legacy'
+        ? 'border-destructive/20 bg-destructive/10 text-destructive'
+        : 'border-border bg-secondary text-muted-foreground';
 
   const updateStatus = useMutation({
     mutationFn: (status: string) => signalsApi.updateStatus(orgId, signal.id, status),
@@ -80,6 +87,11 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
             {signal.sourceProfile ? (
               <span className="rounded border border-border bg-secondary px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
                 {signal.sourceProfile.badgeLabel}
+              </span>
+            ) : null}
+            {signal.sourceProfile ? (
+              <span className={cn('rounded border px-2 py-1 text-[10px] uppercase tracking-wide', supportBadgeClass)}>
+                {signal.sourceProfile.supportStatus.replaceAll('_', ' ')}
               </span>
             ) : null}
             <span className="text-[11px] text-muted-foreground sm:ml-auto flex items-center gap-1">
