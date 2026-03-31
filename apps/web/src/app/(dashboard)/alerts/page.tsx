@@ -91,6 +91,8 @@ export default function AlertsPage() {
   const resetForm = () => {
     setAdding(false);
     setEditingRule(null);
+    create.reset();
+    updateRule.reset();
     setForm({
       name: '',
       minConfidence: 75,
@@ -102,6 +104,11 @@ export default function AlertsPage() {
       autoAssignUserId: '',
       autoNextStep: '',
     });
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteCandidate(null);
+    remove.reset();
   };
 
   const create = useMutation({
@@ -231,6 +238,8 @@ export default function AlertsPage() {
                 key={starter.name}
                 type="button"
                 onClick={() => {
+                  create.reset();
+                  updateRule.reset();
                   setEditingRule(null);
                   setForm((current) => ({
                     ...current,
@@ -392,7 +401,7 @@ export default function AlertsPage() {
         open={!!deleteCandidate}
         onClose={() => {
           if (remove.isPending) return;
-          setDeleteCandidate(null);
+          closeDeleteModal();
         }}
         title="Delete alert rule?"
         description={
@@ -410,7 +419,7 @@ export default function AlertsPage() {
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => setDeleteCandidate(null)}
+              onClick={closeDeleteModal}
               disabled={remove.isPending}
               className="rounded-xl border border-border px-4 py-2.5 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-50"
             >
@@ -468,6 +477,8 @@ export default function AlertsPage() {
                       <div className="flex items-center gap-2 self-start">
                         <button
                           onClick={() => {
+                            create.reset();
+                            updateRule.reset();
                             setAdding(false);
                             setEditingRule(rule);
                             setForm({
@@ -490,7 +501,10 @@ export default function AlertsPage() {
                           className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
                           {rule.isActive ? <ToggleRight className="w-5 h-5 text-green-400" /> : <ToggleLeft className="w-5 h-5" />}
                         </button>
-                        <button onClick={() => setDeleteCandidate(rule)}
+                        <button onClick={() => {
+                          remove.reset();
+                          setDeleteCandidate(rule);
+                        }}
                           className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive">
                           <Trash2 className="w-4 h-4" />
                         </button>

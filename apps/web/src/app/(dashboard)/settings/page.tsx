@@ -291,6 +291,33 @@ export default function SettingsPage() {
   ];
   const completedProfileItems = profileChecklist.filter((item) => item.complete).length;
 
+  const closeInviteModal = () => {
+    setShowInviteModal(false);
+    setInvite({ email: '', role: 'ANALYST' });
+    inviteMutation.reset();
+  };
+
+  const closeEditMemberModal = () => {
+    setEditingMember(null);
+    updateMemberMutation.reset();
+  };
+
+  const cancelMfaSetup = () => {
+    setMfaSetup(null);
+    setMfaEnableCode('');
+    setMfaQrCode(null);
+    setMfaBackupCodes(null);
+    setupMfaMutation.reset();
+    enableMfaMutation.reset();
+  };
+
+  const closeDisableMfaModal = () => {
+    if (disableMfaMutation.isPending) return;
+    setShowDisableMfaWarning(false);
+    setMfaDisableCode('');
+    disableMfaMutation.reset();
+  };
+
   return (
     <div className="page-shell space-y-6 animate-fade-in">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -572,7 +599,7 @@ export default function SettingsPage() {
 
       <Modal
         open={showInviteModal}
-        onClose={() => { setShowInviteModal(false); setInvite({ email: '', role: 'ANALYST' }); }}
+        onClose={closeInviteModal}
         title="Add teammate"
         description="Send a workspace invite by email without leaving the member list."
       >
@@ -600,7 +627,7 @@ export default function SettingsPage() {
               {inviteMutation.isPending ? 'Sending…' : 'Send invite'}
             </button>
             <button
-              onClick={() => { setShowInviteModal(false); setInvite({ email: '', role: 'ANALYST' }); }}
+              onClick={closeInviteModal}
               className="rounded-xl px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               Cancel
@@ -611,7 +638,7 @@ export default function SettingsPage() {
 
       <Modal
         open={!!editingMember}
-        onClose={() => setEditingMember(null)}
+        onClose={closeEditMemberModal}
         title="Edit member role"
         description="Adjust workspace permissions without removing the member from context."
       >
@@ -637,7 +664,7 @@ export default function SettingsPage() {
               {updateMemberMutation.isPending ? 'Saving…' : 'Save role'}
             </button>
             <button
-              onClick={() => setEditingMember(null)}
+              onClick={closeEditMemberModal}
               className="rounded-xl px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               Cancel
@@ -782,12 +809,12 @@ export default function SettingsPage() {
                       }
 
                       if (user?.mfaEnabled) {
+                        disableMfaMutation.reset();
                         setShowDisableMfaWarning(true);
                         return;
                       }
 
-                      setMfaSetup(null);
-                      setMfaEnableCode('');
+                      cancelMfaSetup();
                     }}
                     aria-label="Toggle multi-factor authentication"
                   />
@@ -868,10 +895,7 @@ export default function SettingsPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        setMfaSetup(null);
-                        setMfaEnableCode('');
-                      }}
+                      onClick={cancelMfaSetup}
                       className="rounded-xl border border-border px-4 py-2.5 text-sm text-foreground transition-colors hover:bg-accent"
                     >
                       Cancel
@@ -925,11 +949,7 @@ export default function SettingsPage() {
 
       <Modal
         open={showDisableMfaWarning}
-        onClose={() => {
-          if (disableMfaMutation.isPending) return;
-          setShowDisableMfaWarning(false);
-          setMfaDisableCode('');
-        }}
+        onClose={closeDisableMfaModal}
         title="Disable multi-factor authentication?"
         size="compact"
       >
@@ -957,10 +977,7 @@ export default function SettingsPage() {
           <div className="flex justify-end gap-3">
             <button
               type="button"
-              onClick={() => {
-                setShowDisableMfaWarning(false);
-                setMfaDisableCode('');
-              }}
+              onClick={closeDisableMfaModal}
               className="rounded-xl border border-border px-4 py-2.5 text-sm text-foreground transition-colors hover:bg-accent"
             >
               Cancel

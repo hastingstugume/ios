@@ -15,6 +15,15 @@ export default function KeywordsPage() {
   const [desc, setDesc] = useState('');
   const [search, setSearch] = useState('');
 
+  const resetKeywordModal = () => {
+    setAdding(false);
+    setEditingId(null);
+    setPhrase('');
+    setDesc('');
+    create.reset();
+    update.reset();
+  };
+
   const { data: keywords = [], isLoading } = useQuery({
     queryKey: ['keywords', currentOrgId],
     queryFn: () => keywordsApi.list(currentOrgId!),
@@ -64,7 +73,17 @@ export default function KeywordsPage() {
             <p className="text-sm text-muted-foreground mt-1">Monitor the internet for the phrases that matter to your business.</p>
           </div>
           <button
-            onClick={() => setAdding(!adding)}
+            onClick={() => {
+              if (adding) {
+                resetKeywordModal();
+                return;
+              }
+
+              create.reset();
+              update.reset();
+              setEditingId(null);
+              setAdding(true);
+            }}
             className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:w-auto"
           >
             <Plus className="w-4 h-4" />
@@ -97,7 +116,7 @@ export default function KeywordsPage() {
 
       <Modal
         open={adding || !!editingId}
-        onClose={() => { setAdding(false); setEditingId(null); setPhrase(''); setDesc(''); }}
+        onClose={resetKeywordModal}
         title={editingId ? 'Edit keyword' : 'New keyword'}
         description="Create and refine the phrases that decide which conversations enter your opportunity feed."
       >
@@ -124,7 +143,7 @@ export default function KeywordsPage() {
             >
               {create.isPending || update.isPending ? (editingId ? 'Saving…' : 'Adding…') : (editingId ? 'Save changes' : 'Add keyword')}
             </button>
-            <button onClick={() => { setAdding(false); setEditingId(null); setPhrase(''); setDesc(''); }} className="text-sm text-muted-foreground hover:text-foreground px-4 py-2 rounded-lg hover:bg-accent transition-colors">
+            <button onClick={resetKeywordModal} className="text-sm text-muted-foreground hover:text-foreground px-4 py-2 rounded-lg hover:bg-accent transition-colors">
               Cancel
             </button>
           </div>
@@ -168,7 +187,14 @@ export default function KeywordsPage() {
                 </div>
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => { setEditingId(kw.id); setAdding(false); setPhrase(kw.phrase); setDesc(kw.description || ''); }}
+                    onClick={() => {
+                      create.reset();
+                      update.reset();
+                      setEditingId(kw.id);
+                      setAdding(false);
+                      setPhrase(kw.phrase);
+                      setDesc(kw.description || '');
+                    }}
                     className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent transition-colors text-xs"
                   >
                     Edit

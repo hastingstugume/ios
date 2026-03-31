@@ -419,6 +419,24 @@ export default function SourcesPage() {
   const recommendedSourceTypes = orderedSourceTypes.filter((type) => type.recommended);
   const secondarySourceTypes = orderedSourceTypes.filter((type) => !type.recommended);
 
+  const resetSourceModal = () => {
+    setAdding(false);
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setPreviewFeedback(null);
+    setPresetFeedback(null);
+    create.reset();
+    updateSource.reset();
+    previewSource.reset();
+    addRecommendedKeywords.reset();
+    applyRecommendedNegatives.reset();
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteCandidate(null);
+    remove.reset();
+  };
+
   return (
     <div className="page-shell space-y-6 animate-fade-in">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -440,7 +458,15 @@ export default function SourcesPage() {
           </div>
         </div>
         <button
-          onClick={() => setAdding(!adding)}
+          onClick={() => {
+            if (adding) {
+              resetSourceModal();
+              return;
+            }
+
+            resetSourceModal();
+            setAdding(true);
+          }}
           className="inline-flex w-full items-center justify-center gap-2 self-start rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:w-auto"
         >
           <Plus className="w-4 h-4" />
@@ -481,7 +507,10 @@ export default function SourcesPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setAdding(true)}
+                onClick={() => {
+                  resetSourceModal();
+                  setAdding(true);
+                }}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
               >
                 <Plus className="h-4 w-4" />
@@ -518,7 +547,7 @@ export default function SourcesPage() {
 
       <Modal
         open={adding || !!editingId}
-        onClose={() => { setAdding(false); setEditingId(null); setForm(EMPTY_FORM); setPreviewFeedback(null); previewSource.reset(); }}
+        onClose={resetSourceModal}
         title={editingId ? 'Edit source' : 'New source'}
         description="Add direct sources and search-driven discovery feeds so the scanner can find pain points, buying intent, and lead opportunities across more of the web."
       >
@@ -850,7 +879,7 @@ export default function SourcesPage() {
               className="rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40">
               {create.isPending || updateSource.isPending ? (editingId ? 'Saving…' : 'Adding…') : (editingId ? 'Save source' : 'Add source')}
             </button>
-            <button onClick={() => { setAdding(false); setEditingId(null); setForm(EMPTY_FORM); setPreviewFeedback(null); previewSource.reset(); }} className="rounded-xl px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">Cancel</button>
+            <button onClick={resetSourceModal} className="rounded-xl px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">Cancel</button>
           </div>
         </div>
       </Modal>
@@ -859,7 +888,7 @@ export default function SourcesPage() {
         open={!!deleteCandidate}
         onClose={() => {
           if (remove.isPending) return;
-          setDeleteCandidate(null);
+          closeDeleteModal();
         }}
         title="Delete source?"
         description={
@@ -877,7 +906,7 @@ export default function SourcesPage() {
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => setDeleteCandidate(null)}
+              onClick={closeDeleteModal}
               disabled={remove.isPending}
               className="rounded-xl border border-border px-4 py-2.5 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-50"
             >
@@ -963,6 +992,10 @@ export default function SourcesPage() {
                           ) : null}
                           <button
                             onClick={() => {
+                              create.reset();
+                              updateSource.reset();
+                              setPresetFeedback(null);
+                              setPreviewFeedback(null);
                               setEditingId(src.id);
                               setAdding(false);
                               setForm({
@@ -1001,7 +1034,10 @@ export default function SourcesPage() {
                             {src.status === 'ACTIVE' ? <PauseCircle className="w-5 h-5" /> : <PlayCircle className="w-5 h-5 text-green-400" />}
                           </button>
                           <button
-                            onClick={() => setDeleteCandidate({ id: src.id, name: src.name })}
+                            onClick={() => {
+                              remove.reset();
+                              setDeleteCandidate({ id: src.id, name: src.name });
+                            }}
                             className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                           >
                             <Trash2 className="w-4 h-4" />
