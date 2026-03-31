@@ -756,6 +756,150 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
       },
     ],
   },
+  {
+    id: 'b2b-saas-customer-rescue',
+    name: 'B2B SaaS customer rescue',
+    audience: 'Agencies and consultants helping SaaS teams with support escalations, migrations, and delivery fixes',
+    description: 'Focuses on public signs that a SaaS team is blocked, needs implementation support, or is looking for outside help to stabilize delivery.',
+    recommendedKeywords: ['migration help', 'support escalation', 'implementation partner', 'integration issue'],
+    recommendedNegativeKeywords: ['feature request', 'changelog', 'release notes'],
+    sources: [
+      {
+        name: 'GitHub customer-blocker discussions',
+        type: 'GITHUB_SEARCH',
+        config: {
+          query: '"need help" OR "looking for support" OR migration OR integration',
+          type: 'discussions',
+          sourceWeight: 1.05,
+        },
+      },
+      {
+        name: 'Stack Overflow support rescue',
+        type: 'STACKOVERFLOW_SEARCH',
+        config: {
+          query: '"need support" OR migration OR "integration issue" OR "production issue"',
+          sort: 'activity',
+          sourceWeight: 0.95,
+        },
+      },
+      {
+        name: 'Discourse operator support asks',
+        type: 'DISCOURSE',
+        config: {
+          baseUrl: 'https://meta.discourse.org',
+          query: '"need consultant" OR migration OR "implementation help"',
+          tags: ['support'],
+          postedWithinDays: 30,
+          sourceWeight: 0.9,
+        },
+      },
+    ],
+  },
+  {
+    id: 'data-bi-analytics-implementation',
+    name: 'Data and BI implementation',
+    audience: 'Consultants delivering analytics stacks, dashboards, ELT pipelines, and reporting systems',
+    description: 'Tracks public demand around broken reporting, data migrations, dashboard rebuilds, and analytics implementation work.',
+    recommendedKeywords: ['dashboard migration', 'data pipeline', 'analytics implementation', 'reporting help'],
+    recommendedNegativeKeywords: ['course', 'certification', 'tutorial'],
+    sources: [
+      {
+        name: 'Ask HN analytics demand',
+        type: 'HN_SEARCH',
+        config: {
+          query: '"dashboard" OR "reporting" OR "data pipeline" OR "need analytics help"',
+          tags: 'story,comment',
+          sourceWeight: 1.0,
+        },
+      },
+      {
+        name: 'Stack Overflow data delivery pain',
+        type: 'STACKOVERFLOW_SEARCH',
+        config: {
+          query: '"dashboard" OR "etl" OR "reporting" OR migration OR "need help"',
+          sort: 'activity',
+          sourceWeight: 0.95,
+        },
+      },
+      {
+        name: 'Web analytics consultant search',
+        type: 'WEB_SEARCH',
+        config: {
+          query: '"need analytics consultant" OR "dashboard migration" OR "reporting implementation"',
+          domains: ['news.ycombinator.com', 'github.com', 'community.shopify.com'],
+          excludeTerms: ['course', 'tutorial'],
+          sourceWeight: 0.9,
+        },
+      },
+    ],
+  },
+  {
+    id: 'shopify-ecommerce-implementation',
+    name: 'Shopify and ecommerce implementation',
+    audience: 'Freelancers and agencies helping ecommerce brands with migrations, apps, storefronts, and operations fixes',
+    description: 'Combines ecommerce operator communities with technical pain signals for Shopify, storefront, and integration work.',
+    recommendedKeywords: ['shopify migration', 'storefront help', 'conversion issue', 'integration help'],
+    recommendedNegativeKeywords: ['dropshipping course', 'theme giveaway', 'job board'],
+    sources: [
+      {
+        name: 'Ecommerce operator search',
+        type: 'WEB_SEARCH',
+        config: {
+          query: '"shopify consultant" OR "need ecommerce help" OR "store migration"',
+          domains: ['community.shopify.com', 'news.ycombinator.com', 'indiehackers.com'],
+          excludeTerms: ['course', 'job board'],
+          sourceWeight: 1.0,
+        },
+      },
+      {
+        name: 'Discourse ecommerce implementation',
+        type: 'DISCOURSE',
+        config: {
+          baseUrl: 'https://meta.discourse.org',
+          query: 'migration OR integration OR "need support"',
+          postedWithinDays: 30,
+          sourceWeight: 0.85,
+        },
+      },
+      {
+        name: 'Founder ecommerce asks',
+        type: 'RSS',
+        config: {
+          url: 'https://hnrss.org/newest?q=shopify',
+          sourceWeight: 0.85,
+        },
+      },
+    ],
+  },
+  {
+    id: 'local-service-freelancer-opportunities',
+    name: 'Local-service freelancer opportunities',
+    audience: 'Solo operators and freelancers looking for smaller, faster-turnaround implementation and support work',
+    description: 'A lighter pack for consultants who want shorter-cycle opportunities from public recommendation and help-needed threads.',
+    recommendedKeywords: ['need freelancer', 'recommend consultant', 'quick fix', 'implementation help'],
+    recommendedNegativeKeywords: ['full time', 'internship', 'course'],
+    sources: [
+      {
+        name: 'Ask HN freelancer requests',
+        type: 'HN_SEARCH',
+        config: {
+          query: '"need freelancer" OR "recommend consultant" OR "quick fix"',
+          tags: 'story,comment',
+          sourceWeight: 1.05,
+        },
+      },
+      {
+        name: 'Web quick-turn consultant search',
+        type: 'WEB_SEARCH',
+        config: {
+          query: '"need consultant this week" OR "quick implementation help" OR "recommend freelancer"',
+          domains: ['news.ycombinator.com', 'indiehackers.com', 'community.shopify.com'],
+          excludeTerms: ['job board', 'course'],
+          sourceWeight: 0.9,
+        },
+      },
+    ],
+  },
 ];
 
 export const SOURCE_QUERY_TEMPLATES: Array<{
