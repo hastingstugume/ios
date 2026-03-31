@@ -406,6 +406,9 @@ model AlertRule {
   keywordIds      String[]
   frequency       AlertFrequency @default(DAILY)
   emailRecipients String[]
+  autoStage       SignalStage?
+  autoAssignUserId String?
+  autoNextStep    String?
   lastTriggeredAt DateTime?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt

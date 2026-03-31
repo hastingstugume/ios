@@ -2,9 +2,9 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
-import { alertsApi, keywordsApi, type AlertRule } from '@/lib/api';
+import { alertsApi, keywordsApi, organizationsApi, type AlertRule } from '@/lib/api';
 import { CATEGORY_META, formatDate } from '@/lib/utils';
-import { Bell, Plus, Trash2, ToggleRight, ToggleLeft, Clock, Mail, Search, Pencil } from 'lucide-react';
+import { Bell, Plus, Trash2, ToggleRight, ToggleLeft, Clock, Mail, Search, Pencil, Workflow } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 
 const FREQ_LABELS: Record<string, string> = {
@@ -15,6 +15,12 @@ const FREQ_LABELS: Record<string, string> = {
 };
 
 const CATEGORY_OPTIONS = Object.entries(CATEGORY_META).map(([value, meta]) => ({ value, label: meta.label }));
+const STAGE_OPTIONS = [
+  { value: '', label: 'Do not move stage' },
+  { value: 'IN_PROGRESS', label: 'Move to In progress' },
+  { value: 'OUTREACH', label: 'Move to Outreach' },
+  { value: 'QUALIFIED', label: 'Move to Qualified' },
+];
 
 const ALERT_STARTERS = [
   {
@@ -55,6 +61,9 @@ export default function AlertsPage() {
     emailRecipients: '',
     categories: [] as string[],
     keywordIds: [] as string[],
+    autoStage: '',
+    autoAssignUserId: '',
+    autoNextStep: '',
   });
   const [search, setSearch] = useState('');
   const [deleteCandidate, setDeleteCandidate] = useState<AlertRule | null>(null);
@@ -71,10 +80,28 @@ export default function AlertsPage() {
     enabled: !!currentOrgId,
   });
 
+  const { data: memberData } = useQuery({
+    queryKey: ['org-members', currentOrgId],
+    queryFn: () => organizationsApi.members(currentOrgId!),
+    enabled: !!currentOrgId,
+  });
+
+  const members = memberData?.members ?? [];
+
   const resetForm = () => {
     setAdding(false);
     setEditingRule(null);
-    setForm({ name: '', minConfidence: 75, frequency: 'IMMEDIATE', emailRecipients: '', categories: [], keywordIds: [] });
+    setForm({
+      name: '',
+      minConfidence: 75,
+      frequency: 'IMMEDIATE',
+      emailRecipients: '',
+      categories: [],
+      keywordIds: [],
+      autoStage: '',
+      autoAssignUserId: '',
+      autoNextStep: '',
+    });
   };
 
   const create = useMutation({
@@ -85,6 +112,9 @@ export default function AlertsPage() {
       categories: form.categories,
       keywordIds: form.keywordIds,
       emailRecipients: form.emailRecipients.split(',').map((e) => e.trim()).filter(Boolean),
+      autoStage: form.autoStage || undefined,
+      autoAssignUserId: form.autoAssignUserId || undefined,
+      autoNextStep: form.autoNextStep.trim() || undefined,
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['alerts', currentOrgId] }); resetForm(); },
   });
@@ -97,6 +127,9 @@ export default function AlertsPage() {
       categories: form.categories,
       keywordIds: form.keywordIds,
       emailRecipients: form.emailRecipients.split(',').map((e) => e.trim()).filter(Boolean),
+      autoStage: form.autoStage || null,
+      autoAssignUserId: form.autoAssignUserId || null,
+      autoNextStep: form.autoNextStep.trim() || null,
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['alerts', currentOrgId] }); resetForm(); },
   });
@@ -133,6 +166,26 @@ export default function AlertsPage() {
       : 'any tracked keyword';
 
     return `Score ${rule.minConfidence}%+, ${categorySummary}, ${keywordSummary}.`;
+  };
+
+  const summarizeAutomation = (rule: Pick<AlertRule, 'autoStage' | 'autoAssignUserId' | 'autoNextStep'>) => {
+    const parts: string[] = [];
+
+    if (rule.autoStage) {
+      const stageLabel = STAGE_OPTIONS.find((option) => option.value === rule.autoStage)?.label.replace('Move to ', '') || rule.autoStage;
+      parts.push(`move to ${stageLabel.toLowerCase()}`);
+    }
+
+    if (rule.autoAssignUserId) {
+      const member = members.find((item) => item.userId === rule.autoAssignUserId);
+      parts.push(`assign ${member?.user.name || member?.user.email || 'owner'}`);
+    }
+
+    if (rule.autoNextStep) {
+      parts.push(`next step: ${rule.autoNextStep}`);
+    }
+
+    return parts.length ? parts.join(' · ') : null;
   };
 
   return (
@@ -199,6 +252,9 @@ export default function AlertsPage() {
                     frequency: starter.frequency,
                     categories: starter.categories,
                     keywordIds: starter.keywordIds,
+                    autoStage: '',
+                    autoAssignUserId: '',
+                    autoNextStep: '',
                   }));
                   setAdding(true);
                 }}
@@ -282,6 +338,58 @@ export default function AlertsPage() {
             <input value={form.emailRecipients} onChange={(e) => setForm((current) => ({ ...current, emailRecipients: e.target.value }))}
               placeholder="alice@co.io, bob@co.io"
               className="w-full rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+          </div>
+          <div className="rounded-xl border border-border bg-card px-4 py-4">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+                <Workflow className="h-4 w-4" />
+              </span>
+              <div className="flex-1 space-y-4">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Workflow automation</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Optionally move a matching signal into the pipeline, assign an owner, and prepare the next step automatically.</p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">Move stage</label>
+                    <select
+                      value={form.autoStage}
+                      onChange={(e) => setForm((current) => ({ ...current, autoStage: e.target.value }))}
+                      className="w-full rounded-lg border border-border bg-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      {STAGE_OPTIONS.map((option) => (
+                        <option key={option.label} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">Assign owner</label>
+                    <select
+                      value={form.autoAssignUserId}
+                      onChange={(e) => setForm((current) => ({ ...current, autoAssignUserId: e.target.value }))}
+                      className="w-full rounded-lg border border-border bg-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="">Do not auto-assign</option>
+                      {members.map((member) => (
+                        <option key={member.id} value={member.userId}>
+                          {member.user.name || member.user.email}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Suggested next step</label>
+                  <input
+                    value={form.autoNextStep}
+                    onChange={(e) => setForm((current) => ({ ...current, autoNextStep: e.target.value }))}
+                    placeholder="Review and draft outreach within 15 minutes"
+                    className="w-full rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Automation only fills untouched workflow fields, so manual triage already underway stays intact.</p>
+              </div>
+            </div>
           </div>
           {(create.error || updateRule.error) && <p className="text-sm text-destructive">{((create.error || updateRule.error) as Error).message}</p>}
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -387,6 +495,12 @@ export default function AlertsPage() {
                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rule scope</p>
                     <p className="mt-1 text-sm text-foreground/85">{summarizeRuleScope(rule)}</p>
                   </div>
+                  {summarizeAutomation(rule) ? (
+                    <div className="mt-3 rounded-lg border border-primary/15 bg-primary/5 px-4 py-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-primary/80">Workflow automation</p>
+                      <p className="mt-1 text-sm text-foreground/85">{summarizeAutomation(rule)}</p>
+                    </div>
+                  ) : null}
                   <div className="mt-3 rounded-lg border border-border bg-secondary px-4 py-3">
                     <p className="text-xs text-muted-foreground">Recipients</p>
                     <p className="mt-1 line-clamp-2 text-sm text-foreground/85">{rule.emailRecipients.join(', ')}</p>
@@ -407,6 +521,9 @@ export default function AlertsPage() {
                         emailRecipients: rule.emailRecipients.join(', '),
                         categories: rule.categories,
                         keywordIds: rule.keywordIds,
+                        autoStage: rule.autoStage || '',
+                        autoAssignUserId: rule.autoAssignUserId || '',
+                        autoNextStep: rule.autoNextStep || '',
                       });
                     }}
                     className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"

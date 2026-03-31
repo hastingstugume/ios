@@ -292,7 +292,20 @@ export interface SourcePreview {
     };
   }>;
 }
-export interface AlertRule { id: string; name: string; isActive: boolean; minConfidence: number; categories: string[]; keywordIds: string[]; frequency: string; emailRecipients: string[]; lastTriggeredAt: string | null; }
+export interface AlertRule {
+  id: string;
+  name: string;
+  isActive: boolean;
+  minConfidence: number;
+  categories: string[];
+  keywordIds: string[];
+  frequency: string;
+  emailRecipients: string[];
+  autoStage?: string | null;
+  autoAssignUserId?: string | null;
+  autoNextStep?: string | null;
+  lastTriggeredAt: string | null;
+}
 export interface Annotation { id: string; note: string; createdAt: string; user: Pick<User, 'id' | 'name' | 'avatarUrl'>; }
 export interface PaginatedResponse<T> { data: T[]; meta: { total: number; page: number; limit: number; totalPages: number; }; }
 export interface AuditLog {

@@ -5,7 +5,7 @@ import { AlertsService } from './alerts.service';
 import { AuthGuard } from '../common/guards/auth.guard';
 import { OrgMemberGuard } from '../common/guards/org-member.guard';
 import { IsString, IsOptional, IsNumber, IsArray, IsEnum, IsEmail, Min, Max, IsBoolean } from 'class-validator';
-import { SignalCategory, AlertFrequency } from '@prisma/client';
+import { SignalCategory, AlertFrequency, SignalStage } from '@prisma/client';
 
 class CreateAlertDto {
   @IsString() name!: string;
@@ -14,6 +14,9 @@ class CreateAlertDto {
   @IsOptional() @IsArray() @IsString({ each: true }) keywordIds?: string[];
   @IsOptional() @IsEnum(AlertFrequency) frequency?: AlertFrequency;
   @IsArray() @IsEmail({}, { each: true }) emailRecipients!: string[];
+  @IsOptional() @IsEnum(SignalStage) autoStage?: SignalStage;
+  @IsOptional() @IsString() autoAssignUserId?: string;
+  @IsOptional() @IsString() autoNextStep?: string;
 }
 
 class UpdateAlertDto {
@@ -24,6 +27,9 @@ class UpdateAlertDto {
   @IsOptional() @IsEnum(AlertFrequency) frequency?: AlertFrequency;
   @IsOptional() @IsArray() @IsEmail({}, { each: true }) emailRecipients?: string[];
   @IsOptional() @IsBoolean() isActive?: boolean;
+  @IsOptional() @IsEnum(SignalStage) autoStage?: SignalStage | null;
+  @IsOptional() @IsString() autoAssignUserId?: string | null;
+  @IsOptional() @IsString() autoNextStep?: string | null;
 }
 
 @ApiTags('Alerts')

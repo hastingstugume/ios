@@ -2,7 +2,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { SignalCategory, AlertFrequency } from '@prisma/client';
+import { SignalCategory, AlertFrequency, Prisma, SignalStage } from '@prisma/client';
 import { EntitlementsService } from '../entitlements/entitlements.service';
 
 @Injectable()
@@ -27,10 +27,26 @@ export class AlertsService {
     keywordIds?: string[];
     frequency?: AlertFrequency;
     emailRecipients: string[];
+    autoStage?: SignalStage;
+    autoAssignUserId?: string;
+    autoNextStep?: string;
   }) {
     await this.entitlements.assertCanCreateAlert(orgId);
+    await this.assertAssignableMember(orgId, data.autoAssignUserId);
+    const createData: Prisma.AlertRuleUncheckedCreateInput = {
+      organizationId: orgId,
+      name: data.name,
+      minConfidence: data.minConfidence ?? 70,
+      categories: data.categories ?? [],
+      keywordIds: data.keywordIds ?? [],
+      frequency: data.frequency ?? 'DAILY',
+      emailRecipients: data.emailRecipients,
+      autoStage: data.autoStage ?? null,
+      autoAssignUserId: data.autoAssignUserId || null,
+      autoNextStep: data.autoNextStep?.trim() || null,
+    };
     const rule = await this.prisma.alertRule.create({
-      data: { organizationId: orgId, ...data },
+      data: createData,
     });
     await this.prisma.auditLog.create({
       data: { organizationId: orgId, userId, action: 'ALERT_CREATED', metadata: { name: data.name } },
@@ -41,7 +57,16 @@ export class AlertsService {
   async update(orgId: string, id: string, userId: string, data: any) {
     const rule = await this.prisma.alertRule.findFirst({ where: { id, organizationId: orgId } });
     if (!rule) throw new NotFoundException('Alert rule not found');
-    const updated = await this.prisma.alertRule.update({ where: { id }, data });
+    await this.assertAssignableMember(orgId, data.autoAssignUserId);
+    const updateData: Prisma.AlertRuleUncheckedUpdateInput = {
+      ...data,
+      ...(data.autoNextStep !== undefined ? { autoNextStep: data.autoNextStep?.trim() || null } : {}),
+      ...(data.autoAssignUserId !== undefined ? { autoAssignUserId: data.autoAssignUserId || null } : {}),
+    };
+    const updated = await this.prisma.alertRule.update({
+      where: { id },
+      data: updateData,
+    });
     await this.prisma.auditLog.create({
       data: { organizationId: orgId, userId, action: 'ALERT_UPDATED', metadata: { name: rule.name } },
     });
@@ -90,11 +115,88 @@ export class AlertsService {
       if (rule.keywordIds.length && !rule.keywordIds.some((keywordId) => signalKeywordIds.has(keywordId))) {
         continue;
       }
+      await this.applyWorkflowAutomationIfEligible(orgId, signalId, {
+        autoStage: rule.autoStage ?? null,
+        autoAssignUserId: rule.autoAssignUserId ?? null,
+        autoNextStep: rule.autoNextStep ?? null,
+      });
       await this.notifications.sendAlertEmail(rule.emailRecipients, rule.name, signal as any);
       await this.prisma.alertRule.update({
         where: { id: rule.id },
         data: { lastTriggeredAt: new Date() },
       });
     }
+  }
+
+  private async assertAssignableMember(orgId: string, userId?: string | null) {
+    if (!userId) return;
+
+    const member = await this.prisma.organizationMember.findFirst({
+      where: { organizationId: orgId, userId },
+      select: { id: true },
+    });
+
+    if (!member) {
+      throw new NotFoundException('Automation assignee must belong to this workspace');
+    }
+  }
+
+  private async applyWorkflowAutomationIfEligible(
+    orgId: string,
+    signalId: string,
+    rule: { autoStage: SignalStage | null; autoAssignUserId: string | null; autoNextStep: string | null },
+  ) {
+    if (!rule.autoStage && !rule.autoAssignUserId && !rule.autoNextStep) return;
+
+    const existing = await this.prisma.signal.findFirst({
+      where: { id: signalId, organizationId: orgId },
+      select: {
+        id: true,
+        status: true,
+        stage: true,
+        assigneeId: true,
+        nextStep: true,
+        closedAt: true,
+      },
+    });
+
+    if (!existing) return;
+
+    const isUntouched =
+      existing.stage === 'TO_REVIEW' &&
+      !existing.assigneeId &&
+      !existing.nextStep &&
+      !existing.closedAt;
+
+    const data: Prisma.SignalUncheckedUpdateInput = {};
+
+    if (rule.autoStage && isUntouched) {
+      data.stage = rule.autoStage;
+      if (rule.autoStage !== 'TO_REVIEW' && existing.status === 'NEW') {
+        data.status = 'SAVED';
+      }
+      if (['WON', 'LOST', 'ARCHIVED'].includes(rule.autoStage)) {
+        data.closedAt = existing.closedAt ?? new Date();
+      }
+    }
+
+    if (rule.autoAssignUserId && !existing.assigneeId) {
+      data.assigneeId = rule.autoAssignUserId;
+    }
+
+    if (rule.autoNextStep && !existing.nextStep) {
+      data.nextStep = rule.autoNextStep;
+    }
+
+    if (!Object.keys(data).length) return;
+
+    if (!('closedAt' in data) && existing.closedAt && (!rule.autoStage || !['WON', 'LOST', 'ARCHIVED'].includes(rule.autoStage))) {
+      data.closedAt = existing.closedAt;
+    }
+
+    await this.prisma.signal.update({
+      where: { id: signalId },
+      data,
+    });
   }
 }
