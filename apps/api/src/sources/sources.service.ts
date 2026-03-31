@@ -156,6 +156,24 @@ export class SourcesService {
     return { success: true };
   }
 
+  async fetchNow(orgId: string, id: string, userId: string) {
+    const source = await this.prisma.source.findFirst({ where: { id, organizationId: orgId } });
+    if (!source) throw new NotFoundException('Source not found');
+
+    await this.entitlements.assertCanFetchNow(orgId);
+    await this.ingestion.triggerManualFetch(orgId, id);
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId: orgId,
+        userId,
+        action: 'SOURCE_UPDATED',
+        metadata: { sourceId: id, name: source.name, trigger: 'manual_fetch' },
+      },
+    });
+
+    return { queued: true };
+  }
+
   async preview(orgId: string, data: {
     type: SourceType; config: Record<string, any>;
   }) {

@@ -52,6 +52,9 @@ export class SourcesController {
   @Post('preview') preview(@Param('orgId') orgId: string, @Body() dto: PreviewSourceDto) {
     return this.sources.preview(orgId, dto);
   }
+  @Post(':id/fetch') fetchNow(@Param('orgId') orgId: string, @Param('id') id: string, @Req() req: any) {
+    return this.sources.fetchNow(orgId, id, req.user.id);
+  }
   @Post() create(@Param('orgId') orgId: string, @Body() dto: CreateSourceDto, @Req() req: any) {
     return this.sources.create(orgId, req.user.id, dto);
   }

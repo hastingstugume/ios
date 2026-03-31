@@ -103,6 +103,7 @@ export const sourcesApi = {
     },
   ) => api.post<SourceTemplateSuggestion>(`/orgs/${orgId}/sources/templates`, data),
   preview: (orgId: string, data: { type: string; config: any }) => api.post<SourcePreview>(`/orgs/${orgId}/sources/preview`, data),
+  fetchNow: (orgId: string, id: string) => api.post<{ queued: true }>(`/orgs/${orgId}/sources/${id}/fetch`, {}),
   create: (orgId: string, data: any) => api.post(`/orgs/${orgId}/sources`, data),
   update: (orgId: string, id: string, data: any) => api.patch(`/orgs/${orgId}/sources/${id}`, data),
   delete: (orgId: string, id: string) => api.delete(`/orgs/${orgId}/sources/${id}`),

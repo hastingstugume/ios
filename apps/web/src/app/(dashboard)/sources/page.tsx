@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { keywordsApi, organizationsApi, sourcesApi } from '@/lib/api';
 import { SOURCE_TYPE_META, formatDate } from '@/lib/utils';
 import { SOURCE_QUERY_TEMPLATES } from '@/lib/sourcePresets';
-import { Database, Plus, Trash2, PauseCircle, PlayCircle, AlertCircle, CheckCircle2, Search, Wand2, Activity, TrendingUp, Target, ArrowRight, BrainCircuit } from 'lucide-react';
+import { Database, Plus, Trash2, PauseCircle, PlayCircle, AlertCircle, CheckCircle2, Search, Wand2, Activity, TrendingUp, Target, ArrowRight, BrainCircuit, RefreshCw } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 
 const SOURCE_TYPES = [
@@ -201,6 +201,7 @@ export default function SourcesPage() {
   const [presetFeedbackTone, setPresetFeedbackTone] = useState<'success' | 'error'>('success');
   const [previewFeedback, setPreviewFeedback] = useState<string | null>(null);
   const [deleteCandidate, setDeleteCandidate] = useState<{ id: string; name: string } | null>(null);
+  const [fetchingSourceId, setFetchingSourceId] = useState<string | null>(null);
 
   const installedTemplate = searchParams.get('installed');
   const installedCreated = searchParams.get('created');
@@ -217,6 +218,9 @@ export default function SourcesPage() {
     const query = next.toString();
     router.replace(query ? `/sources?${query}` : '/sources');
   }, [installedTemplate, installedCreated, installedSkipped, installedNote, router, searchParams]);
+
+  const normalizedPlan = (currentOrg?.plan || 'free').trim().toLowerCase();
+  const canFetchNow = normalizedPlan !== 'free';
 
   const { data: sources = [], isLoading } = useQuery({
     queryKey: ['sources', currentOrgId],
@@ -256,6 +260,25 @@ export default function SourcesPage() {
       qc.invalidateQueries({ queryKey: ['sources', currentOrgId] });
       setDeleteCandidate(null);
     },
+  });
+
+  const fetchNow = useMutation({
+    mutationFn: (id: string) => sourcesApi.fetchNow(currentOrgId!, id),
+    onMutate: (id: string) => {
+      setFetchingSourceId(id);
+      setPresetFeedbackTone('success');
+      setPresetFeedback('Fetch queued. New matches should appear shortly.');
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sources', currentOrgId] });
+      qc.invalidateQueries({ queryKey: ['dashboard', currentOrgId] });
+      qc.invalidateQueries({ queryKey: ['signals', currentOrgId] });
+    },
+    onError: (error: Error) => {
+      setPresetFeedbackTone('error');
+      setPresetFeedback(error.message);
+    },
+    onSettled: () => setFetchingSourceId(null),
   });
 
   const addRecommendedKeywords = useMutation({
@@ -925,6 +948,19 @@ export default function SourcesPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 self-start">
+                          {canFetchNow ? (
+                            <button
+                              onClick={() => fetchNow.mutate(src.id)}
+                              disabled={fetchNow.isPending || src.status === 'PAUSED'}
+                              className="rounded-lg border border-border px-2.5 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                              title={src.status === 'PAUSED' ? 'Resume this source before fetching' : 'Fetch now'}
+                            >
+                              <span className="inline-flex items-center gap-1.5">
+                                <RefreshCw className={`h-4 w-4 ${fetchingSourceId === src.id ? 'animate-spin' : ''}`} />
+                                {fetchingSourceId === src.id ? 'Queuing…' : 'Fetch now'}
+                              </span>
+                            </button>
+                          ) : null}
                           <button
                             onClick={() => {
                               setEditingId(src.id);

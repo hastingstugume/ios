@@ -36,6 +36,13 @@ const mockPrisma: any = {
 
 describe('SourcesService', () => {
   let service: SourcesService;
+  const mockEntitlements = {
+    assertCanFetchNow: jest.fn(),
+    assertCanCreateSource: jest.fn(),
+  };
+  const mockIngestion = {
+    triggerManualFetch: jest.fn(),
+  };
   const mockClassification = {
     generateSourceSuggestions: jest.fn(),
   };
@@ -47,13 +54,30 @@ describe('SourcesService', () => {
       providers: [
         SourcesService,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: EntitlementsService, useValue: {} },
-        { provide: IngestionService, useValue: {} },
+        { provide: EntitlementsService, useValue: mockEntitlements },
+        { provide: IngestionService, useValue: mockIngestion },
         { provide: ClassificationService, useValue: mockClassification },
       ],
     }).compile();
 
     service = module.get(SourcesService);
+  });
+
+  it('queues a manual fetch for subscribed workspaces', async () => {
+    mockPrisma.source.findFirst.mockResolvedValue({
+      id: 'src_1',
+      organizationId: 'org_1',
+      name: 'HN demand',
+    });
+    mockPrisma.auditLog = { create: jest.fn().mockResolvedValue({ id: 'log_1' }) };
+    mockEntitlements.assertCanFetchNow.mockResolvedValue({ plan: 'starter' });
+    mockIngestion.triggerManualFetch.mockResolvedValue({ queued: true });
+
+    const result = await service.fetchNow('org_1', 'src_1', 'user_1');
+
+    expect(mockEntitlements.assertCanFetchNow).toHaveBeenCalledWith('org_1');
+    expect(mockIngestion.triggerManualFetch).toHaveBeenCalledWith('org_1', 'src_1');
+    expect(result).toEqual({ queued: true });
   });
 
   it('adds health summaries to each source based on recent signal performance', async () => {

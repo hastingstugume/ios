@@ -123,6 +123,14 @@ export class EntitlementsService {
     );
   }
 
+  async assertCanFetchNow(orgId: string) {
+    const entitlements = await this.getWorkspaceEntitlements(orgId);
+    if (entitlements.plan === 'free') {
+      throw new ForbiddenException('Fetch now is available on Starter and above. Upgrade to run sources on demand.');
+    }
+    return entitlements;
+  }
+
   private async assertResourceLimit(
     orgId: string,
     key: keyof Pick<WorkspaceEntitlements, 'maxSources' | 'maxKeywords' | 'maxAlerts'>,
