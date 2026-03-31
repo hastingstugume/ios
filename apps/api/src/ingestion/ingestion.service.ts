@@ -335,9 +335,10 @@ export class IngestionService {
 
     for (const item of items) {
       const content = `${item.title || ''} ${item.text}`.toLowerCase();
+      const matchedKeywords = keywords.filter((k) => content.includes(k.phrase.toLowerCase()));
       if (this.shouldExcludeByWorkspace(content, workspaceNegativeKeywords)) continue;
       if (this.shouldExcludeItem(content, sourceConfig)) continue;
-      const matchedKeywords = keywords.filter((k) => content.includes(k.phrase.toLowerCase()));
+      if (this.shouldExcludeAsLowSignal(sourceType, item.title || '', item.text, matchedKeywords.length)) continue;
       if (matchedKeywords.length === 0) continue;
 
       const canonicalUrl = this.canonicalizeUrl(item.url);
@@ -498,7 +499,13 @@ export class IngestionService {
         .map((keyword) => keyword.phrase);
       const excludedByWorkspace = this.shouldExcludeByWorkspace(content, workspaceNegativeKeywords);
       const excludedBySource = this.shouldExcludeItem(content, sourceConfig);
-      const passesFilters = matchedKeywords.length > 0 && !excludedByWorkspace && !excludedBySource;
+      const excludedByLowSignal = this.shouldExcludeAsLowSignal(
+        sourceType,
+        item.title || '',
+        item.text,
+        matchedKeywords.length,
+      );
+      const passesFilters = matchedKeywords.length > 0 && !excludedByWorkspace && !excludedBySource && !excludedByLowSignal;
       const classification = passesFilters
         ? this.applySourceWeighting(
             await this.classification.classify(item.title || null, item.text, kwPhrases),
@@ -517,6 +524,7 @@ export class IngestionService {
         matchedKeywords,
         excludedByWorkspace,
         excludedBySource,
+        excludedByLowSignal,
         passesFilters,
         category: classification?.category || null,
         confidenceScore: classification?.confidenceScore || null,
@@ -750,6 +758,55 @@ export class IngestionService {
       .map((term) => term.toLowerCase().trim())
       .filter(Boolean)
       .some((term) => content.includes(term));
+  }
+
+  private shouldExcludeAsLowSignal(
+    sourceType: SourceType,
+    title: string,
+    text: string,
+    matchedKeywordCount: number,
+  ) {
+    const typesWithStrongerNoiseFiltering = new Set<SourceType>([
+      SourceType.WEB_SEARCH,
+      SourceType.RSS,
+      SourceType.HN_SEARCH,
+    ]);
+
+    if (!typesWithStrongerNoiseFiltering.has(sourceType)) {
+      return false;
+    }
+
+    const combinedText = `${title} ${text}`.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (!combinedText) return true;
+
+    const strongIntentSignals = [
+      /\b(looking for|recommend(?:ed)?|need help|need support|help needed|support needed)\b/i,
+      /\b(consultant|agency|freelancer|contractor|implementation partner|vendor|specialist)\b/i,
+      /\b(migration|integration|implementation|automation|revops|crm|devops|rescue)\b/i,
+      /\b(urgent|blocked|stuck|breaking|outage|incident|failing|broken)\b/i,
+      /\b(hire|hiring|who should we hire|partner)\b/i,
+    ];
+
+    const lowSignalPatterns = [
+      /\b(show hn|launch(?:ing)? today|weekly roundup|newsletter|release notes?)\b/i,
+      /\b(list of tools|best tools|top tools|tool stack|my side project)\b/i,
+      /\b(free template|tutorial|course|boilerplate|open source release)\b/i,
+      /\b(job opening|we are hiring|hiring engineer|careers page)\b/i,
+    ];
+
+    const hasStrongIntent = strongIntentSignals.some((pattern) => pattern.test(combinedText));
+    const hasLowSignalPattern = lowSignalPatterns.some((pattern) => pattern.test(combinedText));
+    const compactLength = combinedText.replace(/\s+/g, ' ').length;
+
+    if (!hasStrongIntent && matchedKeywordCount < 2 && compactLength < 110) {
+      return true;
+    }
+
+    if (!hasStrongIntent && hasLowSignalPattern) {
+      return true;
+    }
+
+    return false;
   }
 
   private applySourceWeighting(

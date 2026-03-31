@@ -70,6 +70,36 @@ describe('IngestionService', () => {
     ).rejects.toThrow('SerpApi is selected for web search, but SERPAPI_API_KEY is not configured');
   });
 
+  it('filters weak low-signal web search snippets without clear buying intent', () => {
+    const excluded = (service as any).shouldExcludeAsLowSignal(
+      'WEB_SEARCH',
+      'Weekly roundup of no-code tools',
+      'A short list of tools we like this week',
+      1,
+    );
+    expect(excluded).toBe(true);
+  });
+
+  it('keeps broad-source content when it contains strong recommendation intent', () => {
+    const excluded = (service as any).shouldExcludeAsLowSignal(
+      'RSS',
+      'Need help choosing a CRM implementation partner',
+      'We are looking for a consultant to help migrate HubSpot and Salesforce workflows',
+      1,
+    );
+    expect(excluded).toBe(false);
+  });
+
+  it('does not apply the low-signal heuristic to stronger source types', () => {
+    const excluded = (service as any).shouldExcludeAsLowSignal(
+      'GITHUB_SEARCH',
+      'Weekly roundup of automation tools',
+      'A short list of tools we like this week',
+      0,
+    );
+    expect(excluded).toBe(false);
+  });
+
   it('excludes content when a workspace negative keyword matches', () => {
     const excluded = (service as any).shouldExcludeByWorkspace(
       'this post is about wordpress plugin maintenance',
