@@ -226,6 +226,35 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
     ],
   },
   {
+    id: 'two-source-procurement-radar',
+    name: 'Procurement radar',
+    audience: 'Agencies and consultants tracking open public-sector buying demand',
+    description: 'Pairs SAM.gov procurement notices with broader implementation conversations for direct and predictive demand.',
+    recommendedKeywords: ['technical consulting', 'implementation support', 'migration services'],
+    recommendedNegativeKeywords: ['janitorial', 'construction', 'equipment supply'],
+    sources: [
+      {
+        name: 'SAM.gov active solicitations',
+        type: 'SAM_GOV',
+        config: {
+          query: '"technical consulting" OR "implementation support" OR "migration services"',
+          postedWithinDays: 30,
+          noticeTypes: ['solicitation'],
+          sourceWeight: 1.15,
+        },
+      },
+      {
+        name: 'HN implementation demand',
+        type: 'HN_SEARCH',
+        config: {
+          query: '"implementation help" OR "need consultant" OR "migration"',
+          tags: 'story,comment',
+          sourceWeight: 0.95,
+        },
+      },
+    ],
+  },
+  {
     id: 'two-source-recommendation',
     name: 'Recommendation requests',
     audience: 'Service businesses looking for high-intent referral and recommendation asks',
@@ -745,6 +774,22 @@ export const SOURCE_QUERY_TEMPLATES: Array<{
   recommendedKeywords?: string[];
   recommendedNegativeKeywords?: string[];
 }> = [
+  {
+    type: 'SAM_GOV',
+    label: 'Open Solicitations',
+    description: 'Current procurement notices for consulting, migration, or implementation work.',
+    query: '"technical consulting" OR "implementation support" OR "migration services"',
+    recommendedKeywords: ['technical consulting', 'implementation support', 'migration services'],
+    recommendedNegativeKeywords: ['construction', 'equipment supply'],
+  },
+  {
+    type: 'SAM_GOV',
+    label: 'CRM / RevOps Procurement',
+    description: 'Public-sector buying intent related to CRM, systems integration, and business process improvement.',
+    query: '"CRM implementation" OR "systems integration" OR "business process improvement"',
+    recommendedKeywords: ['CRM implementation', 'systems integration'],
+    recommendedNegativeKeywords: ['training only', 'staffing'],
+  },
   {
     type: 'REDDIT_SEARCH',
     label: 'Buyer Intent',
