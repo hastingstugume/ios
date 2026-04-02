@@ -145,6 +145,24 @@ describe('IngestionService', () => {
     expect(excluded).toBe(false);
   });
 
+  it('matches configured search intent even without an exact tracked keyword hit', () => {
+    const matched = (service as any).matchesConfiguredIntent(
+      'need help migrating our shopify storefront and fixing merchant center tracking',
+      'WEB_SEARCH',
+      { query: '"shopify expert" OR "shopify agency" OR "merchant center support"' },
+    );
+    expect(matched).toBe(true);
+  });
+
+  it('does not treat weak generic chatter as configured intent', () => {
+    const matched = (service as any).matchesConfiguredIntent(
+      'sharing our favorite storefront inspiration links this week',
+      'WEB_SEARCH',
+      { query: '"shopify expert" OR "shopify agency"' },
+    );
+    expect(matched).toBe(false);
+  });
+
   it('does not apply the low-signal heuristic to stronger source types', () => {
     const excluded = (service as any).shouldExcludeAsLowSignal(
       'GITHUB_SEARCH',
@@ -203,5 +221,55 @@ describe('IngestionService', () => {
       },
     );
     expect(duplicate).toBe(true);
+  });
+
+  it('does not persist a signal when classification says it is not an opportunity', async () => {
+    const prisma = {
+      keyword: { findMany: jest.fn().mockResolvedValue([{ id: 'kw1', phrase: 'shopify expert' }]) },
+      organization: { findUnique: jest.fn().mockResolvedValue({ negativeKeywords: [] }) },
+      signal: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn(),
+      },
+      signalKeyword: { create: jest.fn() },
+    };
+    const classify = jest.fn().mockResolvedValue({
+      isOpportunity: false,
+      category: 'OTHER',
+      confidenceScore: 32,
+      whyItMatters: 'Weak mention.',
+      suggestedOutreach: null,
+      suggestedReply: null,
+      painPoint: null,
+      urgency: 'LOW',
+      sentiment: 'NEUTRAL',
+      conversationType: 'OTHER',
+    });
+    const queue = { add: jest.fn() };
+    const isolated = new IngestionService(
+      prisma as any,
+      { normalize: jest.fn((text: string) => text), classify } as any,
+      { get: jest.fn((_key: string, defaultValue?: any) => defaultValue ?? '') } as any,
+      queue as any,
+    );
+
+    await (isolated as any).processItems(
+      'source-1',
+      'org-1',
+      'WEB_SEARCH',
+      { query: '"shopify expert" OR "shopify agency"' },
+      [{
+        externalId: 'ext-1',
+        title: 'Need help migrating our Shopify store',
+        text: 'Our tracking and merchant center setup is broken and we need help fast.',
+        url: 'https://example.com/post',
+      }],
+    );
+
+    expect(classify).toHaveBeenCalled();
+    expect(prisma.signal.create).not.toHaveBeenCalled();
+    expect(queue.add).not.toHaveBeenCalledWith('check-alerts', expect.anything());
   });
 });

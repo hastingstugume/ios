@@ -468,10 +468,11 @@ export class IngestionService {
     for (const item of items) {
       const content = `${item.title || ''} ${item.text}`.toLowerCase();
       const matchedKeywords = keywords.filter((k) => content.includes(k.phrase.toLowerCase()));
+      const matchedConfiguredIntent = this.matchesConfiguredIntent(content, sourceType, sourceConfig);
       if (this.shouldExcludeByWorkspace(content, workspaceNegativeKeywords)) continue;
       if (this.shouldExcludeItem(content, sourceConfig)) continue;
       if (this.shouldExcludeAsLowSignal(sourceType, item.title || '', item.text, matchedKeywords.length)) continue;
-      if (matchedKeywords.length === 0) continue;
+      if (matchedKeywords.length === 0 && !matchedConfiguredIntent) continue;
 
       const canonicalUrl = this.canonicalizeUrl(item.url);
       const normalizedText = this.classification.normalize(item.text);
@@ -494,6 +495,7 @@ export class IngestionService {
         sourceType,
         sourceConfig,
       );
+      if (!classification.isOpportunity) continue;
 
       const signal = await this.prisma.signal.create({
         data: {
@@ -629,6 +631,7 @@ export class IngestionService {
       const matchedKeywords = keywords
         .filter((keyword) => content.includes(keyword.phrase.toLowerCase()))
         .map((keyword) => keyword.phrase);
+      const matchedConfiguredIntent = this.matchesConfiguredIntent(content, sourceType, sourceConfig);
       const excludedByWorkspace = this.shouldExcludeByWorkspace(content, workspaceNegativeKeywords);
       const excludedBySource = this.shouldExcludeItem(content, sourceConfig);
       const excludedByLowSignal = this.shouldExcludeAsLowSignal(
@@ -637,14 +640,16 @@ export class IngestionService {
         item.text,
         matchedKeywords.length,
       );
-      const passesFilters = matchedKeywords.length > 0 && !excludedByWorkspace && !excludedBySource && !excludedByLowSignal;
-      const classification = passesFilters
+      const passesDiscovery = (matchedKeywords.length > 0 || matchedConfiguredIntent) && !excludedByWorkspace && !excludedBySource && !excludedByLowSignal;
+      const classification = passesDiscovery
         ? this.applySourceWeighting(
             await this.classification.classify(item.title || null, item.text, kwPhrases),
             sourceType,
             sourceConfig,
           )
         : null;
+      const excludedByQualification = passesDiscovery && classification ? !classification.isOpportunity : false;
+      const passesFilters = passesDiscovery && !excludedByQualification;
 
       return {
         externalId: item.externalId,
@@ -654,9 +659,11 @@ export class IngestionService {
         author: item.author || null,
         publishedAt: item.publishedAt || null,
         matchedKeywords,
+        matchedConfiguredIntent,
         excludedByWorkspace,
         excludedBySource,
         excludedByLowSignal,
+        excludedByQualification,
         passesFilters,
         category: classification?.category || null,
         confidenceScore: classification?.confidenceScore || null,
@@ -946,6 +953,54 @@ export class IngestionService {
     }
 
     return false;
+  }
+
+  private matchesConfiguredIntent(
+    content: string,
+    sourceType: SourceType,
+    sourceConfig: Record<string, any>,
+  ) {
+    const queryDrivenTypes = new Set<SourceType>([
+      SourceType.REDDIT_SEARCH,
+      SourceType.HN_SEARCH,
+      SourceType.GITHUB_SEARCH,
+      SourceType.STACKOVERFLOW_SEARCH,
+      SourceType.SAM_GOV,
+      SourceType.WEB_SEARCH,
+      SourceType.DISCOURSE,
+    ]);
+
+    if (!queryDrivenTypes.has(sourceType)) {
+      return false;
+    }
+
+    const rawQuery = String(sourceConfig.query || '').trim().toLowerCase();
+    if (!rawQuery) return false;
+
+    if (this.matchesLooseSearchQuery(content, rawQuery)) {
+      return true;
+    }
+
+    const stopWords = new Set(['and', 'or', 'for', 'the', 'with', 'from', 'into', 'that', 'this', 'your', 'need', 'looking']);
+    const intentPattern = /\b(looking for|need help|need support|recommend|recommendation|hire|hiring|consultant|agency|expert|specialist|vendor|partner|migration|implementation|integration|setup|fix|support|rescue|audit)\b/i;
+    const hasIntentLanguage = intentPattern.test(content);
+    const clauses = rawQuery
+      .split(/\s+OR\s+/i)
+      .map((clause) => clause.replace(/[()"]/g, ' ').trim())
+      .filter(Boolean);
+
+    return clauses.some((clause) => {
+      const tokens = clause
+        .split(/\s+/)
+        .map((token) => token.trim())
+        .filter((token) => token.length > 2 && !stopWords.has(token));
+
+      if (!tokens.length) return false;
+
+      const overlap = tokens.filter((token) => content.includes(token)).length;
+      if (overlap >= Math.min(2, tokens.length)) return true;
+      return hasIntentLanguage && overlap >= 1 && tokens.some((token) => token.length >= 6);
+    });
   }
 
   private matchesLooseSearchQuery(text: string, query: string) {
