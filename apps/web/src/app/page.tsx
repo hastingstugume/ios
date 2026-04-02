@@ -7,19 +7,19 @@ import { CATEGORY_META } from '@/lib/utils';
 
 const STEPS = [
   { n: '01', title: 'Source capture',   desc: 'Relevant conversations and posts are collected automatically throughout the day' },
-  { n: '02', title: 'Keyword match',  desc: 'Only posts matching your monitored phrases continue downstream' },
-  { n: '03', title: 'Signal review',    desc: 'Each match is organized by category, confidence, and a short reason it deserves attention' },
-  { n: '04', title: 'Feed & alert',   desc: 'Signal appears in your feed; IMMEDIATE alert rules fire by email' },
+  { n: '02', title: 'Intent screening',  desc: 'Tracked keywords and source intent narrow the stream before deeper qualification runs' },
+  { n: '03', title: 'Signal review',    desc: 'Qualified matches are grouped by category, confidence, and a short reason they deserve attention' },
+  { n: '04', title: 'Feed & alert',   desc: 'The best matches appear in your feed, and immediate email alert rules can fire as they land' },
   { n: '05', title: 'Engage',         desc: 'Save, annotate, and act with AI-generated outreach suggestions' },
 ];
 
 const FEATURES = [
-  { icon: '◈', title: 'Broad Source Coverage',      desc: 'Track the places your buyers already talk so your team sees meaningful demand as it appears.' },
+  { icon: '◈', title: 'Multi-source Monitoring',      desc: 'Track a growing set of public sources so your team sees meaningful demand as it appears.' },
   { icon: '◎', title: 'Signal Classification',      desc: 'Every post is grouped into clear opportunity types with a confidence score for faster review.' },
-  { icon: '◬', title: 'Instant Alert Rules',         desc: 'Set confidence thresholds, filter by category, and get email alerts the moment a matching signal appears.' },
-  { icon: '◉', title: 'Pipeline Management',         desc: 'Save, bookmark, ignore, and annotate signals so your team can move from discovery to follow-up with less friction.' },
+  { icon: '◬', title: 'Immediate Email Alerts',         desc: 'Set confidence thresholds, filter by category, and send matching signals to inboxes as they appear.' },
+  { icon: '◉', title: 'Signal Workflow',         desc: 'Save, bookmark, ignore, annotate, assign, and stage signals so follow-up stays organized.' },
   { icon: '◫', title: 'Team Workspaces',             desc: 'Keep opportunities organized for your team with shared visibility and cleaner collaboration.' },
-  { icon: '◐', title: 'Flexible for Growth',         desc: 'Start with a simple workflow today and expand your process as your team handles more demand.' },
+  { icon: '◐', title: 'Built to Grow',         desc: 'Start with a simple workflow today and expand your process as your team handles more demand.' },
 ];
 
 const PRICING = [
@@ -231,13 +231,13 @@ export default function LandingPage() {
           fontWeight: 800, lineHeight: 1.04, letterSpacing: -2.5,
           textAlign: 'center', maxWidth: 820, animation: 'fadeUp 0.6s ease 0.08s both',
         }}>
-          Find people{' '}
+          Find ecommerce brands{' '}
           <span style={{
             background: 'linear-gradient(135deg,#22d3ee,#0ea5e9,#38bdf8)',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
           }}>asking to buy</span>
-          <br />before your competitors do
+          <br />implementation help
         </h1>
 
         {/* sub */}
@@ -246,7 +246,7 @@ export default function LandingPage() {
           fontSize: 15, lineHeight: 1.75, animation: 'fadeUp 0.6s ease 0.18s both',
         }}>
           Internet Opportunity Scanner continuously monitors public conversations and surfaces
-          high-confidence buying signals for B2B service providers.
+          high-confidence migration, recommendation, tracking, and storefront signals for ecommerce agencies and consultants.
         </p>
 
         {/* CTAs */}
@@ -377,7 +377,7 @@ export default function LandingPage() {
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '100px 40px' }}>
           <div style={{ fontSize: 11, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#22d3ee', marginBottom: 14 }}>// capabilities</div>
           <h2 style={{ fontFamily: 'var(--font-syne), sans-serif', fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 800, letterSpacing: -1.2, marginBottom: 12 }}>
-            Everything a B2B service firm<br />needs to hunt leads at scale
+            Everything a B2B service firm<br />needs to spot buying signals earlier
           </h2>
 
           {/* features grid */}

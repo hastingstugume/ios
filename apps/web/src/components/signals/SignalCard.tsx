@@ -124,6 +124,16 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
           </p>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
+            {signal.serviceHint ? (
+              <span className="rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1 text-[11px] text-primary">
+                Service: {signal.serviceHint}
+              </span>
+            ) : null}
+            {signal.locationHint ? (
+              <span className="rounded-lg border border-border bg-secondary px-2.5 py-1 text-[11px] text-muted-foreground">
+                Location: {signal.locationHint}
+              </span>
+            ) : null}
             {signal.accountHint ? (
               <span className="rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1 text-[11px] text-primary">
                 Account hint: {signal.accountHint}

@@ -196,8 +196,20 @@ export default function SignalDetailPage() {
         </div>
       </div>
 
-      {(signal.painPoint || signal.urgency || signal.sentiment || signal.conversationType || signal.sourceProfile || signal.accountHint || signal.linkedDomain || (signal.toolHints || []).length) ? (
+      {(signal.painPoint || signal.urgency || signal.sentiment || signal.conversationType || signal.sourceProfile || signal.accountHint || signal.linkedDomain || signal.serviceHint || signal.locationHint || (signal.toolHints || []).length) ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {signal.serviceHint ? (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Service hint</p>
+              <p className="mt-2 text-sm font-medium text-foreground">{signal.serviceHint}</p>
+            </div>
+          ) : null}
+          {signal.locationHint ? (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Location hint</p>
+              <p className="mt-2 text-sm font-medium text-foreground">{signal.locationHint}</p>
+            </div>
+          ) : null}
           {signal.accountHint ? (
             <div className="rounded-xl border border-border bg-card p-4">
               <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Account hint</p>

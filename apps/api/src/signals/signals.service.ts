@@ -261,6 +261,8 @@ export class SignalsService {
       sourceProfile,
       linkedDomain: this.extractLinkedDomain(signal),
       accountHint: this.extractAccountHint(signal),
+      serviceHint: this.extractServiceHint(signal),
+      locationHint: this.extractLocationHint(signal),
       toolHints: this.extractToolHints(signal).slice(0, 3),
       painPoint: classification.painPoint || signal.whyItMatters || null,
       urgency: classification.urgency || 'MEDIUM',
@@ -278,6 +280,15 @@ export class SignalsService {
     const urgentBoost = /urgent|asap|blocked|need help now|immediately|this week|stuck|incident|production issue/i.test(combinedText) ? 5 : 0;
     const migrationBoost = /migration|migrate|implementation|integration|rollout|cutover/i.test(combinedText) ? 4 : 0;
     const triggerEventBoost = /\b(raised|raising|funding|series [abc]|seed round|hiring|hiring spree|hiring for|new cmo|new vp|new head of|joined as|just joined)\b/i.test(combinedText) ? 4 : 0;
+    const ecommerceBoost = /\b(shopify|shopify plus|bigcommerce|woocommerce|merchant center|catalog sync|ga4 ecommerce|meta pixel|klaviyo|checkout tracking|storefront)\b/i.test(combinedText)
+      && /\b(migration|expert|consultant|agency|need help|recommend|broken|issue|problem|support)\b/i.test(combinedText)
+      ? 6
+      : 0;
+    const serviceDemandBoost = /\b(cleaner|cleaning service|deep cleaning|mover|moving company|plumber|roofer|roofing|hvac|pest control|photographer|wedding planner|venue|contractor|interior designer)\b/i.test(combinedText)
+      && /\b(recommend|looking for|need|quote|quotes|book|availability|available|hire)\b/i.test(combinedText)
+      ? 6
+      : 0;
+    const localContextBoost = /\b(in|near|around)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}\b/.test(combinedText) ? 3 : 0;
     const hoursOld = Math.max(
       0,
       (Date.now() - new Date(signal.publishedAt || signal.fetchedAt).getTime()) / (1000 * 60 * 60),
@@ -318,6 +329,9 @@ export class SignalsService {
           recommendationBoost +
           urgentBoost +
           migrationBoost +
+          ecommerceBoost +
+          serviceDemandBoost +
+          localContextBoost +
           triggerEventBoost +
           (categoryBoost[signal.category || SignalCategory.OTHER] ?? 0) +
           (sourceBoost[signal.source?.type || ''] ?? 0) +
@@ -345,6 +359,20 @@ export class SignalsService {
       reasons.push('Active recommendation request');
     } else if (signal.category === SignalCategory.PAIN_COMPLAINT) {
       reasons.push('Explicit pain/problem discussion');
+    }
+
+    if (/\b(cleaner|cleaning service|deep cleaning|mover|moving company|plumber|roofer|roofing|hvac|pest control|photographer|wedding planner|venue|contractor|interior designer)\b/i.test(combinedText)
+      && /\b(recommend|looking for|need|quote|quotes|book|availability|available|hire)\b/i.test(combinedText)) {
+      reasons.push('Direct service-provider demand');
+    }
+
+    if (/\b(shopify|shopify plus|bigcommerce|woocommerce|merchant center|catalog sync|ga4 ecommerce|meta pixel|klaviyo|checkout tracking|storefront)\b/i.test(combinedText)
+      && /\b(migration|expert|consultant|agency|need help|recommend|broken|issue|problem|support)\b/i.test(combinedText)) {
+      reasons.push('Clear ecommerce implementation demand');
+    }
+
+    if (/\b(in|near|around)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}\b/.test(combinedText)) {
+      reasons.push('Location-specific buying context');
     }
 
     if (/recommend|who should we hire|looking for (a|an)?\s?(consultant|agency|partner)|implementation partner/i.test(combinedText)) {
@@ -416,8 +444,52 @@ export class SignalsService {
     const linkedDomain = this.extractLinkedDomain(signal);
     if (linkedDomain) return linkedDomain;
 
+    const locationHint = this.extractLocationHint(signal);
+    const serviceHint = this.extractServiceHint(signal);
+    if (serviceHint && locationHint) return `${serviceHint} · ${locationHint}`;
+    if (serviceHint) return serviceHint;
+    if (locationHint) return locationHint;
+
     const toolHints = this.extractToolHints(signal);
     if (toolHints.length) return toolHints[0];
+
+    return null;
+  }
+
+  private extractServiceHint(signal: SignalForRanking) {
+    const haystack = [signal.originalTitle, signal.originalText, signal.whyItMatters]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    const services = [
+      { pattern: /\bshopify|shopify plus|bigcommerce|woocommerce|merchant center|catalog sync|checkout tracking|storefront\b/i, label: 'Ecommerce implementation' },
+      { pattern: /\bklaviyo|retention setup|conversion rate\b/i, label: 'Ecommerce growth' },
+      { pattern: /\bhouse cleaning|cleaning service|deep cleaning|move[- ]out cleaning\b/i, label: 'Cleaning service' },
+      { pattern: /\bmoving company|movers?|relocation help\b/i, label: 'Moving service' },
+      { pattern: /\bpest control|exterminator\b/i, label: 'Pest control' },
+      { pattern: /\bplumber|plumbing\b/i, label: 'Plumbing' },
+      { pattern: /\broofer|roofing\b/i, label: 'Roofing' },
+      { pattern: /\bhvac|air conditioning|heating repair\b/i, label: 'HVAC' },
+      { pattern: /\bwedding photographer|photographer\b/i, label: 'Photography' },
+      { pattern: /\bwedding planner|event planner\b/i, label: 'Event planning' },
+      { pattern: /\bvenue\b/i, label: 'Venue booking' },
+      { pattern: /\bcontractor|remodel|renovation|interior designer\b/i, label: 'Home renovation' },
+    ];
+
+    return services.find((service) => service.pattern.test(haystack))?.label || null;
+  }
+
+  private extractLocationHint(signal: SignalForRanking) {
+    const haystack = [signal.originalTitle, signal.originalText, signal.whyItMatters]
+      .filter(Boolean)
+      .join(' ');
+
+    const directMatch = haystack.match(/\b(?:in|near|around)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}?)(?=[\s,.;!?]|$)/);
+    if (directMatch?.[1]) return directMatch[1].trim();
+
+    const cityPairMatch = haystack.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*,\s*([A-Z]{2})\b/);
+    if (cityPairMatch) return `${cityPairMatch[1]}, ${cityPairMatch[2]}`;
 
     return null;
   }
@@ -432,8 +504,12 @@ export class SignalsService {
       'salesforce',
       'hubspot',
       'shopify',
+      'shopify plus',
       'stripe',
       'klaviyo',
+      'woocommerce',
+      'bigcommerce',
+      'merchant center',
       'netsuite',
       'snowflake',
       'bigquery',
@@ -455,6 +531,8 @@ export class SignalsService {
           ? 'AWS'
           : tool === 'azure'
             ? 'Azure'
+            : tool === 'merchant center'
+              ? 'Merchant center'
             : tool.charAt(0).toUpperCase() + tool.slice(1));
   }
 

@@ -326,4 +326,123 @@ describe('SignalsService', () => {
       'Trigger event suggests near-term demand',
     ]));
   });
+
+  it('boosts local service recommendation demand and extracts service plus location hints', async () => {
+    mockPrisma.signal.findMany.mockResolvedValue([
+      {
+        id: 'generic_signal',
+        organizationId: 'org_1',
+        sourceId: 'src_1',
+        externalId: 'ext_1',
+        sourceUrl: 'https://example.com/1',
+        originalTitle: 'General neighborhood discussion',
+        originalText: 'We are talking about home maintenance in general.',
+        normalizedText: 'We are talking about home maintenance in general.',
+        fetchedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        category: 'OTHER',
+        confidenceScore: 70,
+        whyItMatters: null,
+        suggestedOutreach: null,
+        status: 'NEW',
+        stage: 'TO_REVIEW',
+        source: { id: 'src_1', name: 'Web', type: 'WEB_SEARCH' },
+        keywords: [{ keyword: { id: 'kw_1', phrase: 'home services' } }],
+        assignee: null,
+        _count: { annotations: 0 },
+      },
+      {
+        id: 'service_recommendation',
+        organizationId: 'org_1',
+        sourceId: 'src_2',
+        externalId: 'ext_2',
+        sourceUrl: 'https://example.com/2',
+        originalTitle: 'Looking for a cleaner in Kampala',
+        originalText: 'Can anyone recommend a reliable cleaning service in Kampala this week? Need quotes ASAP.',
+        normalizedText: 'Can anyone recommend a reliable cleaning service in Kampala this week? Need quotes ASAP.',
+        fetchedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        category: 'RECOMMENDATION_REQUEST',
+        confidenceScore: 70,
+        whyItMatters: null,
+        suggestedOutreach: null,
+        status: 'NEW',
+        stage: 'TO_REVIEW',
+        source: { id: 'src_2', name: 'Community', type: 'WEB_SEARCH' },
+        keywords: [{ keyword: { id: 'kw_2', phrase: 'cleaner' } }],
+        assignee: null,
+        _count: { annotations: 0 },
+      },
+    ]);
+    mockPrisma.signal.count.mockResolvedValue(2);
+
+    const result = await service.findAll('org_1', { page: 1, limit: 20 });
+
+    expect(result.data[0].id).toBe('service_recommendation');
+    expect(result.data[0].serviceHint).toBe('Cleaning service');
+    expect(result.data[0].locationHint).toBe('Kampala');
+    expect(result.data[0].rankingReasons).toEqual(expect.arrayContaining([
+      'Direct service-provider demand',
+      'Location-specific buying context',
+    ]));
+  });
+
+  it('boosts ecommerce implementation demand and extracts ecommerce service hints', async () => {
+    mockPrisma.signal.findMany.mockResolvedValue([
+      {
+        id: 'generic_signal',
+        organizationId: 'org_1',
+        sourceId: 'src_1',
+        externalId: 'ext_1',
+        sourceUrl: 'https://example.com/1',
+        originalTitle: 'General store discussion',
+        originalText: 'We are talking about ecommerce trends broadly.',
+        normalizedText: 'We are talking about ecommerce trends broadly.',
+        fetchedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        category: 'OTHER',
+        confidenceScore: 70,
+        whyItMatters: null,
+        suggestedOutreach: null,
+        status: 'NEW',
+        stage: 'TO_REVIEW',
+        source: { id: 'src_1', name: 'Web', type: 'WEB_SEARCH' },
+        keywords: [{ keyword: { id: 'kw_1', phrase: 'ecommerce' } }],
+        assignee: null,
+        _count: { annotations: 0 },
+      },
+      {
+        id: 'shopify_signal',
+        organizationId: 'org_1',
+        sourceId: 'src_2',
+        externalId: 'ext_2',
+        sourceUrl: 'https://community.shopify.com/c/store/need-shopify-help/2',
+        originalTitle: 'Need a Shopify expert for migration',
+        originalText: 'Can anyone recommend a Shopify agency for a storefront migration and merchant center issues?',
+        normalizedText: 'Can anyone recommend a Shopify agency for a storefront migration and merchant center issues?',
+        fetchedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        category: 'RECOMMENDATION_REQUEST',
+        confidenceScore: 72,
+        whyItMatters: null,
+        suggestedOutreach: null,
+        status: 'NEW',
+        stage: 'TO_REVIEW',
+        source: { id: 'src_2', name: 'Shopify Community', type: 'WEB_SEARCH' },
+        keywords: [{ keyword: { id: 'kw_2', phrase: 'shopify migration' } }],
+        assignee: null,
+        _count: { annotations: 0 },
+      },
+    ]);
+    mockPrisma.signal.count.mockResolvedValue(2);
+
+    const result = await service.findAll('org_1', { page: 1, limit: 20 });
+
+    expect(result.data[0].id).toBe('shopify_signal');
+    expect(result.data[0].serviceHint).toBe('Ecommerce implementation');
+    expect(result.data[0].toolHints).toEqual(expect.arrayContaining(['Shopify', 'Merchant center']));
+    expect(result.data[0].rankingReasons).toEqual(expect.arrayContaining([
+      'Clear ecommerce implementation demand',
+    ]));
+  });
 });

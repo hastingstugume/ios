@@ -195,6 +195,8 @@ export interface Signal {
   sourceLabel?: string;
   linkedDomain?: string | null;
   accountHint?: string | null;
+  serviceHint?: string | null;
+  locationHint?: string | null;
   toolHints?: string[];
   painPoint?: string | null;
   urgency?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';

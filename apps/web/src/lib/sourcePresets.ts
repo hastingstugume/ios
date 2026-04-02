@@ -16,6 +16,66 @@ export interface SourcePresetPack {
 
 export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
   {
+    id: 'single-shopify-migration-watch',
+    name: 'Single-source Shopify migration watch',
+    audience: 'Shopify experts and agencies looking for migration and rebuild demand',
+    description: 'A focused pack for brands asking about Shopify migrations, replatforming, and implementation help.',
+    recommendedKeywords: ['shopify migration', 'replatform', 'shopify expert', 'store rebuild'],
+    recommendedNegativeKeywords: ['theme giveaway', 'job opening'],
+    sources: [
+      {
+        name: 'Shopify migration requests',
+        type: 'WEB_SEARCH',
+        config: {
+          query: '"shopify migration" OR "moving to shopify" OR "need a shopify expert" OR "store rebuild"',
+          domains: ['community.shopify.com', 'news.ycombinator.com', 'indiehackers.com'],
+          excludeTerms: ['theme giveaway', 'job opening'],
+          sourceWeight: 1.05,
+        },
+      },
+    ],
+  },
+  {
+    id: 'single-ecommerce-tracking-rescue',
+    name: 'Single-source ecommerce tracking rescue',
+    audience: 'Consultants fixing checkout, attribution, pixel, and catalog issues for ecommerce brands',
+    description: 'Targets direct pain around conversion tracking, merchant feeds, catalog sync, and broken storefront analytics.',
+    recommendedKeywords: ['ga4 ecommerce', 'meta pixel', 'merchant center', 'catalog sync'],
+    recommendedNegativeKeywords: ['course', 'job opening'],
+    sources: [
+      {
+        name: 'Ecommerce tracking issues',
+        type: 'WEB_SEARCH',
+        config: {
+          query: '"ga4 ecommerce" OR "meta pixel" OR "merchant center" OR "catalog sync" OR "checkout tracking"',
+          domains: ['community.shopify.com', 'support.google.com', 'stackoverflow.com'],
+          excludeTerms: ['course', 'job opening'],
+          sourceWeight: 1.0,
+        },
+      },
+    ],
+  },
+  {
+    id: 'single-shopify-recommendations',
+    name: 'Single-source Shopify recommendations',
+    audience: 'Agencies looking for explicit recommendations and who-to-hire requests',
+    description: 'Finds direct asks for Shopify agencies, experts, and ecommerce implementation partners.',
+    recommendedKeywords: ['recommend shopify agency', 'shopify expert', 'ecommerce consultant'],
+    recommendedNegativeKeywords: ['theme', 'job opening'],
+    sources: [
+      {
+        name: 'Shopify recommendation requests',
+        type: 'WEB_SEARCH',
+        config: {
+          query: '"recommend a shopify agency" OR "looking for a shopify expert" OR "need an ecommerce consultant"',
+          domains: ['community.shopify.com', 'indiehackers.com', 'news.ycombinator.com'],
+          excludeTerms: ['theme', 'job opening'],
+          sourceWeight: 1.0,
+        },
+      },
+    ],
+  },
+  {
     id: 'single-sam-gov-procurement',
     name: 'Single-source procurement watch',
     audience: 'Agencies and consultants looking for direct public-sector buying intent',
@@ -221,6 +281,63 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
         config: {
           url: 'https://hnrss.org/newest?q=consultant',
           sourceWeight: 1.0,
+        },
+      },
+    ],
+  },
+  {
+    id: 'two-source-shopify-growth',
+    name: 'Shopify growth and retention',
+    audience: 'Agencies helping ecommerce brands with CRO, retention, and lifecycle tooling',
+    description: 'Pairs community asks with founder demand around Klaviyo, conversion issues, retention, and storefront growth.',
+    recommendedKeywords: ['klaviyo help', 'conversion rate', 'shopify growth', 'retention setup'],
+    recommendedNegativeKeywords: ['job opening', 'theme giveaway', 'course'],
+    sources: [
+      {
+        name: 'Shopify growth search',
+        type: 'WEB_SEARCH',
+        config: {
+          query: '"klaviyo help" OR "shopify conversion rate" OR "retention setup" OR "need ecommerce growth help"',
+          domains: ['community.shopify.com', 'indiehackers.com', 'news.ycombinator.com'],
+          excludeTerms: ['job opening', 'theme giveaway', 'course'],
+          sourceWeight: 1.0,
+        },
+      },
+      {
+        name: 'Founder ecommerce growth feed',
+        type: 'RSS',
+        config: {
+          url: 'https://hnrss.org/newest?q=shopify',
+          sourceWeight: 0.85,
+        },
+      },
+    ],
+  },
+  {
+    id: 'two-source-ecommerce-platform-pain',
+    name: 'Ecommerce platform pain',
+    audience: 'Implementation partners solving storefront, feed, checkout, and app-stack problems',
+    description: 'Captures clear ecommerce platform pain from operator communities and technical troubleshooting sources.',
+    recommendedKeywords: ['checkout issue', 'merchant center', 'shopify app', 'catalog sync'],
+    recommendedNegativeKeywords: ['job opening', 'theme swap'],
+    sources: [
+      {
+        name: 'Ecommerce operator platform pain',
+        type: 'WEB_SEARCH',
+        config: {
+          query: '"checkout issue" OR "merchant center" OR "catalog sync" OR "shopify app problem"',
+          domains: ['community.shopify.com', 'support.bigcommerce.com', 'support.google.com'],
+          excludeTerms: ['job opening', 'theme swap'],
+          sourceWeight: 1.0,
+        },
+      },
+      {
+        name: 'Stack Overflow ecommerce implementation',
+        type: 'STACKOVERFLOW_SEARCH',
+        config: {
+          query: '"shopify" OR "merchant center" OR "conversion tracking" OR "checkout"',
+          sort: 'activity',
+          sourceWeight: 0.9,
         },
       },
     ],
