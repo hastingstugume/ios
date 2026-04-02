@@ -1,8 +1,10 @@
 'use client';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { getNextPlan, getUpgradeContactHref, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
 import { keywordsApi, organizationsApi, sourcesApi } from '@/lib/api';
 import { SOURCE_TYPE_META, formatDate } from '@/lib/utils';
 import { SOURCE_QUERY_TEMPLATES } from '@/lib/sourcePresets';
@@ -219,8 +221,14 @@ export default function SourcesPage() {
     router.replace(query ? `/sources?${query}` : '/sources');
   }, [installedTemplate, installedCreated, installedSkipped, installedNote, router, searchParams]);
 
-  const normalizedPlan = (currentOrg?.plan || 'free').trim().toLowerCase();
+  const normalizedPlan = normalizeWorkspacePlan(currentOrg?.plan);
   const canFetchNow = normalizedPlan !== 'free';
+  const nextPlan = getNextPlan(normalizedPlan);
+  const upgradeContactHref = getUpgradeContactHref({
+    workspaceName: currentOrg?.name,
+    currentPlan: normalizedPlan,
+    targetPlan: nextPlan,
+  });
 
   const { data: sources = [], isLoading } = useQuery({
     queryKey: ['sources', currentOrgId],
@@ -480,6 +488,32 @@ export default function SourcesPage() {
           {installedCreated ? ` with ${installedCreated} source${installedCreated === '1' ? '' : 's'}` : ''}
           {installedSkipped ? `, skipped ${installedSkipped}` : ''}
           {installedNote ? ` (${installedNote})` : ''}.
+        </section>
+      ) : null}
+
+      {!canFetchNow ? (
+        <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-amber-800 dark:text-amber-200">
+              Free workspaces run on schedule only. Upgrade to {nextPlan ? WORKSPACE_PLAN_MAP[nextPlan].label : 'a paid plan'} for on-demand fetches and faster iteration.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/pricing"
+                className="inline-flex items-center justify-center rounded-lg border border-amber-500/40 px-3 py-2 text-sm text-amber-900 transition-colors hover:bg-amber-500/10 dark:text-amber-100"
+              >
+                See plans
+              </Link>
+              {nextPlan ? (
+                <a
+                  href={upgradeContactHref}
+                  className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                  Upgrade to {WORKSPACE_PLAN_MAP[nextPlan].label}
+                </a>
+              ) : null}
+            </div>
+          </div>
         </section>
       ) : null}
 

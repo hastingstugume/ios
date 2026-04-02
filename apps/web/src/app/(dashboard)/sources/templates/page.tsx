@@ -5,19 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { getNextPlan, getUpgradeContactHref, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
 import { keywordsApi, organizationsApi, sourcesApi, type SourceTemplateSuggestion } from '@/lib/api';
 import { SOURCE_PRESET_PACKS } from '@/lib/sourcePresets';
 import { SOURCE_TYPE_META } from '@/lib/utils';
 import { ArrowLeft, Bot, Sparkles } from 'lucide-react';
 
 type InstallableTemplate = SourceTemplateSuggestion;
-
-const PLAN_SOURCE_LIMITS: Record<string, number | null> = {
-  free: 1,
-  starter: 3,
-  growth: 15,
-  scale: null,
-};
 
 export default function SourceTemplatesPage() {
   const { currentOrgId, currentOrg } = useAuth();
@@ -93,9 +87,16 @@ export default function SourceTemplatesPage() {
         ? 'Saved for this workspace'
         : 'Suggested for this workspace';
 
-  const normalizedPlan = (currentOrg?.plan || 'free').trim().toLowerCase();
-  const maxSources = PLAN_SOURCE_LIMITS[normalizedPlan] ?? PLAN_SOURCE_LIMITS.free;
+  const normalizedPlan = normalizeWorkspacePlan(currentOrg?.plan);
+  const currentPlanMeta = WORKSPACE_PLAN_MAP[normalizedPlan];
+  const maxSources = currentPlanMeta.maxSources;
   const remainingSourceSlots = maxSources === null ? Number.POSITIVE_INFINITY : Math.max(maxSources - sources.length, 0);
+  const nextPlan = getNextPlan(normalizedPlan);
+  const upgradeContactHref = getUpgradeContactHref({
+    workspaceName: currentOrg?.name,
+    currentPlan: normalizedPlan,
+    targetPlan: nextPlan,
+  });
   const existingSourceNames = new Set(sources.map((source) => source.name.trim().toLowerCase()));
   const trackedKeywordCount = keywords.length;
   const negativeKeywordCount = currentOrg?.negativeKeywords?.length || 0;
@@ -109,7 +110,7 @@ export default function SourceTemplatesPage() {
     }
     if (remainingSourceSlots < preset.sources.length) {
       const available = Number.isFinite(remainingSourceSlots) ? remainingSourceSlots : 0;
-      return `This template needs ${preset.sources.length} source slots, but your ${currentOrg?.plan || 'Free'} plan has ${available} left.`;
+      return `This template needs ${preset.sources.length} sources, but your ${currentPlanMeta.label} plan has only ${available} slot${available === 1 ? '' : 's'} left.`;
     }
     return null;
   };
@@ -257,6 +258,32 @@ export default function SourceTemplatesPage() {
         </section>
       ) : null}
 
+      {maxSources !== null ? (
+        <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-amber-800 dark:text-amber-200">
+              {currentPlanMeta.label} includes up to {maxSources} sources. You are using {sources.length}, with {remainingSourceSlots} slot{remainingSourceSlots === 1 ? '' : 's'} left.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/pricing"
+                className="inline-flex items-center justify-center rounded-lg border border-amber-500/40 px-3 py-2 text-sm text-amber-900 transition-colors hover:bg-amber-500/10 dark:text-amber-100"
+              >
+                See plans
+              </Link>
+              {nextPlan ? (
+                <a
+                  href={upgradeContactHref}
+                  className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                  Upgrade to {WORKSPACE_PLAN_MAP[nextPlan].label}
+                </a>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {installPreset.error ? (
         <section className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {(installPreset.error as Error).message || 'Could not install template.'}
@@ -303,96 +330,119 @@ export default function SourceTemplatesPage() {
             ))}
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
-            {visibleTemplates.map((preset) => (
-              <div key={preset.id} className="section-card p-5">
-                {installPreset.variables?.id === preset.id && installPreset.isPending ? (
-                  <div className="mb-3 rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-xs text-primary">
-                    Installing template into your workspace...
-                  </div>
-                ) : null}
-                {getTemplateInstallBlocker(preset) ? (
-                  <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
-                    {getTemplateInstallBlocker(preset)}
-                  </div>
-                ) : null}
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-base font-semibold text-foreground">{preset.name}</p>
-                      {preset.templateKind === 'saved' ? (
-                        <span className="rounded-full border border-border bg-secondary px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                          Saved
-                        </span>
-                      ) : preset.templateKind === 'starter' ? (
-                        <span className="rounded-full border border-border bg-secondary px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                          Starter
-                        </span>
-                      ) : (
-                        <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] uppercase tracking-wide text-primary">
-                          Suggested
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">{preset.audience}</p>
-                  </div>
-                  <span className="rounded-full border border-border px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                    {preset.sources.length} sources
-                  </span>
-                </div>
-                <p className="mt-3 text-sm text-muted-foreground">{preset.description}</p>
+            {visibleTemplates.map((preset) => {
+              const installBlocker = getTemplateInstallBlocker(preset);
+              const isSourceLimitBlocker = installBlocker?.includes('source slots');
 
-                {preset.recommendedKeywords?.length ? (
-                  <div className="mt-4">
-                    <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">Recommended keywords</p>
-                    <div className="flex flex-wrap gap-2">
-                      {preset.recommendedKeywords.map((keyword) => (
-                        <span key={keyword} className="rounded-full border border-border px-2 py-1 text-[11px] text-foreground/80">
-                          {keyword}
-                        </span>
-                      ))}
+              return (
+                <div key={preset.id} className="section-card p-5">
+                  {installPreset.variables?.id === preset.id && installPreset.isPending ? (
+                    <div className="mb-3 rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-xs text-primary">
+                      Installing template into your workspace...
                     </div>
-                  </div>
-                ) : null}
-
-                {preset.recommendedNegativeKeywords?.length ? (
-                  <div className="mt-4">
-                    <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">Recommended negatives</p>
-                    <div className="flex flex-wrap gap-2">
-                      {preset.recommendedNegativeKeywords.map((keyword) => (
-                        <span key={keyword} className="rounded-full border border-border px-2 py-1 text-[11px] text-muted-foreground">
-                          {keyword}
-                        </span>
-                      ))}
+                  ) : null}
+                  {installBlocker ? (
+                    <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+                      <p>{installBlocker}</p>
+                      {isSourceLimitBlocker ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Link
+                            href="/pricing"
+                            className="inline-flex items-center justify-center rounded-md border border-amber-500/40 px-2.5 py-1 text-[11px] text-amber-900 transition-colors hover:bg-amber-500/10 dark:text-amber-100"
+                          >
+                            See plans
+                          </Link>
+                          {nextPlan ? (
+                            <a
+                              href={upgradeContactHref}
+                              className="inline-flex items-center justify-center rounded-md bg-primary px-2.5 py-1 text-[11px] text-primary-foreground transition-colors hover:bg-primary/90"
+                            >
+                              Upgrade to {WORKSPACE_PLAN_MAP[nextPlan].label}
+                            </a>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
-                  </div>
-                ) : null}
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {preset.sources.map((source) => (
-                    <span key={source.name} className="rounded-full border border-border px-2 py-1 text-[11px] text-muted-foreground">
-                      {SOURCE_TYPE_META[source.type]?.label || source.type}
+                  ) : null}
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-base font-semibold text-foreground">{preset.name}</p>
+                        {preset.templateKind === 'saved' ? (
+                          <span className="rounded-full border border-border bg-secondary px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                            Saved
+                          </span>
+                        ) : preset.templateKind === 'starter' ? (
+                          <span className="rounded-full border border-border bg-secondary px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                            Starter
+                          </span>
+                        ) : (
+                          <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] uppercase tracking-wide text-primary">
+                            Suggested
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-sm text-muted-foreground">{preset.audience}</p>
+                    </div>
+                    <span className="rounded-full border border-border px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {preset.sources.length} sources
                     </span>
-                  ))}
-                </div>
+                  </div>
+                  <p className="mt-3 text-sm text-muted-foreground">{preset.description}</p>
 
-                <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                  <button
-                    type="button"
-                    onClick={() => installPreset.mutate(preset)}
-                    disabled={installPreset.isPending || !!getTemplateInstallBlocker(preset)}
-                    className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-                  >
-                    {installPreset.variables?.id === preset.id && installPreset.isPending ? 'Installing…' : 'Install template'}
-                  </button>
-                  <Link
-                    href="/sources"
-                    className="inline-flex items-center justify-center rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-                  >
-                    Back to sources
-                  </Link>
+                  {preset.recommendedKeywords?.length ? (
+                    <div className="mt-4">
+                      <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">Recommended keywords</p>
+                      <div className="flex flex-wrap gap-2">
+                        {preset.recommendedKeywords.map((keyword) => (
+                          <span key={keyword} className="rounded-full border border-border px-2 py-1 text-[11px] text-foreground/80">
+                            {keyword}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {preset.recommendedNegativeKeywords?.length ? (
+                    <div className="mt-4">
+                      <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">Recommended negatives</p>
+                      <div className="flex flex-wrap gap-2">
+                        {preset.recommendedNegativeKeywords.map((keyword) => (
+                          <span key={keyword} className="rounded-full border border-border px-2 py-1 text-[11px] text-muted-foreground">
+                            {keyword}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {preset.sources.map((source) => (
+                      <span key={source.name} className="rounded-full border border-border px-2 py-1 text-[11px] text-muted-foreground">
+                        {SOURCE_TYPE_META[source.type]?.label || source.type}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => installPreset.mutate(preset)}
+                      disabled={installPreset.isPending || !!installBlocker}
+                      className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      {installPreset.variables?.id === preset.id && installPreset.isPending ? 'Installing…' : 'Install template'}
+                    </button>
+                    <Link
+                      href="/sources"
+                      className="inline-flex items-center justify-center rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+                    >
+                      Back to sources
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           {!visibleTemplates.length ? (
             <div className="section-card p-8 text-center text-sm text-muted-foreground">

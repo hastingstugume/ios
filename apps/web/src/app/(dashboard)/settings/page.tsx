@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { authApi, keywordsApi, organizationsApi, type AuditLog, type AuthSession, type Invitation, type OrganizationMember } from '@/lib/api';
+import { getNextPlan, getUpgradeContactHref, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
 import { useTheme, type ThemeMode } from '@/components/theme-provider';
 import { formatDate, formatPlanName } from '@/lib/utils';
-import { User, Building2, Shield, Users, Clock3, Link as LinkIcon, Trash2, Plus, Pencil, Sun, Moon, Monitor } from 'lucide-react';
+import { User, Building2, Shield, Users, Clock3, Link as LinkIcon, Trash2, Plus, Pencil, Sun, Moon, Monitor, CreditCard } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 import QRCode from 'qrcode';
 import { Switch } from '@/components/ui/switch';
@@ -283,6 +284,14 @@ export default function SettingsPage() {
     { value: 'system', label: 'System', description: `Currently following ${resolvedTheme} mode.`, icon: Monitor },
   ];
   const trackedKeywordCount = keywordsQuery.data?.length || 0;
+  const normalizedPlan = normalizeWorkspacePlan(currentOrg?.plan);
+  const currentPlanMeta = WORKSPACE_PLAN_MAP[normalizedPlan];
+  const nextPlan = getNextPlan(normalizedPlan);
+  const upgradeContactHref = getUpgradeContactHref({
+    workspaceName: currentOrg?.name,
+    currentPlan: normalizedPlan,
+    targetPlan: nextPlan,
+  });
   const profileChecklist = [
     { label: 'Business focus', complete: Boolean((currentOrg?.businessFocus || businessFocus).trim()) },
     { label: 'Target buyers', complete: Boolean((currentOrg?.targetAudience || targetAudience).trim()) },
@@ -485,11 +494,51 @@ export default function SettingsPage() {
               </Link>
             </div>
           </div>
-          <div className="rounded-xl border border-border bg-secondary p-4">
-            <label className="mb-2 block text-xs text-muted-foreground">Plan</label>
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-semibold text-foreground">{formatPlanName(currentOrg?.plan)}</span>
-              <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase text-primary">Active</span>
+          <div id="plan-management" className="rounded-xl border border-border bg-secondary p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <label className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+                  <CreditCard className="h-3.5 w-3.5" />
+                  Plan and billing
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-semibold text-foreground">{formatPlanName(currentOrg?.plan)}</span>
+                  <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase text-primary">Active</span>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Need more capacity? Upgrade requests are handled directly by our team.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/pricing"
+                  className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+                >
+                  See upgrade options
+                </Link>
+                {nextPlan ? (
+                  <a
+                    href={upgradeContactHref}
+                    className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
+                  >
+                    Upgrade to {WORKSPACE_PLAN_MAP[nextPlan].label}
+                  </a>
+                ) : null}
+              </div>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
+                Sources: <span className="font-medium text-foreground">{currentPlanMeta.maxSources ?? 'Unlimited'}</span>
+              </div>
+              <div className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
+                Keywords: <span className="font-medium text-foreground">{currentPlanMeta.maxKeywords ?? 'Unlimited'}</span>
+              </div>
+              <div className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
+                Alerts: <span className="font-medium text-foreground">{currentPlanMeta.maxAlerts ?? 'Unlimited'}</span>
+              </div>
+              <div className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
+                Seats: <span className="font-medium text-foreground">{currentPlanMeta.maxSeats ?? 'Unlimited'}</span>
+              </div>
             </div>
           </div>
           {!canManageWorkspace && <p className="text-sm text-muted-foreground">Only workspace admins can update workspace settings.</p>}

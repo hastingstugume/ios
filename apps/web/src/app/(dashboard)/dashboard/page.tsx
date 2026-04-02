@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { dashboardApi } from '@/lib/api';
+import { getNextPlan, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
 import { CATEGORY_META, STAGE_META, getConfidenceColor, formatDate } from '@/lib/utils';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import Link from 'next/link';
@@ -30,7 +31,9 @@ function StatCard({ label, value, icon: Icon, sub, color = 'text-primary' }: {
 }
 
 export default function DashboardPage() {
-  const { currentOrgId } = useAuth();
+  const { currentOrgId, currentOrg } = useAuth();
+  const currentPlan = normalizeWorkspacePlan(currentOrg?.plan);
+  const nextPlan = getNextPlan(currentPlan);
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', currentOrgId],
     queryFn: () => dashboardApi.summary(currentOrgId!),
@@ -62,6 +65,22 @@ export default function DashboardPage() {
           View Feed
         </Link>
       </div>
+
+      {nextPlan ? (
+        <div className="rounded-xl border border-primary/20 bg-primary/10 px-4 py-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-primary">
+              Upgrade to {WORKSPACE_PLAN_MAP[nextPlan].label} to track more sources and catch high-intent signals earlier.
+            </p>
+            <Link
+              href="/pricing"
+              className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              See upgrade options
+            </Link>
+          </div>
+        </div>
+      ) : null}
 
       {/* Stats grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">

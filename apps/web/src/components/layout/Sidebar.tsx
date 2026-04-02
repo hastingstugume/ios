@@ -1,10 +1,11 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { cn, formatPlanName } from '@/lib/utils';
-import { Radar, LayoutDashboard, Zap, Tag, Database, Bell, Settings, LogOut, ChevronDown, Building2, Check, Loader2 } from 'lucide-react';
+import { getNextPlan, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
+import { Radar, LayoutDashboard, Zap, Tag, Database, Bell, Settings, LogOut, ChevronDown, Building2, Check, Loader2, CreditCard, LifeBuoy, ArrowUpCircle } from 'lucide-react';
 
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -12,13 +13,33 @@ const NAV = [
   { href: '/keywords', label: 'Keywords', icon: Tag },
   { href: '/sources', label: 'Sources', icon: Database },
   { href: '/alerts', label: 'Alerts', icon: Bell },
-  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function Sidebar({ className = '', onNavigate }: { className?: string; onNavigate?: () => void }) {
   const pathname = usePathname();
   const { user, currentOrg, memberships, setCurrentOrgId, logout, isLoggingOut } = useAuth();
   const [showOrgMenu, setShowOrgMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const footerRef = useRef<HTMLDivElement | null>(null);
+  const currentPlan = normalizeWorkspacePlan(currentOrg?.plan);
+  const nextPlan = getNextPlan(currentPlan);
+  const nextPlanLabel = nextPlan ? WORKSPACE_PLAN_MAP[nextPlan].label : null;
+
+  useEffect(() => {
+    setShowUserMenu(false);
+    setShowOrgMenu(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!showUserMenu) return;
+    const handleOutside = (event: MouseEvent) => {
+      if (!footerRef.current?.contains(event.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [showUserMenu]);
 
   return (
     <aside className={cn('w-56 shrink-0 flex flex-col bg-card border-r border-border h-screen sticky top-0', className)}>
@@ -109,30 +130,81 @@ export function Sidebar({ className = '', onNavigate }: { className?: string; on
         })}
       </nav>
 
-      <div className="px-3 py-3 border-t border-border">
-        <div className="flex items-center gap-2.5 mb-2">
+      <div ref={footerRef} className="relative px-3 py-3 border-t border-border">
+        {showUserMenu ? (
+          <div className="absolute bottom-full left-0 right-0 z-50 mb-3">
+            <div className="absolute -bottom-1.5 right-5 h-3 w-3 rotate-45 border-b border-r border-border/80 bg-popover/95" />
+            <div className="overflow-hidden rounded-2xl border border-border/80 bg-popover/95 ring-1 ring-primary/20 shadow-[0_22px_56px_rgba(2,8,23,0.55)] backdrop-blur-md">
+              <div className="border-b border-border px-3 py-2.5">
+                <p className="truncate text-xs text-muted-foreground">{user?.email || 'Signed in'}</p>
+              </div>
+              <div className="p-1.5">
+                <Link
+                  href="/settings"
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    onNavigate?.();
+                  }}
+                  className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground"
+                >
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </Link>
+                <a
+                  href={`mailto:${process.env.NEXT_PUBLIC_BILLING_CONTACT_EMAIL || 'support@opportunity-scanner.io'}?subject=${encodeURIComponent('Help with Opportunity Scanner')}`}
+                  className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground"
+                >
+                  <LifeBuoy className="h-4 w-4" />
+                  Get help
+                </a>
+              </div>
+              <div className="border-t border-border p-1.5">
+                <Link
+                  href="/pricing"
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    onNavigate?.();
+                  }}
+                  className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground"
+                >
+                  {nextPlanLabel ? <ArrowUpCircle className="h-4 w-4" /> : <CreditCard className="h-4 w-4" />}
+                  {nextPlanLabel ? `Upgrade to ${nextPlanLabel}` : 'Plans and billing'}
+                </Link>
+              </div>
+              <div className="border-t border-border p-1.5">
+                <button
+                  onClick={() => {
+                    if (isLoggingOut) return;
+                    setShowUserMenu(false);
+                    onNavigate?.();
+                    logout();
+                  }}
+                  disabled={isLoggingOut}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isLoggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+                  {isLoggingOut ? 'Signing out…' : 'Log out'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        <button
+          onClick={() => setShowUserMenu((value) => !value)}
+          className="flex w-full items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 transition-colors hover:bg-accent"
+        >
           <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0 border border-primary/20">
             <span className="text-xs font-semibold text-primary">
               {user?.name?.charAt(0) || user?.email?.charAt(0) || '?'}
             </span>
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex-1 text-left">
             <p className="text-xs font-medium text-foreground truncate">{user?.name || 'User'}</p>
-            <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
+            <p className="text-[10px] text-muted-foreground truncate">
+              {currentOrg ? `${formatPlanName(currentOrg.plan)} plan` : 'No workspace'}
+            </p>
           </div>
-        </div>
-        <button
-          onClick={() => {
-            if (isLoggingOut) return;
-            setShowOrgMenu(false);
-            onNavigate?.();
-            logout();
-          }}
-          disabled={isLoggingOut}
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isLoggingOut ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
-          {isLoggingOut ? 'Signing out…' : 'Sign out'}
+          <ChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform', showUserMenu && 'rotate-180')} />
         </button>
       </div>
     </aside>

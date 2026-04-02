@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { getPlanLabel } from './plans';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -20,12 +21,7 @@ export function formatDate(dateStr: string | null | undefined) {
 }
 
 export function formatPlanName(plan: string | null | undefined) {
-  const normalized = plan?.trim().toLowerCase();
-  if (!normalized) return 'Free';
-  if (normalized === 'pro') return 'Growth';
-  if (normalized === 'team') return 'Growth';
-  if (normalized === 'enterprise') return 'Scale';
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  return getPlanLabel(plan);
 }
 
 export const CATEGORY_META: Record<string, { label: string; color: string; bg: string }> = {
