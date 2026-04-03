@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useUpgradeCheckout } from '@/hooks/useUpgradeCheckout';
+import { useBillingPortal } from '@/hooks/useBillingPortal';
 import { organizationsApi } from '@/lib/api';
 import { normalizeWorkspacePlan, WORKSPACE_PLAN_MAP, WORKSPACE_PLAN_ORDER, WORKSPACE_PLANS } from '@/lib/plans';
 import { Check, CreditCard, Sparkles } from 'lucide-react';
@@ -36,6 +37,12 @@ export default function PricingPage() {
     startUpgradeCheckout,
     clearCheckoutError,
   } = useUpgradeCheckout(currentOrgId);
+  const {
+    redirectingToPortal,
+    portalError,
+    startBillingPortal,
+    clearPortalError,
+  } = useBillingPortal(currentOrgId);
   const plans = useMemo(
     () => WORKSPACE_PLANS.filter((plan) => (segment === 'individual'
       ? ['free', 'starter', 'growth'].includes(plan.key)
@@ -95,6 +102,18 @@ export default function PricingPage() {
               Team and Enterprise
             </button>
           </div>
+          {currentPlan !== 'free' ? (
+            <div>
+              <button
+                type="button"
+                onClick={() => startBillingPortal({ returnPath: '/pricing' })}
+                disabled={redirectingToPortal}
+                className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {redirectingToPortal ? 'Redirecting...' : 'Manage billing and invoices'}
+              </button>
+            </div>
+          ) : null}
           {checkoutState === 'success' ? (
             <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
               Checkout completed. Your workspace plan will update in-app in a few moments.
@@ -112,6 +131,20 @@ export default function PricingPage() {
                 <button
                   type="button"
                   onClick={clearCheckoutError}
+                  className="inline-flex items-center justify-center rounded-md border border-destructive/40 px-2.5 py-1 text-xs transition-colors hover:bg-destructive/10"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {portalError ? (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <span>{portalError}</span>
+                <button
+                  type="button"
+                  onClick={clearPortalError}
                   className="inline-flex items-center justify-center rounded-md border border-destructive/40 px-2.5 py-1 text-xs transition-colors hover:bg-destructive/10"
                 >
                   Dismiss

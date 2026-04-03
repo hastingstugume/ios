@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useUpgradeCheckout } from '@/hooks/useUpgradeCheckout';
+import { useBillingPortal } from '@/hooks/useBillingPortal';
 import { authApi, keywordsApi, organizationsApi, type AuditLog, type AuthSession, type Invitation, type OrganizationMember } from '@/lib/api';
 import { getNextPlan, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
 import { useTheme, type ThemeMode } from '@/components/theme-provider';
@@ -343,6 +344,12 @@ export default function SettingsPage() {
     startUpgradeCheckout,
     clearCheckoutError,
   } = useUpgradeCheckout(currentOrgId);
+  const {
+    redirectingToPortal,
+    portalError,
+    startBillingPortal,
+    clearPortalError,
+  } = useBillingPortal(currentOrgId);
   const profileChecklist = [
     Boolean((currentOrg?.businessFocus || businessFocus).trim()),
     Boolean((currentOrg?.targetAudience || targetAudience).trim()),
@@ -574,6 +581,14 @@ export default function SettingsPage() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => startBillingPortal({ returnPath: '/settings#plan-limits' })}
+                  disabled={redirectingToPortal}
+                  className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {redirectingToPortal ? 'Redirecting...' : 'Manage billing'}
+                </button>
                 <Link
                   href="/pricing"
                   className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
@@ -599,6 +614,20 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={clearCheckoutError}
+                    className="rounded-md border border-destructive/40 px-2 py-0.5 transition-colors hover:bg-destructive/10"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            {portalError ? (
+              <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                <div className="flex items-center justify-between gap-3">
+                  <span>{portalError}</span>
+                  <button
+                    type="button"
+                    onClick={clearPortalError}
                     className="rounded-md border border-destructive/40 px-2 py-0.5 transition-colors hover:bg-destructive/10"
                   >
                     Dismiss

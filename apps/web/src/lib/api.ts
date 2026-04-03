@@ -137,6 +137,12 @@ export const billingApi = {
       cancelPath?: string;
     },
   ) => api.post<{ checkoutUrl: string; sessionId: string }>(`/orgs/${orgId}/billing/checkout`, data),
+  createPortalSession: (
+    orgId: string,
+    data?: {
+      returnPath?: string;
+    },
+  ) => api.post<{ portalUrl: string; sessionId: string }>(`/orgs/${orgId}/billing/portal`, data || {}),
 };
 
 export const publicApi = {
