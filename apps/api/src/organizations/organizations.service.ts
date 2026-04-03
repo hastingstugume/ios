@@ -1,7 +1,7 @@
 // organizations/organizations.service.ts
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { UserRole } from '@prisma/client';
+import { AuditAction, Prisma, UserRole } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EntitlementsService } from '../entitlements/entitlements.service';
@@ -83,17 +83,34 @@ export class OrganizationsService {
     return org;
   }
 
-  async getAuditLog(orgId: string, page = 1, limit = 50) {
+  async getAuditLog(
+    orgId: string,
+    page = 1,
+    limit = 50,
+    options?: { rangeDays?: number; actions?: string[] },
+  ) {
     const skip = (page - 1) * limit;
+    const validActions = (options?.actions || []).filter((action): action is AuditAction =>
+      (Object.values(AuditAction) as string[]).includes(action),
+    );
+    const createdAtFilter = options?.rangeDays
+      ? { gte: new Date(Date.now() - options.rangeDays * 24 * 60 * 60 * 1000) }
+      : undefined;
+    const where: Prisma.AuditLogWhereInput = {
+      organizationId: orgId,
+      ...(createdAtFilter ? { createdAt: createdAtFilter } : {}),
+      ...(validActions.length ? { action: { in: validActions } } : {}),
+    };
+
     const [data, total] = await Promise.all([
       this.prisma.auditLog.findMany({
-        where: { organizationId: orgId },
+        where,
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
         include: { user: { select: { id: true, name: true, email: true } } },
       }),
-      this.prisma.auditLog.count({ where: { organizationId: orgId } }),
+      this.prisma.auditLog.count({ where }),
     ]);
     return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }

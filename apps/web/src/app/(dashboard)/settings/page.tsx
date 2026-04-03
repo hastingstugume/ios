@@ -17,6 +17,7 @@ import { Switch } from '@/components/ui/switch';
 
 const ROLE_OPTIONS = ['OWNER', 'ADMIN', 'ANALYST', 'VIEWER'] as const;
 type SettingsTab = 'account' | 'workspace' | 'team' | 'security' | 'audit';
+type AuditRangeDays = 7 | 30;
 
 const SETTINGS_TABS: Array<{ key: SettingsTab; label: string; hint: string }> = [
   { key: 'account', label: 'Account', hint: 'Profile and appearance' },
@@ -25,6 +26,29 @@ const SETTINGS_TABS: Array<{ key: SettingsTab; label: string; hint: string }> = 
   { key: 'security', label: 'Security', hint: 'Password, sessions, and MFA' },
   { key: 'audit', label: 'Audit', hint: 'Workspace activity history' },
 ];
+
+const BILLING_AUDIT_ACTIONS = new Set([
+  'BILLING_CHECKOUT_STARTED',
+  'BILLING_PORTAL_OPENED',
+  'BILLING_PLAN_UPDATED',
+]);
+
+function planRank(plan?: string | null): number {
+  if (!plan) return 0;
+  const normalized = plan.trim().toLowerCase();
+  if (normalized === 'free') return 0;
+  if (normalized === 'starter') return 1;
+  if (normalized === 'growth' || normalized === 'pro' || normalized === 'team') return 2;
+  if (normalized === 'scale' || normalized === 'enterprise') return 3;
+  return 0;
+}
+
+function formatAuditActionLabel(action: string): string {
+  if (action === 'BILLING_CHECKOUT_STARTED') return 'Checkout started';
+  if (action === 'BILLING_PORTAL_OPENED') return 'Billing portal opened';
+  if (action === 'BILLING_PLAN_UPDATED') return 'Plan updated';
+  return action.replaceAll('_', ' ');
+}
 
 function SectionTitle({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle: string }) {
   return (
@@ -112,6 +136,7 @@ export default function SettingsPage() {
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [editingMember, setEditingMember] = useState<OrganizationMember | null>(null);
+  const [auditRangeDays, setAuditRangeDays] = useState<AuditRangeDays>(30);
 
   useEffect(() => {
     setName(user?.name || '');
@@ -198,8 +223,8 @@ export default function SettingsPage() {
   });
 
   const auditQuery = useQuery({
-    queryKey: ['org-audit', currentOrgId],
-    queryFn: () => organizationsApi.auditLog(currentOrgId!, 1, 20),
+    queryKey: ['org-audit', currentOrgId, auditRangeDays],
+    queryFn: () => organizationsApi.auditLog(currentOrgId!, 1, 100, { rangeDays: auditRangeDays }),
     enabled: !!currentOrgId,
   });
   const keywordsQuery = useQuery({
@@ -349,6 +374,25 @@ export default function SettingsPage() {
   const members = membersQuery.data?.members || [];
   const invitations = membersQuery.data?.invitations || [];
   const auditLogs = auditQuery.data?.data || [];
+  const billingAuditLogs = useMemo(
+    () => auditLogs.filter((entry) => BILLING_AUDIT_ACTIONS.has(entry.action)),
+    [auditLogs],
+  );
+  const billingPortalOpenedCount = billingAuditLogs.filter((entry) => entry.action === 'BILLING_PORTAL_OPENED').length;
+  const checkoutStartedCount = billingAuditLogs.filter((entry) => entry.action === 'BILLING_CHECKOUT_STARTED').length;
+  const planUpgradeCount = billingAuditLogs.filter((entry) => {
+    if (entry.action !== 'BILLING_PLAN_UPDATED') return false;
+    const previousPlan = String(entry.metadata?.previousPlan || '');
+    const updatedPlan = String(entry.metadata?.updatedPlan || '');
+    if (!updatedPlan) return false;
+    return planRank(updatedPlan) > planRank(previousPlan);
+  }).length;
+  const portalToCheckoutRate = billingPortalOpenedCount > 0
+    ? Math.round((checkoutStartedCount / billingPortalOpenedCount) * 100)
+    : null;
+  const checkoutToUpgradeRate = checkoutStartedCount > 0
+    ? Math.round((planUpgradeCount / checkoutStartedCount) * 100)
+    : null;
   const activeSessions = sessionsQuery.data?.sessions || [];
   const themeOptions: Array<{ value: ThemeMode; label: string; description: string; icon: any }> = [
     { value: 'light', label: 'Light', description: 'Bright interface for daytime work.', icon: Sun },
@@ -1450,11 +1494,95 @@ export default function SettingsPage() {
       <section className={`section-card ${activeTab === 'audit' ? '' : 'hidden'}`}>
         <SectionTitle icon={Clock3} title="Audit Log" subtitle="Review important workspace actions and administrative changes." />
         <div className="space-y-3 px-5 py-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-secondary px-4 py-3">
+            <div>
+              <p className="text-sm font-medium text-foreground">Time range</p>
+              <p className="mt-1 text-xs text-muted-foreground">Filter activity and conversion metrics by recent period.</p>
+            </div>
+            <div className="inline-flex rounded-lg border border-border bg-background p-1">
+              {[7, 30].map((days) => {
+                const isActive = auditRangeDays === days;
+                return (
+                  <button
+                    key={days}
+                    type="button"
+                    onClick={() => setAuditRangeDays(days as AuditRangeDays)}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                    }`}
+                  >
+                    {days}d
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-secondary p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Billing conversion funnel</p>
+                <p className="mt-1 text-xs text-muted-foreground">Portal opened -&gt; checkout started -&gt; plan upgraded.</p>
+              </div>
+              <span className="text-xs text-muted-foreground">Last {auditRangeDays} days</span>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              <div className="rounded-lg border border-border bg-background px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Portal opens</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">{billingPortalOpenedCount}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-background px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Checkout starts</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">{checkoutStartedCount}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {portalToCheckoutRate === null ? '—' : `${portalToCheckoutRate}% of portal opens`}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-background px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Plan upgrades</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">{planUpgradeCount}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {checkoutToUpgradeRate === null ? '—' : `${checkoutToUpgradeRate}% of checkout starts`}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <details className="overflow-hidden rounded-xl border border-border bg-secondary/70" open={billingAuditLogs.length > 0}>
+            <summary className="cursor-pointer list-none px-4 py-3 text-sm text-foreground">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-medium">Billing activity timeline</span>
+                <span className="text-xs text-muted-foreground">{billingAuditLogs.length} events</span>
+              </div>
+            </summary>
+            <div className="space-y-2 border-t border-border px-4 py-3">
+              {billingAuditLogs.slice(0, 12).map((entry) => (
+                <div key={entry.id} className="rounded-lg border border-border bg-background px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-foreground">{formatAuditActionLabel(entry.action)}</p>
+                    <p className="text-xs text-muted-foreground">{formatDate(entry.createdAt)}</p>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {entry.user?.name || entry.user?.email || 'System'}
+                  </p>
+                  {entry.metadata ? (
+                    <p className="mt-1 text-xs text-muted-foreground break-words">
+                      {Object.entries(entry.metadata).map(([key, value]) => `${key}: ${String(value)}`).join(' · ')}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+              {!billingAuditLogs.length ? (
+                <p className="text-sm text-muted-foreground">No billing activity found in this time range.</p>
+              ) : null}
+            </div>
+          </details>
+
           {auditLogs.map((entry: AuditLog) => (
             <div key={entry.id} className="rounded-xl border border-border bg-secondary px-4 py-3">
               <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-sm font-medium text-foreground">{entry.action.replaceAll('_', ' ')}</p>
+                  <p className="text-sm font-medium text-foreground">{formatAuditActionLabel(entry.action)}</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {entry.user?.name || entry.user?.email || 'System'} · {formatDate(entry.createdAt)}
                   </p>

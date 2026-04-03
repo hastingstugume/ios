@@ -124,8 +124,20 @@ export const organizationsApi = {
   inviteMember: (orgId: string, data: { email: string; role: string }) => api.post(`/orgs/${orgId}/members`, data),
   updateMember: (orgId: string, memberId: string, data: { role: string }) => api.patch(`/orgs/${orgId}/members/${memberId}`, data),
   removeMember: (orgId: string, memberId: string) => api.delete(`/orgs/${orgId}/members/${memberId}`),
-  auditLog: (orgId: string, page = 1, limit = 20) =>
-    api.get<PaginatedResponse<AuditLog>>(`/orgs/${orgId}/audit-log?page=${page}&limit=${limit}`),
+  auditLog: (
+    orgId: string,
+    page = 1,
+    limit = 20,
+    options?: { rangeDays?: number; actions?: string[] },
+  ) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (options?.rangeDays) params.set('rangeDays', String(options.rangeDays));
+    if (options?.actions?.length) params.set('actions', options.actions.join(','));
+    return api.get<PaginatedResponse<AuditLog>>(`/orgs/${orgId}/audit-log?${params.toString()}`);
+  },
 };
 
 export const billingApi = {

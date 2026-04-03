@@ -46,8 +46,18 @@ export class OrganizationsController {
     @Param('orgId') orgId: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+    @Query('rangeDays') rangeDaysRaw?: string,
+    @Query('actions') actionsRaw?: string,
   ) {
-    return this.orgs.getAuditLog(orgId, page, limit);
+    const parsedRangeDays = rangeDaysRaw ? Number.parseInt(rangeDaysRaw, 10) : Number.NaN;
+    const rangeDays = Number.isFinite(parsedRangeDays) && parsedRangeDays > 0
+      ? Math.min(parsedRangeDays, 365)
+      : undefined;
+    const actions = actionsRaw
+      ? actionsRaw.split(',').map((value) => value.trim().toUpperCase()).filter(Boolean)
+      : undefined;
+
+    return this.orgs.getAuditLog(orgId, page, limit, { rangeDays, actions });
   }
 
   @Get('members')
