@@ -33,6 +33,10 @@ export class OrganizationsController {
 
   @Get() findOne(@Param('orgId') orgId: string) { return this.orgs.findOne(orgId); }
 
+  @Get('usage') getUsage(@Param('orgId') orgId: string) {
+    return this.orgs.getUsage(orgId);
+  }
+
   @Patch() update(@Param('orgId') orgId: string, @Body() dto: UpdateOrgDto, @Req() req: any) {
     return this.orgs.update(orgId, req.user.id, req.membership?.role, dto);
   }

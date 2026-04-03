@@ -25,6 +25,36 @@ export class OrganizationsService {
     return org;
   }
 
+  async getUsage(orgId: string) {
+    const entitlements = await this.entitlements.getWorkspaceEntitlements(orgId);
+    const [sourcesUsed, keywordsUsed, alertsUsed, memberCount, pendingInvitationCount] = await Promise.all([
+      this.prisma.source.count({ where: { organizationId: orgId } }),
+      this.prisma.keyword.count({ where: { organizationId: orgId, isActive: true } }),
+      this.prisma.alertRule.count({ where: { organizationId: orgId, isActive: true } }),
+      this.prisma.organizationMember.count({ where: { organizationId: orgId } }),
+      this.prisma.invitation.count({
+        where: {
+          organizationId: orgId,
+          acceptedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+      }),
+    ]);
+
+    const seatsUsed = memberCount + pendingInvitationCount;
+
+    return {
+      plan: entitlements.plan,
+      planLabel: entitlements.label,
+      resources: {
+        sources: this.buildUsageMetric(sourcesUsed, entitlements.maxSources),
+        keywords: this.buildUsageMetric(keywordsUsed, entitlements.maxKeywords),
+        alerts: this.buildUsageMetric(alertsUsed, entitlements.maxAlerts),
+        seats: this.buildUsageMetric(seatsUsed, entitlements.maxSeats),
+      },
+    };
+  }
+
   async update(
     id: string,
     userId: string,
@@ -216,5 +246,28 @@ export class OrganizationsService {
     if (actorRole !== UserRole.OWNER && targetRole === UserRole.OWNER) {
       throw new ForbiddenException('Only owners can assign owner role');
     }
+  }
+
+  private buildUsageMetric(used: number, limit: number | null) {
+    if (limit === null) {
+      return {
+        used,
+        limit: null,
+        remaining: null,
+        percentUsed: null,
+        atLimit: false,
+      };
+    }
+
+    const remaining = Math.max(limit - used, 0);
+    const normalizedPercent = limit > 0 ? Math.round((Math.min(used, limit) / limit) * 100) : 0;
+
+    return {
+      used,
+      limit,
+      remaining,
+      percentUsed: normalizedPercent,
+      atLimit: used >= limit,
+    };
   }
 }
