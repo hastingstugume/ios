@@ -510,22 +510,27 @@ export default function SettingsPage() {
               <p className="mt-2 text-xs text-muted-foreground">Who you want the scanner to find demand from most often.</p>
             </div>
           </div>
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Workspace negative keywords</label>
-            <input
-              value={negativeKeywords}
-              onChange={(e) => setNegativeKeywords(e.target.value)}
-              disabled={!canManageWorkspace}
-              placeholder="wordpress, crypto, newsletter, affiliate"
-              className="w-full rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:text-muted-foreground"
-            />
-            <p className="mt-2 text-xs text-muted-foreground">Comma-separated phrases that should be filtered out across all discovery sources in this workspace.</p>
-          </div>
-          <div className="rounded-xl border border-border bg-secondary px-4 py-3">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-muted-foreground">
-                Suggestion profile strength: <span className="font-medium text-foreground">{completedProfileItems} / {profileChecklist.length}</span>
-              </p>
+          <details className="rounded-xl border border-border bg-secondary">
+            <summary className="cursor-pointer list-none px-4 py-3 text-sm text-foreground">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-medium">Advanced workspace settings</span>
+                <span className="text-xs text-muted-foreground">
+                  Profile strength {completedProfileItems}/{profileChecklist.length}
+                </span>
+              </div>
+            </summary>
+            <div className="space-y-4 border-t border-border px-4 py-4">
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Workspace negative keywords</label>
+                <input
+                  value={negativeKeywords}
+                  onChange={(e) => setNegativeKeywords(e.target.value)}
+                  disabled={!canManageWorkspace}
+                  placeholder="wordpress, crypto, newsletter, affiliate"
+                  className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:text-muted-foreground"
+                />
+                <p className="mt-2 text-xs text-muted-foreground">Comma-separated phrases filtered out across this workspace.</p>
+              </div>
               <div className="flex flex-wrap gap-2">
                 <Link
                   href="/sources/templates"
@@ -541,7 +546,7 @@ export default function SettingsPage() {
                 </Link>
               </div>
             </div>
-          </div>
+          </details>
           <div id="plan-limits" className="rounded-xl border border-border bg-secondary p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
