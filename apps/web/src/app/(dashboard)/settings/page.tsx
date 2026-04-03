@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUpgradeCheckout } from '@/hooks/useUpgradeCheckout';
 import { useBillingPortal } from '@/hooks/useBillingPortal';
 import { authApi, billingApi, keywordsApi, organizationsApi, type AuditLog, type AuthSession, type Invitation, type OrganizationMember } from '@/lib/api';
+import { getPlanLimitUpgradeHint } from '@/lib/planLimitErrors';
 import { getNextPlan, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
 import { useTheme, type ThemeMode } from '@/components/theme-provider';
 import { formatDate, formatPlanName } from '@/lib/utils';
@@ -379,11 +380,14 @@ export default function SettingsPage() {
     Boolean((currentOrg?.negativeKeywords || negativeKeywords.split(',').map((term) => term.trim()).filter(Boolean)).length),
   ];
   const completedProfileItems = profileChecklist.filter(Boolean).length;
+  const teamSeatLimitReached = Boolean(workspaceUsage?.resources.seats.atLimit);
+  const inviteUpgradeHint = getPlanLimitUpgradeHint(inviteMutation.error, currentOrg?.plan);
 
   const closeInviteModal = () => {
     setShowInviteModal(false);
     setInvite({ email: '', role: 'ANALYST' });
     inviteMutation.reset();
+    clearCheckoutError();
   };
 
   const closeEditMemberModal = () => {
@@ -851,6 +855,32 @@ export default function SettingsPage() {
       <section className={`section-card ${activeTab === 'team' ? '' : 'hidden'}`}>
         <SectionTitle icon={Users} title="Team Access" subtitle="Manage members, invite new teammates, and keep workspace roles accurate." />
         <div className="space-y-5 px-5 py-5">
+          {teamSeatLimitReached ? (
+            <div className="rounded-xl border border-primary/20 bg-primary/10 px-4 py-3">
+              <p className="text-sm text-primary">
+                Your team seats are fully used ({workspaceUsage?.resources.seats.used}/{workspaceUsage?.resources.seats.limit}). Upgrade to invite more teammates.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {nextPlan ? (
+                  <button
+                    type="button"
+                    onClick={() => startUpgradeCheckout(nextPlan)}
+                    disabled={!!redirectingPlan}
+                    className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
+                  >
+                    {redirectingPlan === nextPlan ? 'Redirecting…' : `Upgrade to ${WORKSPACE_PLAN_MAP[nextPlan].label}`}
+                  </button>
+                ) : (
+                  <Link
+                    href="/pricing"
+                    className="inline-flex items-center justify-center rounded-lg border border-primary/30 px-3 py-2 text-sm text-primary transition-colors hover:bg-primary/10"
+                  >
+                    See plans
+                  </Link>
+                )}
+              </div>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary px-4 py-4">
             <div>
               <p className="text-sm font-medium text-foreground">Workspace members and invitations</p>
@@ -952,7 +982,60 @@ export default function SettingsPage() {
           >
             {ROLE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
           </select>
-          {inviteMutation.error && <p className="text-sm text-destructive">{(inviteMutation.error as Error).message}</p>}
+          {inviteMutation.error ? (
+            inviteUpgradeHint ? (
+              <div className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-3 text-sm text-primary">
+                <p>{inviteUpgradeHint.message}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {inviteUpgradeHint.nextPlan ? (
+                    <button
+                      type="button"
+                      onClick={() => startUpgradeCheckout(inviteUpgradeHint.nextPlan!)}
+                      disabled={redirectingPlan === inviteUpgradeHint.nextPlan}
+                      className="rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
+                    >
+                      {redirectingPlan === inviteUpgradeHint.nextPlan
+                        ? 'Redirecting…'
+                        : `Upgrade to ${WORKSPACE_PLAN_MAP[inviteUpgradeHint.nextPlan].label}`}
+                    </button>
+                  ) : (
+                    <Link
+                      href="/pricing"
+                      className="rounded-lg border border-primary/30 px-3 py-2 text-sm transition-colors hover:bg-primary/10"
+                    >
+                      See plans
+                    </Link>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      inviteMutation.reset();
+                      clearCheckoutError();
+                    }}
+                    className="rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-destructive">{(inviteMutation.error as Error).message}</p>
+            )
+          ) : null}
+          {checkoutError ? (
+            <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              <div className="flex items-center justify-between gap-3">
+                <span>{checkoutError}</span>
+                <button
+                  type="button"
+                  onClick={clearCheckoutError}
+                  className="rounded-md border border-destructive/30 px-2 py-1 transition-colors hover:bg-destructive/10"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ) : null}
           <div className="flex gap-2">
             <button
               disabled={!invite.email.trim() || inviteMutation.isPending}

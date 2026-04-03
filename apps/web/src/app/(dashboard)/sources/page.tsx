@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUpgradeCheckout } from '@/hooks/useUpgradeCheckout';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getNextPlan, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
+import { getPlanLimitUpgradeHint } from '@/lib/planLimitErrors';
 import { keywordsApi, organizationsApi, sourcesApi } from '@/lib/api';
 import { SOURCE_TYPE_META, formatDate } from '@/lib/utils';
 import { SOURCE_QUERY_TEMPLATES } from '@/lib/sourcePresets';
@@ -421,6 +422,8 @@ export default function SourcesPage() {
 
   const previewResults = previewSource.data?.previewItems || [];
   const selectedTypeSupport = SOURCE_TYPE_SUPPORT[form.type] || SOURCE_TYPE_SUPPORT.MANUAL;
+  const sourceMutationError = create.error || updateSource.error;
+  const sourceUpgradeHint = getPlanLimitUpgradeHint(sourceMutationError, currentOrg?.plan);
   const orderedSourceTypes = [
     ...SOURCE_TYPES.filter((type) => type.recommended && SOURCE_TYPE_SUPPORT[type.value]?.supportStatus === 'production_ready'),
     ...SOURCE_TYPES.filter((type) => type.recommended && SOURCE_TYPE_SUPPORT[type.value]?.supportStatus !== 'production_ready'),
@@ -925,7 +928,46 @@ export default function SourcesPage() {
               ) : null}
             </div>
           ) : null}
-          {(create.error || updateSource.error) && <p className="text-sm text-destructive">{((create.error || updateSource.error) as Error).message}</p>}
+          {sourceMutationError ? (
+            sourceUpgradeHint ? (
+              <div className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-3 text-sm text-primary">
+                <p>{sourceUpgradeHint.message}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {sourceUpgradeHint.nextPlan ? (
+                    <button
+                      type="button"
+                      onClick={() => startUpgradeCheckout(sourceUpgradeHint.nextPlan!)}
+                      disabled={redirectingPlan === sourceUpgradeHint.nextPlan}
+                      className="rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
+                    >
+                      {redirectingPlan === sourceUpgradeHint.nextPlan
+                        ? 'Redirecting…'
+                        : `Upgrade to ${WORKSPACE_PLAN_MAP[sourceUpgradeHint.nextPlan].label}`}
+                    </button>
+                  ) : (
+                    <Link
+                      href="/pricing"
+                      className="rounded-lg border border-primary/30 px-3 py-2 text-sm transition-colors hover:bg-primary/10"
+                    >
+                      See plans
+                    </Link>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      create.reset();
+                      updateSource.reset();
+                    }}
+                    className="rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-destructive">{(sourceMutationError as Error).message}</p>
+            )
+          ) : null}
           <div className="flex gap-2">
             <button disabled={!form.name || create.isPending || updateSource.isPending} onClick={() => editingId ? updateSource.mutate() : create.mutate()}
               className="rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40">

@@ -2,7 +2,10 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { useUpgradeCheckout } from '@/hooks/useUpgradeCheckout';
 import { alertsApi, keywordsApi, organizationsApi, type AlertRule } from '@/lib/api';
+import { getPlanLimitUpgradeHint } from '@/lib/planLimitErrors';
+import { WORKSPACE_PLAN_MAP } from '@/lib/plans';
 import { CATEGORY_META, formatDate } from '@/lib/utils';
 import { Bell, Plus, Trash2, ToggleRight, ToggleLeft, Clock, Mail, Search, Pencil, Workflow } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
@@ -50,7 +53,7 @@ const ALERT_STARTERS = [
 ];
 
 export default function AlertsPage() {
-  const { currentOrgId, user } = useAuth();
+  const { currentOrgId, currentOrg, user } = useAuth();
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [editingRule, setEditingRule] = useState<AlertRule | null>(null);
@@ -67,6 +70,12 @@ export default function AlertsPage() {
   });
   const [search, setSearch] = useState('');
   const [deleteCandidate, setDeleteCandidate] = useState<AlertRule | null>(null);
+  const {
+    redirectingPlan,
+    checkoutError,
+    startUpgradeCheckout,
+    clearCheckoutError,
+  } = useUpgradeCheckout(currentOrgId);
 
   const { data: rules = [], isLoading } = useQuery({
     queryKey: ['alerts', currentOrgId],
@@ -158,6 +167,8 @@ export default function AlertsPage() {
   const liveRules = rules.filter((rule) => rule.isActive).length;
   const immediateRules = rules.filter((rule) => rule.frequency === 'IMMEDIATE').length;
   const recipientCount = rules.reduce((sum, rule) => sum + rule.emailRecipients.length, 0);
+  const alertMutationError = create.error || updateRule.error;
+  const alertUpgradeHint = getPlanLimitUpgradeHint(alertMutationError, currentOrg?.plan);
 
   const keywordLabelMap = useMemo(() => Object.fromEntries(keywords.map((keyword) => [keyword.id, keyword.phrase])), [keywords]);
 
@@ -386,7 +397,61 @@ export default function AlertsPage() {
               </div>
             </div>
           </div>
-          {(create.error || updateRule.error) && <p className="text-sm text-destructive">{((create.error || updateRule.error) as Error).message}</p>}
+          {alertMutationError ? (
+            alertUpgradeHint ? (
+              <div className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-3 text-sm text-primary">
+                <p>{alertUpgradeHint.message}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {alertUpgradeHint.nextPlan ? (
+                    <button
+                      type="button"
+                      onClick={() => startUpgradeCheckout(alertUpgradeHint.nextPlan!)}
+                      disabled={redirectingPlan === alertUpgradeHint.nextPlan}
+                      className="rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
+                    >
+                      {redirectingPlan === alertUpgradeHint.nextPlan
+                        ? 'Redirecting…'
+                        : `Upgrade to ${WORKSPACE_PLAN_MAP[alertUpgradeHint.nextPlan].label}`}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => window.location.assign('/pricing')}
+                      className="rounded-lg border border-primary/30 px-3 py-2 text-sm transition-colors hover:bg-primary/10"
+                    >
+                      See plans
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      create.reset();
+                      updateRule.reset();
+                    }}
+                    className="rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-destructive">{(alertMutationError as Error).message}</p>
+            )
+          ) : null}
+          {checkoutError ? (
+            <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              <div className="flex items-center justify-between gap-3">
+                <span>{checkoutError}</span>
+                <button
+                  type="button"
+                  onClick={clearCheckoutError}
+                  className="rounded-md border border-destructive/30 px-2 py-1 transition-colors hover:bg-destructive/10"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ) : null}
           <div className="flex flex-col gap-2 sm:flex-row">
             <button disabled={!form.name || !form.emailRecipients || create.isPending || updateRule.isPending} onClick={() => editingRule ? updateRule.mutate() : create.mutate()}
               className="rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40">

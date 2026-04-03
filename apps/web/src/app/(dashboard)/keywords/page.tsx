@@ -2,18 +2,27 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { useUpgradeCheckout } from '@/hooks/useUpgradeCheckout';
 import { keywordsApi } from '@/lib/api';
+import { getPlanLimitUpgradeHint } from '@/lib/planLimitErrors';
+import { WORKSPACE_PLAN_MAP } from '@/lib/plans';
 import { Tag, Plus, Trash2, ToggleLeft, ToggleRight, Search } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 
 export default function KeywordsPage() {
-  const { currentOrgId } = useAuth();
+  const { currentOrgId, currentOrg } = useAuth();
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [phrase, setPhrase] = useState('');
   const [desc, setDesc] = useState('');
   const [search, setSearch] = useState('');
+  const {
+    redirectingPlan,
+    checkoutError,
+    startUpgradeCheckout,
+    clearCheckoutError,
+  } = useUpgradeCheckout(currentOrgId);
 
   const resetKeywordModal = () => {
     setAdding(false);
@@ -63,6 +72,8 @@ export default function KeywordsPage() {
 
   const activeKeywords = keywords.filter((kw) => kw.isActive).length;
   const trackedSignals = keywords.reduce((sum, kw) => sum + (kw._count?.signalKeywords ?? 0), 0);
+  const keywordMutationError = create.error || update.error;
+  const keywordUpgradeHint = getPlanLimitUpgradeHint(keywordMutationError, currentOrg?.plan);
 
   return (
     <div className="page-shell animate-fade-in">
@@ -134,7 +145,61 @@ export default function KeywordsPage() {
             placeholder="Description (optional)"
             className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
           />
-          {(create.error || update.error) && <p className="text-sm text-destructive">{((create.error || update.error) as Error).message}</p>}
+          {keywordMutationError ? (
+            keywordUpgradeHint ? (
+              <div className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-3 text-sm text-primary">
+                <p>{keywordUpgradeHint.message}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {keywordUpgradeHint.nextPlan ? (
+                    <button
+                      type="button"
+                      onClick={() => startUpgradeCheckout(keywordUpgradeHint.nextPlan!)}
+                      disabled={redirectingPlan === keywordUpgradeHint.nextPlan}
+                      className="rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
+                    >
+                      {redirectingPlan === keywordUpgradeHint.nextPlan
+                        ? 'Redirecting…'
+                        : `Upgrade to ${WORKSPACE_PLAN_MAP[keywordUpgradeHint.nextPlan].label}`}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => window.location.assign('/pricing')}
+                      className="rounded-lg border border-primary/30 px-3 py-2 text-sm transition-colors hover:bg-primary/10"
+                    >
+                      See plans
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      create.reset();
+                      update.reset();
+                    }}
+                    className="rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-destructive">{(keywordMutationError as Error).message}</p>
+            )
+          ) : null}
+          {checkoutError ? (
+            <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              <div className="flex items-center justify-between gap-3">
+                <span>{checkoutError}</span>
+                <button
+                  type="button"
+                  onClick={clearCheckoutError}
+                  className="rounded-md border border-destructive/30 px-2 py-1 transition-colors hover:bg-destructive/10"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ) : null}
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
               disabled={!phrase.trim() || create.isPending || update.isPending}
