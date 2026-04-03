@@ -361,6 +361,13 @@ export default function SettingsPage() {
   const normalizedPlan = normalizeWorkspacePlan(currentOrg?.plan);
   const currentPlanMeta = WORKSPACE_PLAN_MAP[normalizedPlan];
   const nextPlan = getNextPlan(normalizedPlan);
+  const seatUsageSummary = workspaceUsage
+    ? workspaceUsage.resources.seats.limit === null
+      ? `${workspaceUsage.resources.seats.used} seats used`
+      : `${workspaceUsage.resources.seats.used}/${workspaceUsage.resources.seats.limit} seats`
+    : currentPlanMeta.maxSeats === null
+      ? 'Unlimited seats'
+      : `0/${currentPlanMeta.maxSeats} seats`;
   const {
     redirectingPlan,
     checkoutError,
@@ -661,92 +668,100 @@ export default function SettingsPage() {
                 </div>
               </div>
             ) : null}
-            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-lg border border-border bg-background px-3 py-2">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Sources</p>
-                <p className="mt-1 text-sm font-medium text-foreground">
-                  {workspaceUsage
-                    ? workspaceUsage.resources.sources.limit === null
-                      ? `${workspaceUsage.resources.sources.used} active`
-                      : `${workspaceUsage.resources.sources.used}/${workspaceUsage.resources.sources.limit}`
-                    : currentPlanMeta.maxSources ?? 'Unlimited'}
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  {workspaceUsage?.resources.sources.limit === null
-                    ? 'Unlimited on this plan'
-                    : `${workspaceUsage?.resources.sources.remaining ?? currentPlanMeta.maxSources ?? 0} remaining`}
-                </p>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
-                  <div
-                    className="h-full rounded-full bg-primary"
-                    style={{ width: `${workspaceUsage?.resources.sources.percentUsed ?? 0}%` }}
-                  />
+            <details className="mt-4 rounded-lg border border-border bg-background">
+              <summary className="cursor-pointer list-none px-3 py-2 text-sm text-foreground">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium">Usage meters</span>
+                  <span className="text-xs text-muted-foreground">{seatUsageSummary}</span>
+                </div>
+              </summary>
+              <div className="grid gap-2 border-t border-border px-3 py-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-lg border border-border bg-secondary px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Sources</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">
+                    {workspaceUsage
+                      ? workspaceUsage.resources.sources.limit === null
+                        ? `${workspaceUsage.resources.sources.used} active`
+                        : `${workspaceUsage.resources.sources.used}/${workspaceUsage.resources.sources.limit}`
+                      : currentPlanMeta.maxSources ?? 'Unlimited'}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {workspaceUsage?.resources.sources.limit === null
+                      ? 'Unlimited on this plan'
+                      : `${workspaceUsage?.resources.sources.remaining ?? currentPlanMeta.maxSources ?? 0} remaining`}
+                  </p>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background">
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{ width: `${workspaceUsage?.resources.sources.percentUsed ?? 0}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border bg-secondary px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Keywords</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">
+                    {workspaceUsage
+                      ? workspaceUsage.resources.keywords.limit === null
+                        ? `${workspaceUsage.resources.keywords.used} active`
+                        : `${workspaceUsage.resources.keywords.used}/${workspaceUsage.resources.keywords.limit}`
+                      : currentPlanMeta.maxKeywords ?? 'Unlimited'}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {workspaceUsage?.resources.keywords.limit === null
+                      ? 'Unlimited on this plan'
+                      : `${workspaceUsage?.resources.keywords.remaining ?? currentPlanMeta.maxKeywords ?? 0} remaining`}
+                  </p>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background">
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{ width: `${workspaceUsage?.resources.keywords.percentUsed ?? 0}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border bg-secondary px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Alerts</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">
+                    {workspaceUsage
+                      ? workspaceUsage.resources.alerts.limit === null
+                        ? `${workspaceUsage.resources.alerts.used} active`
+                        : `${workspaceUsage.resources.alerts.used}/${workspaceUsage.resources.alerts.limit}`
+                      : currentPlanMeta.maxAlerts ?? 'Unlimited'}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {workspaceUsage?.resources.alerts.limit === null
+                      ? 'Unlimited on this plan'
+                      : `${workspaceUsage?.resources.alerts.remaining ?? currentPlanMeta.maxAlerts ?? 0} remaining`}
+                  </p>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background">
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{ width: `${workspaceUsage?.resources.alerts.percentUsed ?? 0}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border bg-secondary px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Seats</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">
+                    {workspaceUsage
+                      ? workspaceUsage.resources.seats.limit === null
+                        ? `${workspaceUsage.resources.seats.used} active`
+                        : `${workspaceUsage.resources.seats.used}/${workspaceUsage.resources.seats.limit}`
+                      : currentPlanMeta.maxSeats ?? 'Unlimited'}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {workspaceUsage?.resources.seats.limit === null
+                      ? 'Unlimited on this plan'
+                      : `${workspaceUsage?.resources.seats.remaining ?? currentPlanMeta.maxSeats ?? 0} remaining`}
+                  </p>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background">
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{ width: `${workspaceUsage?.resources.seats.percentUsed ?? 0}%` }}
+                    />
+                  </div>
                 </div>
               </div>
-              <div className="rounded-lg border border-border bg-background px-3 py-2">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Keywords</p>
-                <p className="mt-1 text-sm font-medium text-foreground">
-                  {workspaceUsage
-                    ? workspaceUsage.resources.keywords.limit === null
-                      ? `${workspaceUsage.resources.keywords.used} active`
-                      : `${workspaceUsage.resources.keywords.used}/${workspaceUsage.resources.keywords.limit}`
-                    : currentPlanMeta.maxKeywords ?? 'Unlimited'}
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  {workspaceUsage?.resources.keywords.limit === null
-                    ? 'Unlimited on this plan'
-                    : `${workspaceUsage?.resources.keywords.remaining ?? currentPlanMeta.maxKeywords ?? 0} remaining`}
-                </p>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
-                  <div
-                    className="h-full rounded-full bg-primary"
-                    style={{ width: `${workspaceUsage?.resources.keywords.percentUsed ?? 0}%` }}
-                  />
-                </div>
-              </div>
-              <div className="rounded-lg border border-border bg-background px-3 py-2">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Alerts</p>
-                <p className="mt-1 text-sm font-medium text-foreground">
-                  {workspaceUsage
-                    ? workspaceUsage.resources.alerts.limit === null
-                      ? `${workspaceUsage.resources.alerts.used} active`
-                      : `${workspaceUsage.resources.alerts.used}/${workspaceUsage.resources.alerts.limit}`
-                    : currentPlanMeta.maxAlerts ?? 'Unlimited'}
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  {workspaceUsage?.resources.alerts.limit === null
-                    ? 'Unlimited on this plan'
-                    : `${workspaceUsage?.resources.alerts.remaining ?? currentPlanMeta.maxAlerts ?? 0} remaining`}
-                </p>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
-                  <div
-                    className="h-full rounded-full bg-primary"
-                    style={{ width: `${workspaceUsage?.resources.alerts.percentUsed ?? 0}%` }}
-                  />
-                </div>
-              </div>
-              <div className="rounded-lg border border-border bg-background px-3 py-2">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Seats</p>
-                <p className="mt-1 text-sm font-medium text-foreground">
-                  {workspaceUsage
-                    ? workspaceUsage.resources.seats.limit === null
-                      ? `${workspaceUsage.resources.seats.used} active`
-                      : `${workspaceUsage.resources.seats.used}/${workspaceUsage.resources.seats.limit}`
-                    : currentPlanMeta.maxSeats ?? 'Unlimited'}
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  {workspaceUsage?.resources.seats.limit === null
-                    ? 'Unlimited on this plan'
-                    : `${workspaceUsage?.resources.seats.remaining ?? currentPlanMeta.maxSeats ?? 0} remaining`}
-                </p>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
-                  <div
-                    className="h-full rounded-full bg-primary"
-                    style={{ width: `${workspaceUsage?.resources.seats.percentUsed ?? 0}%` }}
-                  />
-                </div>
-              </div>
-            </div>
+            </details>
             <details className="mt-4 rounded-lg border border-border bg-background">
               <summary className="cursor-pointer list-none px-3 py-2 text-sm text-foreground">
                 <div className="flex items-center justify-between gap-3">
@@ -881,10 +896,22 @@ export default function SettingsPage() {
               </div>
             </div>
           ) : null}
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary px-4 py-4">
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">{members.length}</span> members
+            </div>
+            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">{invitations.length}</span> pending invites
+            </div>
+            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">{seatUsageSummary}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary px-4 py-3">
             <div>
               <p className="text-sm font-medium text-foreground">Workspace members and invitations</p>
-              <p className="text-sm text-muted-foreground mt-1">Invite teammates by email and adjust roles without leaving the member list.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Invite teammates by email and adjust roles without leaving this page.</p>
             </div>
             {canManageWorkspace && (
               <button
@@ -897,67 +924,75 @@ export default function SettingsPage() {
             )}
           </div>
 
-          <div className="grid gap-3">
+          <div className="overflow-hidden rounded-xl border border-border bg-secondary/70">
             {members.map((member: OrganizationMember) => (
-              <div key={member.id} className="rounded-xl border border-border bg-secondary px-4 py-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-foreground">{member.user.name || 'Unnamed member'}</p>
+              <div key={member.id} className="flex flex-col gap-3 border-b border-border px-4 py-3 last:border-b-0 md:flex-row md:items-center md:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-xs font-semibold text-primary">
+                    {(member.user.name || member.user.email || '?').charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-medium text-foreground">{member.user.name || 'Unnamed member'}</p>
                       <RoleBadge role={member.role} />
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1">{member.user.email}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Joined {formatDate(member.joinedAt)}</p>
+                    <p className="truncate text-xs text-muted-foreground">{member.user.email}</p>
+                    <p className="text-[11px] text-muted-foreground">Joined {formatDate(member.joinedAt)}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      disabled={!canManageWorkspace || member.role === 'OWNER'}
-                      onClick={() => setEditingMember(member)}
-                      className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      disabled={!canManageWorkspace || member.role === 'OWNER' || member.user.id === user?.id}
-                      onClick={() => removeMemberMutation.mutate(member.id)}
-                      className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                </div>
+                <div className="flex items-center gap-2 self-end md:self-auto">
+                  <button
+                    disabled={!canManageWorkspace || member.role === 'OWNER'}
+                    onClick={() => setEditingMember(member)}
+                    className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
+                    disabled={!canManageWorkspace || member.role === 'OWNER' || member.user.id === user?.id}
+                    onClick={() => removeMemberMutation.mutate(member.id)}
+                    className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             ))}
-            {!members.length && <p className="text-sm text-muted-foreground">No members found for this workspace.</p>}
+            {!members.length ? (
+              <p className="px-4 py-4 text-sm text-muted-foreground">No members found for this workspace.</p>
+            ) : null}
           </div>
 
           {!!invitations.length && (
-            <div className="rounded-xl border border-border bg-secondary/70 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <LinkIcon className="w-4 h-4 text-primary" />
-                <h3 className="text-sm font-semibold text-foreground">Pending invitations</h3>
-              </div>
-              <div className="space-y-3">
+            <details className="overflow-hidden rounded-xl border border-border bg-secondary/70">
+              <summary className="cursor-pointer list-none px-4 py-3 text-sm text-foreground">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-2 font-medium">
+                    <LinkIcon className="h-4 w-4 text-primary" />
+                    Pending invitations
+                  </span>
+                  <span className="text-xs text-muted-foreground">{invitations.length} pending</span>
+                </div>
+              </summary>
+              <div className="divide-y divide-border border-t border-border">
                 {invitations.map((invitation: Invitation) => (
-                  <div key={invitation.id} className="rounded-lg border border-border bg-background px-3 py-3">
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <p className="text-sm text-foreground">{invitation.email}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {invitation.role} · invite email sent · expires {formatDate(invitation.expiresAt)}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => copyInviteLink(invitation)}
-                        className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                      >
-                        {copiedToken === invitation.id ? 'Copied link' : 'Copy fallback link'}
-                      </button>
+                  <div key={invitation.id} className="flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:justify-between">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-foreground">{invitation.email}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {invitation.role} · expires {formatDate(invitation.expiresAt)}
+                      </p>
                     </div>
+                    <button
+                      onClick={() => copyInviteLink(invitation)}
+                      className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      {copiedToken === invitation.id ? 'Copied link' : 'Copy link'}
+                    </button>
                   </div>
                 ))}
               </div>
-            </div>
+            </details>
           )}
         </div>
       </section>
