@@ -14,6 +14,15 @@ import QRCode from 'qrcode';
 import { Switch } from '@/components/ui/switch';
 
 const ROLE_OPTIONS = ['OWNER', 'ADMIN', 'ANALYST', 'VIEWER'] as const;
+type SettingsTab = 'account' | 'workspace' | 'team' | 'security' | 'audit';
+
+const SETTINGS_TABS: Array<{ key: SettingsTab; label: string; hint: string }> = [
+  { key: 'account', label: 'Account', hint: 'Profile and appearance' },
+  { key: 'workspace', label: 'Workspace', hint: 'Workspace, plan, and limits' },
+  { key: 'team', label: 'Team', hint: 'Members and invitations' },
+  { key: 'security', label: 'Security', hint: 'Password, sessions, and MFA' },
+  { key: 'audit', label: 'Audit', hint: 'Workspace activity history' },
+];
 
 function SectionTitle({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle: string }) {
   return (
@@ -69,6 +78,7 @@ export default function SettingsPage() {
   const { user, currentOrg, currentOrgId, role } = useAuth();
   const { theme, resolvedTheme, setTheme } = useTheme();
   const qc = useQueryClient();
+  const [activeTab, setActiveTab] = useState<SettingsTab>('account');
   const [name, setName] = useState('');
   const [orgName, setOrgName] = useState('');
   const [businessFocus, setBusinessFocus] = useState('');
@@ -105,6 +115,34 @@ export default function SettingsPage() {
   useEffect(() => {
     setNegativeKeywords((currentOrg?.negativeKeywords || []).join(', '));
   }, [currentOrg?.negativeKeywords]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const syncTabFromHash = () => {
+      const hash = window.location.hash.toLowerCase();
+      if (!hash) return;
+      if (hash.includes('plan-limits') || hash.includes('workspace')) {
+        setActiveTab('workspace');
+        return;
+      }
+      if (hash.includes('team')) {
+        setActiveTab('team');
+        return;
+      }
+      if (hash.includes('security') || hash.includes('password') || hash.includes('sessions') || hash.includes('mfa')) {
+        setActiveTab('security');
+        return;
+      }
+      if (hash.includes('audit')) {
+        setActiveTab('audit');
+      }
+    };
+
+    syncTabFromHash();
+    window.addEventListener('hashchange', syncTabFromHash);
+    return () => window.removeEventListener('hashchange', syncTabFromHash);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -295,12 +333,12 @@ export default function SettingsPage() {
     clearCheckoutError,
   } = useUpgradeCheckout(currentOrgId);
   const profileChecklist = [
-    { label: 'Business focus', complete: Boolean((currentOrg?.businessFocus || businessFocus).trim()) },
-    { label: 'Target buyers', complete: Boolean((currentOrg?.targetAudience || targetAudience).trim()) },
-    { label: 'Tracked keywords', complete: trackedKeywordCount > 0 },
-    { label: 'Negative keywords', complete: Boolean((currentOrg?.negativeKeywords || negativeKeywords.split(',').map((term) => term.trim()).filter(Boolean)).length) },
+    Boolean((currentOrg?.businessFocus || businessFocus).trim()),
+    Boolean((currentOrg?.targetAudience || targetAudience).trim()),
+    trackedKeywordCount > 0,
+    Boolean((currentOrg?.negativeKeywords || negativeKeywords.split(',').map((term) => term.trim()).filter(Boolean)).length),
   ];
-  const completedProfileItems = profileChecklist.filter((item) => item.complete).length;
+  const completedProfileItems = profileChecklist.filter(Boolean).length;
 
   const closeInviteModal = () => {
     setShowInviteModal(false);
@@ -341,7 +379,30 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <section className="section-card">
+      <section className="section-card p-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          {SETTINGS_TABS.map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`rounded-xl border px-3 py-2 text-left transition-colors ${
+                  isActive
+                    ? 'border-primary/30 bg-primary/10'
+                    : 'border-border bg-secondary hover:bg-accent'
+                }`}
+              >
+                <p className={`text-sm font-medium ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}>{tab.label}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{tab.hint}</p>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className={`section-card ${activeTab === 'account' ? '' : 'hidden'}`}>
         <SectionTitle icon={User} title="Profile" subtitle="Update the name shown across your workspace activity." />
         <div className="space-y-4 px-5 py-5">
           <div className="flex items-center gap-4 rounded-xl border border-border bg-secondary p-4">
@@ -374,7 +435,7 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <section className="section-card">
+      <section className={`section-card ${activeTab === 'account' ? '' : 'hidden'}`}>
         <SectionTitle icon={Sun} title="Appearance" subtitle="Choose how the app looks across this browser." />
         <div className="space-y-4 px-5 py-5">
           <div className="grid gap-3 md:grid-cols-3">
@@ -405,7 +466,7 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <section className="section-card">
+      <section className={`section-card ${activeTab === 'workspace' ? '' : 'hidden'}`}>
         <SectionTitle icon={Building2} title="Workspace" subtitle="Keep workspace settings accurate and visible to your team." />
         <div className="space-y-4 px-5 py-5">
           <div className="grid gap-3 md:grid-cols-2">
@@ -460,55 +521,40 @@ export default function SettingsPage() {
             />
             <p className="mt-2 text-xs text-muted-foreground">Comma-separated phrases that should be filtered out across all discovery sources in this workspace.</p>
           </div>
-          <div className="rounded-xl border border-border bg-secondary p-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <p className="text-sm font-medium text-foreground">Suggestion profile</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Template suggestions get better when this workspace clearly describes its niche, buyers, and filters.
-                </p>
+          <div className="rounded-xl border border-border bg-secondary px-4 py-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">
+                Suggestion profile strength: <span className="font-medium text-foreground">{completedProfileItems} / {profileChecklist.length}</span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/sources/templates"
+                  className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-accent"
+                >
+                  Suggested templates
+                </Link>
+                <Link
+                  href="/keywords"
+                  className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  Tracked keywords
+                </Link>
               </div>
-              <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
-                {completedProfileItems} of {profileChecklist.length} signals set
-              </span>
-            </div>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              {profileChecklist.map((item) => (
-                <div key={item.label} className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
-                  <span className={item.complete ? 'text-foreground' : 'text-muted-foreground'}>
-                    {item.complete ? 'Done' : 'Add'} {item.label.toLowerCase()}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Link
-                href="/sources/templates"
-                className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
-              >
-                View suggested templates
-              </Link>
-              <Link
-                href="/keywords"
-                className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                Edit tracked keywords
-              </Link>
             </div>
           </div>
-          <div id="plan-management" className="rounded-xl border border-border bg-secondary p-4">
+          <div id="plan-limits" className="rounded-xl border border-border bg-secondary p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <label className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
                   <CreditCard className="h-3.5 w-3.5" />
-                  Plan and billing
+                  Plan and limits
                 </label>
                 <div className="flex items-center gap-2">
                   <span className="text-lg font-semibold text-foreground">{formatPlanName(currentOrg?.plan)}</span>
                   <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase text-primary">Active</span>
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Need more capacity? Launch secure checkout and unlock higher limits right away.
+                  These are your workspace limits right now.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -544,18 +590,22 @@ export default function SettingsPage() {
                 </div>
               </div>
             ) : null}
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <div className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
-                Sources: <span className="font-medium text-foreground">{currentPlanMeta.maxSources ?? 'Unlimited'}</span>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-lg border border-border bg-background px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Sources</p>
+                <p className="mt-1 text-sm font-medium text-foreground">{currentPlanMeta.maxSources ?? 'Unlimited'}</p>
               </div>
-              <div className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
-                Keywords: <span className="font-medium text-foreground">{currentPlanMeta.maxKeywords ?? 'Unlimited'}</span>
+              <div className="rounded-lg border border-border bg-background px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Keywords</p>
+                <p className="mt-1 text-sm font-medium text-foreground">{currentPlanMeta.maxKeywords ?? 'Unlimited'}</p>
               </div>
-              <div className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
-                Alerts: <span className="font-medium text-foreground">{currentPlanMeta.maxAlerts ?? 'Unlimited'}</span>
+              <div className="rounded-lg border border-border bg-background px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Alerts</p>
+                <p className="mt-1 text-sm font-medium text-foreground">{currentPlanMeta.maxAlerts ?? 'Unlimited'}</p>
               </div>
-              <div className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
-                Seats: <span className="font-medium text-foreground">{currentPlanMeta.maxSeats ?? 'Unlimited'}</span>
+              <div className="rounded-lg border border-border bg-background px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Seats</p>
+                <p className="mt-1 text-sm font-medium text-foreground">{currentPlanMeta.maxSeats ?? 'Unlimited'}</p>
               </div>
             </div>
           </div>
@@ -580,7 +630,7 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <section className="section-card">
+      <section className={`section-card ${activeTab === 'team' ? '' : 'hidden'}`}>
         <SectionTitle icon={Users} title="Team Access" subtitle="Manage members, invite new teammates, and keep workspace roles accurate." />
         <div className="space-y-5 px-5 py-5">
           <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary px-4 py-4">
@@ -740,7 +790,7 @@ export default function SettingsPage() {
         </div>
       </Modal>
 
-      <section className="section-card">
+      <section className={`section-card ${activeTab === 'security' ? '' : 'hidden'}`}>
         <SectionTitle icon={Shield} title="Password" subtitle="Change your password with current-password verification." />
         <div className="space-y-4 px-5 py-5">
           {user?.hasPassword ? (
@@ -785,7 +835,7 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <section className="section-card">
+      <section className={`section-card ${activeTab === 'security' ? '' : 'hidden'}`}>
         <SectionTitle icon={Shield} title="Sessions" subtitle="Review where your account is signed in and revoke devices you no longer use." />
         <div className="space-y-4 px-5 py-5">
           <div className="flex flex-col gap-3 rounded-xl border border-border bg-secondary px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -852,7 +902,7 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <section className="section-card">
+      <section className={`section-card ${activeTab === 'security' ? '' : 'hidden'}`}>
         <SectionTitle icon={Shield} title="Multi-factor authentication" subtitle="Recommended for stronger account protection, but optional for individual users." />
         <div className="space-y-4 px-5 py-5">
           {user?.hasPassword ? (
@@ -1061,7 +1111,7 @@ export default function SettingsPage() {
         </div>
       </Modal>
 
-      <section className="section-card">
+      <section className={`section-card ${activeTab === 'audit' ? '' : 'hidden'}`}>
         <SectionTitle icon={Clock3} title="Audit Log" subtitle="Review important workspace actions and administrative changes." />
         <div className="space-y-3 px-5 py-5">
           {auditLogs.map((entry: AuditLog) => (

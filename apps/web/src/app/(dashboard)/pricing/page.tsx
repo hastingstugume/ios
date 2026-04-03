@@ -207,10 +207,10 @@ export default function PricingPage() {
           </div>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link
-              href="/settings#plan-management"
+              href="/settings#plan-limits"
               className="inline-flex items-center justify-center rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
             >
-              View limits in settings
+              See current limits
             </Link>
             {currentOrgId ? (
               <button
