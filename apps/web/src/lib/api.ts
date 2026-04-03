@@ -127,6 +127,17 @@ export const organizationsApi = {
     api.get<PaginatedResponse<AuditLog>>(`/orgs/${orgId}/audit-log?page=${page}&limit=${limit}`),
 };
 
+export const billingApi = {
+  createCheckoutSession: (
+    orgId: string,
+    data: {
+      targetPlan: 'starter' | 'growth' | 'scale';
+      successPath?: string;
+      cancelPath?: string;
+    },
+  ) => api.post<{ checkoutUrl: string; sessionId: string }>(`/orgs/${orgId}/billing/checkout`, data),
+};
+
 export const publicApi = {
   landing: () => api.get<LandingData>('/public/landing'),
 };

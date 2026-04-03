@@ -3,8 +3,9 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { useUpgradeCheckout } from '@/hooks/useUpgradeCheckout';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { getNextPlan, getUpgradeContactHref, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
+import { getNextPlan, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
 import { keywordsApi, organizationsApi, sourcesApi } from '@/lib/api';
 import { SOURCE_TYPE_META, formatDate } from '@/lib/utils';
 import { SOURCE_QUERY_TEMPLATES } from '@/lib/sourcePresets';
@@ -224,11 +225,12 @@ export default function SourcesPage() {
   const normalizedPlan = normalizeWorkspacePlan(currentOrg?.plan);
   const canFetchNow = normalizedPlan !== 'free';
   const nextPlan = getNextPlan(normalizedPlan);
-  const upgradeContactHref = getUpgradeContactHref({
-    workspaceName: currentOrg?.name,
-    currentPlan: normalizedPlan,
-    targetPlan: nextPlan,
-  });
+  const {
+    redirectingPlan,
+    checkoutError,
+    startUpgradeCheckout,
+    clearCheckoutError,
+  } = useUpgradeCheckout(currentOrgId);
 
   const { data: sources = [], isLoading } = useQuery({
     queryKey: ['sources', currentOrgId],
@@ -505,15 +507,31 @@ export default function SourcesPage() {
                 See plans
               </Link>
               {nextPlan ? (
-                <a
-                  href={upgradeContactHref}
+                <button
+                  type="button"
+                  onClick={() => startUpgradeCheckout(nextPlan)}
+                  disabled={!!redirectingPlan}
                   className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
                 >
-                  Upgrade to {WORKSPACE_PLAN_MAP[nextPlan].label}
-                </a>
+                  {redirectingPlan === nextPlan ? 'Redirecting…' : `Upgrade to ${WORKSPACE_PLAN_MAP[nextPlan].label}`}
+                </button>
               ) : null}
             </div>
           </div>
+          {checkoutError ? (
+            <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              <div className="flex items-center justify-between gap-3">
+                <span>{checkoutError}</span>
+                <button
+                  type="button"
+                  onClick={clearCheckoutError}
+                  className="rounded-md border border-destructive/40 px-2 py-0.5 transition-colors hover:bg-destructive/10"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : null}
 

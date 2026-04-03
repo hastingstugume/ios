@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
-import { getNextPlan, getUpgradeContactHref, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
+import { useUpgradeCheckout } from '@/hooks/useUpgradeCheckout';
+import { getNextPlan, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
 import { keywordsApi, organizationsApi, sourcesApi, type SourceTemplateSuggestion } from '@/lib/api';
 import { SOURCE_PRESET_PACKS } from '@/lib/sourcePresets';
 import { SOURCE_TYPE_META } from '@/lib/utils';
@@ -92,11 +93,12 @@ export default function SourceTemplatesPage() {
   const maxSources = currentPlanMeta.maxSources;
   const remainingSourceSlots = maxSources === null ? Number.POSITIVE_INFINITY : Math.max(maxSources - sources.length, 0);
   const nextPlan = getNextPlan(normalizedPlan);
-  const upgradeContactHref = getUpgradeContactHref({
-    workspaceName: currentOrg?.name,
-    currentPlan: normalizedPlan,
-    targetPlan: nextPlan,
-  });
+  const {
+    redirectingPlan,
+    checkoutError,
+    startUpgradeCheckout,
+    clearCheckoutError,
+  } = useUpgradeCheckout(currentOrgId);
   const existingSourceNames = new Set(sources.map((source) => source.name.trim().toLowerCase()));
   const trackedKeywordCount = keywords.length;
   const negativeKeywordCount = currentOrg?.negativeKeywords?.length || 0;
@@ -272,15 +274,31 @@ export default function SourceTemplatesPage() {
                 See plans
               </Link>
               {nextPlan ? (
-                <a
-                  href={upgradeContactHref}
+                <button
+                  type="button"
+                  onClick={() => startUpgradeCheckout(nextPlan)}
+                  disabled={!!redirectingPlan}
                   className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
                 >
-                  Upgrade to {WORKSPACE_PLAN_MAP[nextPlan].label}
-                </a>
+                  {redirectingPlan === nextPlan ? 'Redirecting…' : `Upgrade to ${WORKSPACE_PLAN_MAP[nextPlan].label}`}
+                </button>
               ) : null}
             </div>
           </div>
+          {checkoutError ? (
+            <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              <div className="flex items-center justify-between gap-3">
+                <span>{checkoutError}</span>
+                <button
+                  type="button"
+                  onClick={clearCheckoutError}
+                  className="rounded-md border border-destructive/40 px-2 py-0.5 transition-colors hover:bg-destructive/10"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -353,12 +371,14 @@ export default function SourceTemplatesPage() {
                             See plans
                           </Link>
                           {nextPlan ? (
-                            <a
-                              href={upgradeContactHref}
+                            <button
+                              type="button"
+                              onClick={() => startUpgradeCheckout(nextPlan)}
+                              disabled={!!redirectingPlan}
                               className="inline-flex items-center justify-center rounded-md bg-primary px-2.5 py-1 text-[11px] text-primary-foreground transition-colors hover:bg-primary/90"
                             >
-                              Upgrade to {WORKSPACE_PLAN_MAP[nextPlan].label}
-                            </a>
+                              {redirectingPlan === nextPlan ? 'Redirecting…' : `Upgrade to ${WORKSPACE_PLAN_MAP[nextPlan].label}`}
+                            </button>
                           ) : null}
                         </div>
                       ) : null}

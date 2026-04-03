@@ -98,25 +98,3 @@ export function getNextPlan(plan?: string | null): WorkspacePlan | null {
   if (idx < 0 || idx === WORKSPACE_PLAN_ORDER.length - 1) return null;
   return WORKSPACE_PLAN_ORDER[idx + 1];
 }
-
-export function getUpgradeContactHref(options?: {
-  targetPlan?: WorkspacePlan | string | null;
-  workspaceName?: string | null;
-  currentPlan?: string | null;
-}) {
-  const email = process.env.NEXT_PUBLIC_BILLING_CONTACT_EMAIL || 'support@opportunity-scanner.io';
-  const subject = `Upgrade request${options?.targetPlan ? ` to ${getPlanLabel(options.targetPlan)}` : ''}`;
-  const body = [
-    'Hi team,',
-    '',
-    `I want to upgrade our workspace${options?.workspaceName ? ` "${options.workspaceName}"` : ''}.`,
-    options?.currentPlan ? `Current plan: ${getPlanLabel(options.currentPlan)}` : null,
-    options?.targetPlan ? `Target plan: ${getPlanLabel(options.targetPlan)}` : null,
-    '',
-    'Please share next steps.',
-  ]
-    .filter(Boolean)
-    .join('\n');
-  return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-}
-

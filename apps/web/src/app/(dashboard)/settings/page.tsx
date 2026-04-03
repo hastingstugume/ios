@@ -3,8 +3,9 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { useUpgradeCheckout } from '@/hooks/useUpgradeCheckout';
 import { authApi, keywordsApi, organizationsApi, type AuditLog, type AuthSession, type Invitation, type OrganizationMember } from '@/lib/api';
-import { getNextPlan, getUpgradeContactHref, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
+import { getNextPlan, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
 import { useTheme, type ThemeMode } from '@/components/theme-provider';
 import { formatDate, formatPlanName } from '@/lib/utils';
 import { User, Building2, Shield, Users, Clock3, Link as LinkIcon, Trash2, Plus, Pencil, Sun, Moon, Monitor, CreditCard } from 'lucide-react';
@@ -287,11 +288,12 @@ export default function SettingsPage() {
   const normalizedPlan = normalizeWorkspacePlan(currentOrg?.plan);
   const currentPlanMeta = WORKSPACE_PLAN_MAP[normalizedPlan];
   const nextPlan = getNextPlan(normalizedPlan);
-  const upgradeContactHref = getUpgradeContactHref({
-    workspaceName: currentOrg?.name,
-    currentPlan: normalizedPlan,
-    targetPlan: nextPlan,
-  });
+  const {
+    redirectingPlan,
+    checkoutError,
+    startUpgradeCheckout,
+    clearCheckoutError,
+  } = useUpgradeCheckout(currentOrgId);
   const profileChecklist = [
     { label: 'Business focus', complete: Boolean((currentOrg?.businessFocus || businessFocus).trim()) },
     { label: 'Target buyers', complete: Boolean((currentOrg?.targetAudience || targetAudience).trim()) },
@@ -506,7 +508,7 @@ export default function SettingsPage() {
                   <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase text-primary">Active</span>
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Need more capacity? Upgrade requests are handled directly by our team.
+                  Need more capacity? Launch secure checkout and unlock higher limits right away.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -517,15 +519,31 @@ export default function SettingsPage() {
                   See upgrade options
                 </Link>
                 {nextPlan ? (
-                  <a
-                    href={upgradeContactHref}
+                  <button
+                    type="button"
+                    onClick={() => startUpgradeCheckout(nextPlan)}
+                    disabled={!!redirectingPlan}
                     className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
                   >
-                    Upgrade to {WORKSPACE_PLAN_MAP[nextPlan].label}
-                  </a>
+                    {redirectingPlan === nextPlan ? 'Redirecting…' : `Upgrade to ${WORKSPACE_PLAN_MAP[nextPlan].label}`}
+                  </button>
                 ) : null}
               </div>
             </div>
+            {checkoutError ? (
+              <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                <div className="flex items-center justify-between gap-3">
+                  <span>{checkoutError}</span>
+                  <button
+                    type="button"
+                    onClick={clearCheckoutError}
+                    className="rounded-md border border-destructive/40 px-2 py-0.5 transition-colors hover:bg-destructive/10"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               <div className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
                 Sources: <span className="font-medium text-foreground">{currentPlanMeta.maxSources ?? 'Unlimited'}</span>

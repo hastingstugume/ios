@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { getUpgradeContactHref, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP, WORKSPACE_PLAN_ORDER, WORKSPACE_PLANS } from '@/lib/plans';
+import { useUpgradeCheckout } from '@/hooks/useUpgradeCheckout';
+import { normalizeWorkspacePlan, WORKSPACE_PLAN_MAP, WORKSPACE_PLAN_ORDER, WORKSPACE_PLANS } from '@/lib/plans';
 import { Check, CreditCard, Sparkles } from 'lucide-react';
 
 const PLAN_OUTCOMES: Record<string, string> = {
@@ -14,20 +16,24 @@ const PLAN_OUTCOMES: Record<string, string> = {
 };
 
 export default function PricingPage() {
-  const { currentOrg } = useAuth();
+  const { currentOrg, currentOrgId } = useAuth();
+  const searchParams = useSearchParams();
   const currentPlan = normalizeWorkspacePlan(currentOrg?.plan);
   const currentPlanIndex = WORKSPACE_PLAN_ORDER.indexOf(currentPlan);
   const [segment, setSegment] = useState<'individual' | 'team'>('individual');
-  const upgradeContactHref = getUpgradeContactHref({
-    workspaceName: currentOrg?.name,
-    currentPlan,
-  });
+  const {
+    redirectingPlan,
+    checkoutError,
+    startUpgradeCheckout,
+    clearCheckoutError,
+  } = useUpgradeCheckout(currentOrgId);
   const plans = useMemo(
     () => WORKSPACE_PLANS.filter((plan) => (segment === 'individual'
       ? ['free', 'starter', 'growth'].includes(plan.key)
       : ['growth', 'scale'].includes(plan.key))),
     [segment],
   );
+  const checkoutState = searchParams.get('checkout');
 
   return (
     <div className="page-shell animate-fade-in">
@@ -67,6 +73,30 @@ export default function PricingPage() {
               Team and Enterprise
             </button>
           </div>
+          {checkoutState === 'success' ? (
+            <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+              Checkout completed. Your workspace plan will update in-app in a few moments.
+            </div>
+          ) : null}
+          {checkoutState === 'cancelled' ? (
+            <div className="rounded-xl border border-border bg-secondary px-4 py-3 text-sm text-muted-foreground">
+              Checkout was cancelled. You can restart whenever you are ready.
+            </div>
+          ) : null}
+          {checkoutError ? (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <span>{checkoutError}</span>
+                <button
+                  type="button"
+                  onClick={clearCheckoutError}
+                  className="inline-flex items-center justify-center rounded-md border border-destructive/40 px-2.5 py-1 text-xs transition-colors hover:bg-destructive/10"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className={`grid gap-6 ${plans.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
@@ -125,16 +155,14 @@ export default function PricingPage() {
                         You are on this plan
                       </button>
                     ) : isUpgrade ? (
-                      <a
-                        href={getUpgradeContactHref({
-                          workspaceName: currentOrg?.name,
-                          currentPlan,
-                          targetPlan: plan.key,
-                        })}
-                        className="inline-flex w-full items-center justify-center rounded-2xl bg-primary px-4 py-3 text-base font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                      <button
+                        type="button"
+                        onClick={() => startUpgradeCheckout(plan.key)}
+                        disabled={!!redirectingPlan}
+                        className="inline-flex w-full items-center justify-center rounded-2xl bg-primary px-4 py-3 text-base font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
                       >
-                        Get {plan.label}
-                      </a>
+                        {redirectingPlan === plan.key ? 'Redirecting…' : `Get ${plan.label}`}
+                      </button>
                     ) : (
                       <button
                         type="button"
@@ -145,7 +173,7 @@ export default function PricingPage() {
                       </button>
                     )}
                     <p className="mt-2 text-center text-xs leading-5 text-muted-foreground">
-                      Sales-assisted activation
+                      Instant secure checkout
                     </p>
                   </div>
                 </div>
@@ -184,12 +212,24 @@ export default function PricingPage() {
             >
               View limits in settings
             </Link>
-            <a
-              href={upgradeContactHref}
-              className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-            >
-              Talk to billing
-            </a>
+            {currentOrgId ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const nextPlan = WORKSPACE_PLAN_ORDER[currentPlanIndex + 1];
+                  if (!nextPlan || nextPlan === 'free') return;
+                  startUpgradeCheckout(nextPlan);
+                }}
+                disabled={!!redirectingPlan || !WORKSPACE_PLAN_ORDER[currentPlanIndex + 1]}
+                className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {redirectingPlan
+                  ? 'Redirecting…'
+                  : WORKSPACE_PLAN_ORDER[currentPlanIndex + 1]
+                    ? `Upgrade to ${WORKSPACE_PLAN_MAP[WORKSPACE_PLAN_ORDER[currentPlanIndex + 1]].label}`
+                    : 'You are on the highest plan'}
+              </button>
+            ) : null}
           </div>
         </div>
       </section>
