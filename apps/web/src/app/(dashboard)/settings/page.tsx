@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useUpgradeCheckout } from '@/hooks/useUpgradeCheckout';
 import { useBillingPortal } from '@/hooks/useBillingPortal';
-import { authApi, keywordsApi, organizationsApi, type AuditLog, type AuthSession, type Invitation, type OrganizationMember } from '@/lib/api';
+import { authApi, billingApi, keywordsApi, organizationsApi, type AuditLog, type AuthSession, type Invitation, type OrganizationMember } from '@/lib/api';
 import { getNextPlan, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
 import { useTheme, type ThemeMode } from '@/components/theme-provider';
 import { formatDate, formatPlanName } from '@/lib/utils';
@@ -73,6 +73,21 @@ function formatSessionIp(ipAddress: string | null) {
   }
 
   return ipAddress;
+}
+
+function formatCurrencyCents(amount: number | null, currency: string) {
+  if (amount === null || Number.isNaN(amount)) return 'N/A';
+
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency || 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount / 100);
+  } catch {
+    return `$${(amount / 100).toFixed(2)}`;
+  }
 }
 
 export default function SettingsPage() {
@@ -195,6 +210,12 @@ export default function SettingsPage() {
     queryKey: ['workspace-usage', currentOrgId],
     queryFn: () => organizationsApi.usage(currentOrgId!),
     enabled: !!currentOrgId,
+    refetchInterval: 60_000,
+  });
+  const billingOverviewQuery = useQuery({
+    queryKey: ['billing-overview', currentOrgId],
+    queryFn: () => billingApi.overview(currentOrgId!),
+    enabled: !!currentOrgId && (role === 'OWNER' || role === 'ADMIN'),
     refetchInterval: 60_000,
   });
   const sessionsQuery = useQuery({
@@ -335,6 +356,7 @@ export default function SettingsPage() {
   ];
   const trackedKeywordCount = keywordsQuery.data?.length || 0;
   const workspaceUsage = usageQuery.data;
+  const billingOverview = billingOverviewQuery.data;
   const normalizedPlan = normalizeWorkspacePlan(currentOrg?.plan);
   const currentPlanMeta = WORKSPACE_PLAN_MAP[normalizedPlan];
   const nextPlan = getNextPlan(normalizedPlan);
@@ -721,6 +743,89 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
+            <details className="mt-4 rounded-lg border border-border bg-background">
+              <summary className="cursor-pointer list-none px-3 py-2 text-sm text-foreground">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium">Billing overview and invoices</span>
+                  <span className="text-xs text-muted-foreground">
+                    {billingOverview?.hasBillingProfile ? `${billingOverview.invoices.length} recent invoices` : 'No billing history yet'}
+                  </span>
+                </div>
+              </summary>
+              <div className="space-y-3 border-t border-border px-3 py-3">
+                {billingOverviewQuery.isLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading billing details...</p>
+                ) : !billingOverview?.hasBillingProfile ? (
+                  <p className="text-sm text-muted-foreground">
+                    No billing profile yet. Start with an upgrade checkout to generate subscriptions and invoices.
+                  </p>
+                ) : (
+                  <>
+                    <div className="rounded-lg border border-border bg-secondary px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Subscription status</span>
+                        <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                          {billingOverview.subscription?.status || 'Unknown'}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm text-foreground">
+                        {formatCurrencyCents(
+                          billingOverview.subscription?.amount ?? null,
+                          billingOverview.subscription?.currency || 'USD',
+                        )}
+                        {billingOverview.subscription?.interval ? ` / ${billingOverview.subscription.interval}` : ''}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {billingOverview.subscription?.currentPeriodEnd
+                          ? `Current period ends ${formatDate(billingOverview.subscription.currentPeriodEnd)}`
+                          : 'No active renewal date'}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      {billingOverview.invoices.slice(0, 5).map((invoice) => (
+                        <div
+                          key={invoice.id}
+                          className="flex flex-col gap-2 rounded-lg border border-border px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div>
+                            <p className="font-medium text-foreground">
+                              {formatCurrencyCents(invoice.amountPaid, invoice.currency)}
+                              <span className="ml-2 text-xs text-muted-foreground uppercase">{invoice.status || 'unknown'}</span>
+                            </p>
+                            <p className="text-xs text-muted-foreground">{formatDate(invoice.createdAt)}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {invoice.hostedInvoiceUrl ? (
+                              <a
+                                href={invoice.hostedInvoiceUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="rounded-md border border-border px-2 py-1 text-xs text-foreground transition-colors hover:bg-accent"
+                              >
+                                View invoice
+                              </a>
+                            ) : null}
+                            {invoice.invoicePdf ? (
+                              <a
+                                href={invoice.invoicePdf}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                              >
+                                PDF
+                              </a>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                      {!billingOverview.invoices.length ? (
+                        <p className="text-xs text-muted-foreground">No invoices found yet for this workspace.</p>
+                      ) : null}
+                    </div>
+                  </>
+                )}
+              </div>
+            </details>
           </div>
           {!canManageWorkspace && <p className="text-sm text-muted-foreground">Only workspace admins can update workspace settings.</p>}
           {orgMutation.error && <p className="text-sm text-destructive">{(orgMutation.error as Error).message}</p>}

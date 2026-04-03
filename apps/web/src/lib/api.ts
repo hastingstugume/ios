@@ -143,6 +143,7 @@ export const billingApi = {
       returnPath?: string;
     },
   ) => api.post<{ portalUrl: string; sessionId: string }>(`/orgs/${orgId}/billing/portal`, data || {}),
+  overview: (orgId: string) => api.get<BillingOverview>(`/orgs/${orgId}/billing/overview`),
 };
 
 export const publicApi = {
@@ -215,6 +216,34 @@ export interface WorkspaceUsage {
     alerts: WorkspaceUsageMetric;
     seats: WorkspaceUsageMetric;
   };
+}
+export interface BillingSubscriptionOverview {
+  id: string;
+  status: string;
+  cancelAtPeriodEnd: boolean;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  amount: number | null;
+  currency: string;
+  interval: string | null;
+}
+export interface BillingInvoiceOverview {
+  id: string;
+  number: string | null;
+  status: string | null;
+  amountPaid: number;
+  amountDue: number;
+  currency: string;
+  createdAt: string;
+  hostedInvoiceUrl: string | null;
+  invoicePdf: string | null;
+}
+export interface BillingOverview {
+  hasBillingProfile: boolean;
+  customerId: string | null;
+  workspacePlan: string;
+  subscription: BillingSubscriptionOverview | null;
+  invoices: BillingInvoiceOverview[];
 }
 export interface Signal {
   id: string; organizationId: string; sourceId: string; externalId: string;
