@@ -8,7 +8,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import Link from 'next/link';
 import {
   Zap, TrendingUp, Star, Bell, ArrowUpRight,
-  Target, Clock, Bookmark, Workflow, Send, Trophy
+  Target, Clock, Bookmark, Workflow, Send, Trophy, CheckCircle2, Circle
 } from 'lucide-react';
 
 function StatCard({ label, value, icon: Icon, sub, color = 'text-primary' }: {
@@ -51,6 +51,7 @@ export default function DashboardPage() {
   );
 
   const s = data?.stats || {};
+  const activation = data?.activation;
 
   return (
     <div className="page-shell animate-fade-in">
@@ -78,6 +79,46 @@ export default function DashboardPage() {
             >
               See upgrade options
             </Link>
+          </div>
+        </div>
+      ) : null}
+
+      {activation ? (
+        <div className="rounded-xl border border-border bg-card p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">
+                Launch Checklist: {activation.completedSteps}/{activation.totalSteps} completed
+              </h2>
+              <p className="text-xs text-muted-foreground mt-1">
+                You are {activation.totalSteps - activation.completedSteps} steps away from a steady stream of actionable signals.
+              </p>
+            </div>
+            <div className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-foreground">
+              {activation.progressPercent}% live
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {(activation.items || []).map((item: any) => (
+              <Link
+                key={item.id}
+                href={item.href}
+                className="rounded-lg border border-border bg-secondary/40 p-3 transition-colors hover:border-primary/30 hover:bg-secondary/60"
+              >
+                <div className="flex items-start gap-2">
+                  {item.completed ? (
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-400" />
+                  ) : (
+                    <Circle className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                  )}
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{item.label}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{item.description}</p>
+                  </div>
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
       ) : null}

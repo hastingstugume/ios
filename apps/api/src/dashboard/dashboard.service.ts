@@ -21,6 +21,8 @@ export class DashboardService {
       outreach,
       qualified,
       won,
+      sourceCount,
+      activeKeywordCount,
       byCategory,
       byStage,
       topSources,
@@ -42,6 +44,8 @@ export class DashboardService {
       this.prisma.signal.count({ where: { organizationId: orgId, stage: 'OUTREACH' } }),
       this.prisma.signal.count({ where: { organizationId: orgId, stage: 'QUALIFIED' } }),
       this.prisma.signal.count({ where: { organizationId: orgId, stage: 'WON' } }),
+      this.prisma.source.count({ where: { organizationId: orgId } }),
+      this.prisma.keyword.count({ where: { organizationId: orgId, isActive: true } }),
       this.prisma.signal.groupBy({
         by: ['category'],
         where: { organizationId: orgId, fetchedAt: { gte: thirtyDaysAgo } },
@@ -95,6 +99,46 @@ export class DashboardService {
       ORDER BY 1 ASC
     `;
 
+    const activationItems = [
+      {
+        id: 'source_connected',
+        label: 'Connect your first source',
+        description: 'Turn on one source so the workspace can start capturing buyer intent.',
+        href: '/sources',
+        completed: sourceCount > 0,
+      },
+      {
+        id: 'keywords_added',
+        label: 'Add at least 3 keywords',
+        description: 'Tight keywords improve relevance and reduce noisy opportunities.',
+        href: '/keywords',
+        completed: activeKeywordCount >= 3,
+      },
+      {
+        id: 'first_signal_captured',
+        label: 'Capture your first signal',
+        description: 'Review one real opportunity from your feed to validate demand.',
+        href: '/feed',
+        completed: totalSignals > 0,
+      },
+      {
+        id: 'first_signal_saved',
+        label: 'Save your first signal',
+        description: 'Save high-intent opportunities so the team can act quickly.',
+        href: '/feed?status=SAVED',
+        completed: saved > 0,
+      },
+      {
+        id: 'alert_enabled',
+        label: 'Enable an alert rule',
+        description: 'Get notified as soon as high-intent signals show up.',
+        href: '/alerts',
+        completed: alertRules > 0,
+      },
+    ];
+
+    const completedActivationSteps = activationItems.filter((item) => item.completed).length;
+
     return {
       stats: {
         totalSignals,
@@ -106,7 +150,15 @@ export class DashboardService {
         outreach,
         qualified,
         won,
+        activeSources: sourceCount,
+        activeKeywords: activeKeywordCount,
         activeAlerts: alertRules,
+      },
+      activation: {
+        completedSteps: completedActivationSteps,
+        totalSteps: activationItems.length,
+        progressPercent: Math.round((completedActivationSteps / activationItems.length) * 100),
+        items: activationItems,
       },
       byCategory: byCategory.map((c) => ({ category: c.category, count: c._count._all })),
       byStage: byStage.map((stage) => ({ stage: stage.stage, count: stage._count._all })),

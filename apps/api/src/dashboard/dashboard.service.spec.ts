@@ -9,7 +9,11 @@ const mockPrisma: any = {
     findMany: jest.fn(),
   },
   source: {
+    count: jest.fn(),
     findMany: jest.fn(),
+  },
+  keyword: {
+    count: jest.fn(),
   },
   alertRule: {
     count: jest.fn(),
@@ -53,6 +57,8 @@ describe('DashboardService', () => {
     mockPrisma.signal.findMany.mockResolvedValue([
       { id: 'sig_1', confidenceScore: 91, source: { name: 'r/startups', type: 'REDDIT' }, assignee: null },
     ]);
+    mockPrisma.source.count.mockResolvedValue(1);
+    mockPrisma.keyword.count.mockResolvedValue(4);
     mockPrisma.source.findMany.mockResolvedValue([{ id: 'src_1', name: 'r/startups', type: 'REDDIT' }]);
     mockPrisma.alertRule.count.mockResolvedValue(2);
     mockPrisma.$queryRaw.mockResolvedValue([{ date: '2026-03-26', count: BigInt(5) }]);
@@ -65,7 +71,14 @@ describe('DashboardService', () => {
       outreach: 2,
       qualified: 1,
       won: 1,
+      activeSources: 1,
+      activeKeywords: 4,
       activeAlerts: 2,
+    }));
+    expect(result.activation).toEqual(expect.objectContaining({
+      completedSteps: 5,
+      totalSteps: 5,
+      progressPercent: 100,
     }));
     expect(result.byStage).toEqual([{ stage: 'IN_PROGRESS', count: 3 }]);
     expect(result.topSources).toEqual([{ source: { id: 'src_1', name: 'r/startups', type: 'REDDIT' }, count: 5 }]);
