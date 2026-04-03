@@ -18,6 +18,7 @@ import { ClassificationModule } from './classification/classification.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PublicModule } from './public/public.module';
 import { EntitlementsModule } from './entitlements/entitlements.module';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { EntitlementsModule } from './entitlements/entitlements.module';
     NotificationsModule,
     PublicModule,
     EntitlementsModule,
+    BillingModule,
   ],
   providers: [
     {
