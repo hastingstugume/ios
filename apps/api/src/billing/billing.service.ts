@@ -41,6 +41,12 @@ interface CreateBillingPortalSessionInput {
   returnPath?: string;
 }
 
+interface GetBillingOverviewInput {
+  orgId: string;
+  userEmail: string;
+  membershipRole?: UserRole;
+}
+
 @Injectable()
 export class BillingService {
   private readonly logger = new Logger(BillingService.name);
@@ -158,6 +164,85 @@ export class BillingService {
     return { portalUrl: session.url, sessionId: session.id };
   }
 
+  async getBillingOverview(input: GetBillingOverviewInput) {
+    this.assertBillingAdmin(input.membershipRole);
+
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: input.orgId },
+      select: { id: true, plan: true },
+    });
+    if (!organization) throw new BadRequestException('Workspace not found');
+
+    const customerId = await this.tryResolveBillingCustomerId(input.orgId, input.userEmail);
+    if (!customerId) {
+      return {
+        hasBillingProfile: false,
+        customerId: null,
+        workspacePlan: this.normalizeWorkspacePlan(organization.plan),
+        subscription: null,
+        invoices: [],
+      };
+    }
+
+    const subscriptions = await this.stripe.subscriptions.list({
+      customer: customerId,
+      status: 'all',
+      limit: 20,
+    });
+    const workspaceSubscriptions = subscriptions.data.filter(
+      (subscription) => subscription.metadata?.organizationId === input.orgId,
+    );
+    const scopedSubscriptions = workspaceSubscriptions.length ? workspaceSubscriptions : subscriptions.data;
+    const primarySubscription = this.selectPrimarySubscription(scopedSubscriptions);
+    const scopedSubscriptionIds = new Set(scopedSubscriptions.map((subscription) => subscription.id));
+
+    const invoices = await this.stripe.invoices.list({ customer: customerId, limit: 20 });
+    const scopedInvoices = invoices.data
+      .filter((invoice) => {
+        const invoiceSubscription = invoice.parent?.subscription_details?.subscription;
+        if (!invoiceSubscription) return scopedSubscriptionIds.size === 0;
+        const subscriptionId = typeof invoiceSubscription === 'string' ? invoiceSubscription : invoiceSubscription.id;
+        return scopedSubscriptionIds.size ? scopedSubscriptionIds.has(subscriptionId) : true;
+      })
+      .slice(0, 8);
+
+    const primaryItem = primarySubscription?.items.data[0];
+    const normalizedSubscription = primarySubscription
+      ? {
+          id: primarySubscription.id,
+          status: primarySubscription.status,
+          cancelAtPeriodEnd: primarySubscription.cancel_at_period_end,
+          currentPeriodStart: primaryItem?.current_period_start
+            ? new Date(primaryItem.current_period_start * 1000).toISOString()
+            : null,
+          currentPeriodEnd: primaryItem?.current_period_end
+            ? new Date(primaryItem.current_period_end * 1000).toISOString()
+            : null,
+          amount: primaryItem?.price?.unit_amount ?? null,
+          currency: (primaryItem?.price?.currency || 'usd').toUpperCase(),
+          interval: primaryItem?.price?.recurring?.interval ?? null,
+        }
+      : null;
+
+    return {
+      hasBillingProfile: true,
+      customerId,
+      workspacePlan: this.normalizeWorkspacePlan(organization.plan),
+      subscription: normalizedSubscription,
+      invoices: scopedInvoices.map((invoice) => ({
+        id: invoice.id,
+        number: invoice.number,
+        status: invoice.status,
+        amountPaid: invoice.amount_paid,
+        amountDue: invoice.amount_due,
+        currency: invoice.currency.toUpperCase(),
+        createdAt: new Date(invoice.created * 1000).toISOString(),
+        hostedInvoiceUrl: invoice.hosted_invoice_url,
+        invoicePdf: invoice.invoice_pdf,
+      })),
+    };
+  }
+
   async handleStripeWebhook(signature: string, rawBody?: Buffer) {
     if (!rawBody?.length) {
       throw new BadRequestException('Webhook payload is empty');
@@ -258,6 +343,17 @@ export class BillingService {
     throw new BadRequestException('No billing profile found for this workspace. Start with an upgrade checkout first.');
   }
 
+  private async tryResolveBillingCustomerId(orgId: string, userEmail: string) {
+    try {
+      return await this.resolveBillingCustomerId(orgId, userEmail);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   private async findCustomerFromSubscriptionSearch(orgId: string) {
     try {
       const result = await this.stripe.subscriptions.search({
@@ -281,6 +377,17 @@ export class BillingService {
       this.logger.warn(`Stripe subscription search unavailable while resolving billing customer: ${error?.message || error}`);
       return null;
     }
+  }
+
+  private selectPrimarySubscription(subscriptions: Stripe.Subscription[]) {
+    if (!subscriptions.length) return null;
+
+    const activeLike = subscriptions.find((subscription) =>
+      ['active', 'trialing', 'past_due'].includes(subscription.status),
+    );
+    if (activeLike) return activeLike;
+
+    return subscriptions[0];
   }
 
   private async processStripeEvent(event: Stripe.Event) {

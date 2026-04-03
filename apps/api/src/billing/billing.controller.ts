@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Headers, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { IsIn, IsOptional, IsString } from 'class-validator';
@@ -58,6 +58,15 @@ export class BillingController {
     return this.billing.createBillingPortalSession({
       orgId,
       returnPath: dto.returnPath,
+      userEmail: req.user?.email || '',
+      membershipRole: req.membership?.role as UserRole | undefined,
+    });
+  }
+
+  @Get('overview')
+  getBillingOverview(@Param('orgId') orgId: string, @Req() req: any) {
+    return this.billing.getBillingOverview({
+      orgId,
       userEmail: req.user?.email || '',
       membershipRole: req.membership?.role as UserRole | undefined,
     });
