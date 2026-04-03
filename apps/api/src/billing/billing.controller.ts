@@ -21,6 +21,12 @@ class CreateCheckoutSessionDto {
   cancelPath?: string;
 }
 
+class CreateBillingPortalSessionDto {
+  @IsOptional()
+  @IsString()
+  returnPath?: string;
+}
+
 @ApiTags('Billing')
 @Controller('orgs/:orgId/billing')
 @UseGuards(AuthGuard, OrgMemberGuard)
@@ -38,6 +44,20 @@ export class BillingController {
       targetPlan: dto.targetPlan,
       successPath: dto.successPath,
       cancelPath: dto.cancelPath,
+      userEmail: req.user?.email || '',
+      membershipRole: req.membership?.role as UserRole | undefined,
+    });
+  }
+
+  @Post('portal')
+  createBillingPortalSession(
+    @Param('orgId') orgId: string,
+    @Body() dto: CreateBillingPortalSessionDto,
+    @Req() req: any,
+  ) {
+    return this.billing.createBillingPortalSession({
+      orgId,
+      returnPath: dto.returnPath,
       userEmail: req.user?.email || '',
       membershipRole: req.membership?.role as UserRole | undefined,
     });

@@ -34,6 +34,13 @@ interface CreateCheckoutSessionInput {
   cancelPath?: string;
 }
 
+interface CreateBillingPortalSessionInput {
+  orgId: string;
+  userEmail: string;
+  membershipRole?: UserRole;
+  returnPath?: string;
+}
+
 @Injectable()
 export class BillingService {
   private readonly logger = new Logger(BillingService.name);
@@ -116,6 +123,41 @@ export class BillingService {
     return { checkoutUrl: session.url, sessionId: session.id };
   }
 
+  async createBillingPortalSession(input: CreateBillingPortalSessionInput) {
+    this.assertBillingAdmin(input.membershipRole);
+    if (!input.userEmail) throw new BadRequestException('A valid account email is required');
+
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: input.orgId },
+      select: { id: true },
+    });
+    if (!organization) throw new BadRequestException('Workspace not found');
+
+    const frontendUrl = this.config.get<string>('FRONTEND_URL', 'http://localhost:3000');
+    const returnUrl = this.buildAbsoluteUrl(frontendUrl, input.returnPath, '/settings#plan-limits');
+    const customerId = await this.resolveBillingCustomerId(input.orgId, input.userEmail);
+
+    let session: Stripe.BillingPortal.Session;
+    try {
+      session = await this.stripe.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: returnUrl,
+      });
+    } catch (error: any) {
+      const stripeMessage = error?.raw?.message || error?.message || '';
+      if (/portal/i.test(stripeMessage) && /config|configured|setup|setting/i.test(stripeMessage)) {
+        throw new ServiceUnavailableException('Stripe Billing Portal is not configured yet');
+      }
+      throw new InternalServerErrorException('Could not start billing portal');
+    }
+
+    if (!session.url) {
+      throw new InternalServerErrorException('Billing portal session did not return a redirect URL');
+    }
+
+    return { portalUrl: session.url, sessionId: session.id };
+  }
+
   async handleStripeWebhook(signature: string, rawBody?: Buffer) {
     if (!rawBody?.length) {
       throw new BadRequestException('Webhook payload is empty');
@@ -188,6 +230,57 @@ export class BillingService {
     const url = new URL(urlValue);
     url.searchParams.set(key, value);
     return url.toString();
+  }
+
+  private async resolveBillingCustomerId(orgId: string, userEmail: string) {
+    const searchedCustomerId = await this.findCustomerFromSubscriptionSearch(orgId);
+    if (searchedCustomerId) return searchedCustomerId;
+
+    const customers = await this.stripe.customers.list({ email: userEmail, limit: 10 });
+    const candidates = customers.data.filter((customer): customer is Stripe.Customer => !('deleted' in customer && customer.deleted));
+    if (!candidates.length) {
+      throw new BadRequestException('No billing profile found for this workspace. Start with an upgrade checkout first.');
+    }
+
+    for (const customer of candidates) {
+      const subscriptions = await this.stripe.subscriptions.list({
+        customer: customer.id,
+        status: 'all',
+        limit: 20,
+      });
+
+      const matchesWorkspace = subscriptions.data.some((subscription) => subscription.metadata?.organizationId === orgId);
+      if (matchesWorkspace) {
+        return customer.id;
+      }
+    }
+
+    throw new BadRequestException('No billing profile found for this workspace. Start with an upgrade checkout first.');
+  }
+
+  private async findCustomerFromSubscriptionSearch(orgId: string) {
+    try {
+      const result = await this.stripe.subscriptions.search({
+        query: `metadata['organizationId']:'${orgId}'`,
+        limit: 1,
+      });
+
+      const subscription = result.data[0];
+      if (!subscription?.customer) return null;
+
+      if (typeof subscription.customer === 'string') {
+        return subscription.customer;
+      }
+
+      if ('id' in subscription.customer && typeof subscription.customer.id === 'string') {
+        return subscription.customer.id;
+      }
+
+      return null;
+    } catch (error: any) {
+      this.logger.warn(`Stripe subscription search unavailable while resolving billing customer: ${error?.message || error}`);
+      return null;
+    }
   }
 
   private async processStripeEvent(event: Stripe.Event) {
