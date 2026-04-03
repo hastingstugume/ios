@@ -118,6 +118,7 @@ export const alertsApi = {
 
 export const organizationsApi = {
   get: (orgId: string) => api.get<OrganizationDetail>(`/orgs/${orgId}`),
+  usage: (orgId: string) => api.get<WorkspaceUsage>(`/orgs/${orgId}/usage`),
   update: (orgId: string, data: { name?: string; logoUrl?: string; businessFocus?: string; targetAudience?: string; negativeKeywords?: string[] }) => api.patch<Organization>(`/orgs/${orgId}`, data),
   members: (orgId: string) => api.get<{ members: OrganizationMember[]; invitations: Invitation[] }>(`/orgs/${orgId}/members`),
   inviteMember: (orgId: string, data: { email: string; role: string }) => api.post(`/orgs/${orgId}/members`, data),
@@ -191,6 +192,23 @@ export interface Invitation {
 export interface OrganizationDetail extends Organization {
   logoUrl?: string | null;
   members: OrganizationMember[];
+}
+export interface WorkspaceUsageMetric {
+  used: number;
+  limit: number | null;
+  remaining: number | null;
+  percentUsed: number | null;
+  atLimit: boolean;
+}
+export interface WorkspaceUsage {
+  plan: string;
+  planLabel: string;
+  resources: {
+    sources: WorkspaceUsageMetric;
+    keywords: WorkspaceUsageMetric;
+    alerts: WorkspaceUsageMetric;
+    seats: WorkspaceUsageMetric;
+  };
 }
 export interface Signal {
   id: string; organizationId: string; sourceId: string; externalId: string;

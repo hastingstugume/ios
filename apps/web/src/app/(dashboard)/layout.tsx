@@ -1,8 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useUpgradeCheckout } from '@/hooks/useUpgradeCheckout';
+import { organizationsApi } from '@/lib/api';
 import { normalizeWorkspacePlan } from '@/lib/plans';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Menu, X } from 'lucide-react';
@@ -14,6 +16,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const currentPlan = normalizeWorkspacePlan(currentOrg?.plan);
   const showUpgradeCTA = currentPlan === 'free';
   const { redirectingPlan, checkoutError, clearCheckoutError, startUpgradeCheckout } = useUpgradeCheckout(currentOrgId);
+  const usageQuery = useQuery({
+    queryKey: ['workspace-usage', currentOrgId],
+    queryFn: () => organizationsApi.usage(currentOrgId!),
+    enabled: Boolean(currentOrgId && showUpgradeCTA),
+    refetchInterval: 60_000,
+  });
+  const usage = usageQuery.data;
+  const sourceLimitReached = Boolean(usage?.resources.sources.atLimit);
+  const keywordLimitReached = Boolean(usage?.resources.keywords.atLimit);
+  const alertLimitReached = Boolean(usage?.resources.alerts.atLimit);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.replace('/');
@@ -77,23 +89,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <main className="min-w-0 flex-1 overflow-y-auto pt-16 md:pt-0">
         {showUpgradeCTA ? (
-          <section className="pointer-events-none fixed left-1/2 top-[4.75rem] z-40 -translate-x-1/2 md:top-4">
-            <div className="pointer-events-auto rounded-xl border border-border/80 bg-card/95 px-3 py-2 shadow-[0_12px_40px_rgba(2,8,23,0.35)] backdrop-blur-md">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">Free plan</span>
-                <span className="text-muted-foreground/60">·</span>
+          <section className="pointer-events-none fixed bottom-4 right-4 z-40 md:bottom-5 md:right-6">
+            <div className="pointer-events-auto rounded-full border border-border/80 bg-card/95 px-2.5 py-2 shadow-[0_10px_30px_rgba(2,8,23,0.3)] backdrop-blur-md">
+              <div className="flex items-center gap-2">
+                <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                  Free
+                </span>
+                <span className="hidden text-xs text-muted-foreground md:inline">
+                  {sourceLimitReached || keywordLimitReached || alertLimitReached ? 'Limit reached' : 'Unlock more capacity'}
+                </span>
                 <button
                   type="button"
                   onClick={() => startUpgradeCheckout('starter')}
                   disabled={!!redirectingPlan}
-                  className="font-medium text-foreground underline underline-offset-4 transition-colors hover:text-primary disabled:cursor-not-allowed disabled:no-underline disabled:opacity-70"
+                  className="rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {redirectingPlan === 'starter' ? 'Redirecting…' : 'Upgrade'}
+                  {redirectingPlan === 'starter' ? 'Redirecting...' : 'Upgrade'}
                 </button>
               </div>
             </div>
             {checkoutError ? (
-              <div className="mt-2 rounded-lg border border-destructive/40 bg-card/95 px-3 py-2 text-xs text-destructive shadow-[0_8px_30px_rgba(2,8,23,0.3)]">
+              <div className="mt-2 w-[min(320px,92vw)] rounded-lg border border-destructive/40 bg-card/95 px-3 py-2 text-xs text-destructive shadow-[0_8px_30px_rgba(2,8,23,0.3)]">
                 <div className="flex items-center justify-between gap-3">
                   <span>{checkoutError}</span>
                   <button

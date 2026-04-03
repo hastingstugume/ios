@@ -3,8 +3,10 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useUpgradeCheckout } from '@/hooks/useUpgradeCheckout';
+import { organizationsApi } from '@/lib/api';
 import { normalizeWorkspacePlan, WORKSPACE_PLAN_MAP, WORKSPACE_PLAN_ORDER, WORKSPACE_PLANS } from '@/lib/plans';
 import { Check, CreditCard, Sparkles } from 'lucide-react';
 
@@ -17,6 +19,13 @@ const PLAN_OUTCOMES: Record<string, string> = {
 
 export default function PricingPage() {
   const { currentOrg, currentOrgId } = useAuth();
+  const usageQuery = useQuery({
+    queryKey: ['workspace-usage', currentOrgId],
+    queryFn: () => organizationsApi.usage(currentOrgId!),
+    enabled: !!currentOrgId,
+    refetchInterval: 60_000,
+  });
+  const usage = usageQuery.data;
   const searchParams = useSearchParams();
   const currentPlan = normalizeWorkspacePlan(currentOrg?.plan);
   const currentPlanIndex = WORKSPACE_PLAN_ORDER.indexOf(currentPlan);
@@ -48,6 +57,19 @@ export default function PricingPage() {
             <p className="mt-3 max-w-3xl text-base leading-7 text-muted-foreground">
               Current plan: <span className="font-medium text-foreground">{WORKSPACE_PLAN_MAP[currentPlan].label}</span>. Move up when you need higher capacity and faster execution.
             </p>
+            {usage ? (
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                <span className="rounded-md border border-border bg-card px-2 py-1">
+                  Sources {usage.resources.sources.used}/{usage.resources.sources.limit ?? 'unlimited'}
+                </span>
+                <span className="rounded-md border border-border bg-card px-2 py-1">
+                  Keywords {usage.resources.keywords.used}/{usage.resources.keywords.limit ?? 'unlimited'}
+                </span>
+                <span className="rounded-md border border-border bg-card px-2 py-1">
+                  Alerts {usage.resources.alerts.used}/{usage.resources.alerts.limit ?? 'unlimited'}
+                </span>
+              </div>
+            ) : null}
           </div>
           <div className="inline-flex rounded-2xl border border-border bg-card p-1.5">
             <button

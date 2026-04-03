@@ -190,6 +190,12 @@ export default function SettingsPage() {
     queryFn: () => keywordsApi.list(currentOrgId!),
     enabled: !!currentOrgId,
   });
+  const usageQuery = useQuery({
+    queryKey: ['workspace-usage', currentOrgId],
+    queryFn: () => organizationsApi.usage(currentOrgId!),
+    enabled: !!currentOrgId,
+    refetchInterval: 60_000,
+  });
   const sessionsQuery = useQuery({
     queryKey: ['auth-sessions'],
     queryFn: () => authApi.sessions(),
@@ -266,6 +272,7 @@ export default function SettingsPage() {
       setInvite({ email: '', role: 'ANALYST' });
       setShowInviteModal(false);
       qc.invalidateQueries({ queryKey: ['org-members', currentOrgId] });
+      qc.invalidateQueries({ queryKey: ['workspace-usage', currentOrgId] });
     },
   });
 
@@ -280,7 +287,10 @@ export default function SettingsPage() {
 
   const removeMemberMutation = useMutation({
     mutationFn: (memberId: string) => organizationsApi.removeMember(currentOrgId!, memberId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['org-members', currentOrgId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['org-members', currentOrgId] });
+      qc.invalidateQueries({ queryKey: ['workspace-usage', currentOrgId] });
+    },
   });
 
   const invitationLinkBase = useMemo(() => {
@@ -323,6 +333,7 @@ export default function SettingsPage() {
     { value: 'system', label: 'System', description: `Currently following ${resolvedTheme} mode.`, icon: Monitor },
   ];
   const trackedKeywordCount = keywordsQuery.data?.length || 0;
+  const workspaceUsage = usageQuery.data;
   const normalizedPlan = normalizeWorkspacePlan(currentOrg?.plan);
   const currentPlanMeta = WORKSPACE_PLAN_MAP[normalizedPlan];
   const nextPlan = getNextPlan(normalizedPlan);
@@ -598,19 +609,87 @@ export default function SettingsPage() {
             <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-lg border border-border bg-background px-3 py-2">
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Sources</p>
-                <p className="mt-1 text-sm font-medium text-foreground">{currentPlanMeta.maxSources ?? 'Unlimited'}</p>
+                <p className="mt-1 text-sm font-medium text-foreground">
+                  {workspaceUsage
+                    ? workspaceUsage.resources.sources.limit === null
+                      ? `${workspaceUsage.resources.sources.used} active`
+                      : `${workspaceUsage.resources.sources.used}/${workspaceUsage.resources.sources.limit}`
+                    : currentPlanMeta.maxSources ?? 'Unlimited'}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {workspaceUsage?.resources.sources.limit === null
+                    ? 'Unlimited on this plan'
+                    : `${workspaceUsage?.resources.sources.remaining ?? currentPlanMeta.maxSources ?? 0} remaining`}
+                </p>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${workspaceUsage?.resources.sources.percentUsed ?? 0}%` }}
+                  />
+                </div>
               </div>
               <div className="rounded-lg border border-border bg-background px-3 py-2">
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Keywords</p>
-                <p className="mt-1 text-sm font-medium text-foreground">{currentPlanMeta.maxKeywords ?? 'Unlimited'}</p>
+                <p className="mt-1 text-sm font-medium text-foreground">
+                  {workspaceUsage
+                    ? workspaceUsage.resources.keywords.limit === null
+                      ? `${workspaceUsage.resources.keywords.used} active`
+                      : `${workspaceUsage.resources.keywords.used}/${workspaceUsage.resources.keywords.limit}`
+                    : currentPlanMeta.maxKeywords ?? 'Unlimited'}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {workspaceUsage?.resources.keywords.limit === null
+                    ? 'Unlimited on this plan'
+                    : `${workspaceUsage?.resources.keywords.remaining ?? currentPlanMeta.maxKeywords ?? 0} remaining`}
+                </p>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${workspaceUsage?.resources.keywords.percentUsed ?? 0}%` }}
+                  />
+                </div>
               </div>
               <div className="rounded-lg border border-border bg-background px-3 py-2">
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Alerts</p>
-                <p className="mt-1 text-sm font-medium text-foreground">{currentPlanMeta.maxAlerts ?? 'Unlimited'}</p>
+                <p className="mt-1 text-sm font-medium text-foreground">
+                  {workspaceUsage
+                    ? workspaceUsage.resources.alerts.limit === null
+                      ? `${workspaceUsage.resources.alerts.used} active`
+                      : `${workspaceUsage.resources.alerts.used}/${workspaceUsage.resources.alerts.limit}`
+                    : currentPlanMeta.maxAlerts ?? 'Unlimited'}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {workspaceUsage?.resources.alerts.limit === null
+                    ? 'Unlimited on this plan'
+                    : `${workspaceUsage?.resources.alerts.remaining ?? currentPlanMeta.maxAlerts ?? 0} remaining`}
+                </p>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${workspaceUsage?.resources.alerts.percentUsed ?? 0}%` }}
+                  />
+                </div>
               </div>
               <div className="rounded-lg border border-border bg-background px-3 py-2">
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Seats</p>
-                <p className="mt-1 text-sm font-medium text-foreground">{currentPlanMeta.maxSeats ?? 'Unlimited'}</p>
+                <p className="mt-1 text-sm font-medium text-foreground">
+                  {workspaceUsage
+                    ? workspaceUsage.resources.seats.limit === null
+                      ? `${workspaceUsage.resources.seats.used} active`
+                      : `${workspaceUsage.resources.seats.used}/${workspaceUsage.resources.seats.limit}`
+                    : currentPlanMeta.maxSeats ?? 'Unlimited'}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {workspaceUsage?.resources.seats.limit === null
+                    ? 'Unlimited on this plan'
+                    : `${workspaceUsage?.resources.seats.remaining ?? currentPlanMeta.maxSeats ?? 0} remaining`}
+                </p>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${workspaceUsage?.resources.seats.percentUsed ?? 0}%` }}
+                  />
+                </div>
               </div>
             </div>
           </div>
