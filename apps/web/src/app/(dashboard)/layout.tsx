@@ -2,13 +2,18 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useUpgradeCheckout } from '@/hooks/useUpgradeCheckout';
+import { normalizeWorkspacePlan } from '@/lib/plans';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Menu, X } from 'lucide-react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { isLoading, isAuthenticated, emailVerified, onboardingCompleted } = useAuth();
+  const { isLoading, isAuthenticated, emailVerified, onboardingCompleted, currentOrg, currentOrgId } = useAuth();
   const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const currentPlan = normalizeWorkspacePlan(currentOrg?.plan);
+  const showUpgradeCTA = currentPlan === 'free';
+  const { redirectingPlan, checkoutError, clearCheckoutError, startUpgradeCheckout } = useUpgradeCheckout(currentOrgId);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.replace('/');
@@ -71,6 +76,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
 
       <main className="min-w-0 flex-1 overflow-y-auto pt-16 md:pt-0">
+        {showUpgradeCTA ? (
+          <section className="pointer-events-none fixed left-1/2 top-[4.75rem] z-40 -translate-x-1/2 md:top-4">
+            <div className="pointer-events-auto rounded-xl border border-border/80 bg-card/95 px-3 py-2 shadow-[0_12px_40px_rgba(2,8,23,0.35)] backdrop-blur-md">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">Free plan</span>
+                <span className="text-muted-foreground/60">·</span>
+                <button
+                  type="button"
+                  onClick={() => startUpgradeCheckout('starter')}
+                  disabled={!!redirectingPlan}
+                  className="font-medium text-foreground underline underline-offset-4 transition-colors hover:text-primary disabled:cursor-not-allowed disabled:no-underline disabled:opacity-70"
+                >
+                  {redirectingPlan === 'starter' ? 'Redirecting…' : 'Upgrade'}
+                </button>
+              </div>
+            </div>
+            {checkoutError ? (
+              <div className="mt-2 rounded-lg border border-destructive/40 bg-card/95 px-3 py-2 text-xs text-destructive shadow-[0_8px_30px_rgba(2,8,23,0.3)]">
+                <div className="flex items-center justify-between gap-3">
+                  <span>{checkoutError}</span>
+                  <button
+                    type="button"
+                    onClick={clearCheckoutError}
+                    className="rounded-md border border-destructive/40 px-2 py-0.5 transition-colors hover:bg-destructive/10"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
         {children}
       </main>
     </div>

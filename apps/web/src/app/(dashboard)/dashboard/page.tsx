@@ -66,7 +66,7 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {nextPlan ? (
+      {nextPlan && currentPlan !== 'free' ? (
         <div className="rounded-xl border border-primary/20 bg-primary/10 px-4 py-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-primary">
