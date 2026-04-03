@@ -403,7 +403,7 @@ export default function LandingPage() {
           Simple plans for teams<br />tracking buyer intent
         </h2>
         <p style={{ color: '#94a3b8', fontSize: 15, maxWidth: 560, lineHeight: 1.75 }}>
-          These plans describe how teams typically adopt the product today. Billing automation is not yet self-serve inside the app.
+          Start free, then upgrade in-app with secure Stripe checkout when you need higher limits and faster execution.
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 1, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 18, overflow: 'hidden', marginTop: 52 }}>

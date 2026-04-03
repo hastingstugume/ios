@@ -29,7 +29,7 @@ This document is the source of truth for two things:
 | Alerts | Create, edit, pause/resume, delete, confidence/frequency rules, category targeting, keyword targeting, and last-trigger timestamps are implemented. |
 | Settings | Real profile save, workspace save, password change, team admin, pending invites, and audit log UI are implemented. |
 | Workspace Admin | Workspace switching, member listing, invite/add teammate, role updates, member removal, and audit log browsing are implemented. |
-| Billing | Deferred. Plan is visible as organization metadata only. No self-serve billing or payment processing is implemented. |
+| Billing | Stripe Checkout self-serve upgrades are implemented for paid tiers, and webhook events sync workspace plan changes back into organization metadata. |
 
 ## Promise Matrix
 
@@ -41,8 +41,8 @@ This document is the source of truth for two things:
 | Alert rules | Alerts support confidence, categories, keywords, recipients, and trigger timestamps | Alerts UI supports create/edit/toggle/delete with targeting | Yes | Add digest delivery UX later if needed |
 | Team workspaces | Organization members, invitations, membership roles, audit log, org switching exist | Sidebar switcher and settings admin UI are real | Yes | Invitation acceptance UX can be expanded further later |
 | Save and act on signals | Saved/bookmarked/ignored, pipeline stages, assignment, next steps, and close-state tracking are implemented | Feed/detail UI supports real workflow updates backed by the API | Yes | Continue hardening with tests and QA |
-| Pricing and plans | Organization has a stored plan field, but no payment flow exists | Landing pricing is informational only; settings show active plan metadata | Partially | Keep pricing non-transactional until billing project starts |
-| Self-serve billing | No payment processor, subscription lifecycle, or invoice handling exists | No billing controls remain in signed-in UX | No claim made | Separate billing project required |
+| Pricing and plans | Organization has a stored plan field and Stripe checkout mapping for paid tiers | Signed-in pricing and upgrade CTAs trigger checkout session creation | Yes (with env config) | Keep plan/price mapping aligned with Stripe dashboard |
+| Self-serve billing | Stripe Checkout + webhook-driven plan sync are available | Signed-in upgrade controls route to secure checkout instead of email requests | Yes (Starter/Growth; Scale if configured) | Add billing portal and invoice history UX next |
 
 ## Acceptance Criteria By Subsystem
 
@@ -51,7 +51,7 @@ This document is the source of truth for two things:
 - Landing preview and stats are sourced from `/api/v1/public/landing`.
 - No hardcoded fake operational metrics remain.
 - CTA language is reduced to `Get started` and `Sign in`.
-- Pricing remains informational and does not imply working self-serve billing.
+- Pricing and upgrade controls must match configured Stripe prices and active plan entitlements.
 
 ### Auth
 
@@ -94,7 +94,7 @@ This document is the source of truth for two things:
 
 ### Deferred
 
-- Billing and subscription automation
+- Billing portal and invoice history UX
 - Invite email delivery hardening beyond the current SendGrid integration
 - Additional workflow automation such as reminders, SLAs, or stage-change notifications
 
@@ -131,11 +131,11 @@ This document is the source of truth for two things:
 
 ### Commit 8
 
-- Remove non-functional billing controls and keep plan display informational only.
+- Implement Stripe checkout upgrade flow and webhook plan synchronization.
 
 ### Commit 9
 
-- Run truth pass and verification across landing plus signed-in flows.
+- Add customer billing portal and complete billing lifecycle UX.
 
 ## Verification Checklist
 
@@ -147,5 +147,5 @@ This document is the source of truth for two things:
 - Role changes and removals are enforced by backend permissions.
 - Keyword and source edits persist and validate correctly.
 - Alert rules store categories and keywordIds and match against real signal data.
-- Landing page renders backend-sourced preview data and does not over-claim billing.
+- Landing page renders backend-sourced preview data and billing copy matches shipped checkout behavior.
 - After schema changes, `yarn db:migrate` and `yarn db:generate` are run before TypeScript verification so Prisma types stay in sync with the code.
