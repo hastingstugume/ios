@@ -9,8 +9,10 @@ import { generateCurrentTotpCode } from './totp.util';
 const mockPrisma: any = {
   user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
   userIdentity: { findUnique: jest.fn(), create: jest.fn() },
-  organization: { create: jest.fn() },
+  organization: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
   organizationMember: { create: jest.fn(), findFirst: jest.fn() },
+  source: { count: jest.fn(), create: jest.fn() },
+  keyword: { count: jest.fn(), create: jest.fn() },
   session: { create: jest.fn(), findUnique: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), deleteMany: jest.fn(), delete: jest.fn() },
   mfaChallenge: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
   invitation: { findUnique: jest.fn(), update: jest.fn() },
@@ -568,5 +570,38 @@ describe('AuthService', () => {
     await expect(service.completeOnboarding('u1', 'BUSINESS' as any, 'Acme')).resolves.toEqual(
       expect.objectContaining({ success: true, organizationId: 'org_1' }),
     );
+  });
+
+  it('seeds starter onboarding sources and keywords when a starter pack is selected', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      emailVerified: true,
+      memberships: [],
+    });
+    mockPrisma.organization.create.mockResolvedValue({ id: 'org_1', name: 'Acme' });
+    mockPrisma.organizationMember.create.mockResolvedValue({ id: 'mem_1' });
+    mockPrisma.user.update.mockResolvedValue({ id: 'u1' });
+    mockPrisma.source.count.mockResolvedValue(0);
+    mockPrisma.keyword.count.mockResolvedValue(0);
+    mockPrisma.organization.findUnique.mockResolvedValue({
+      businessFocus: null,
+      targetAudience: null,
+    });
+    mockPrisma.organization.update.mockResolvedValue({ id: 'org_1' });
+    mockPrisma.source.create.mockResolvedValue({ id: 'src_1' });
+    mockPrisma.keyword.create.mockResolvedValue({ id: 'kw_1' });
+    mockPrisma.auditLog.create.mockResolvedValue({ id: 'log_1' });
+
+    await expect(
+      service.completeOnboarding('u1', 'BUSINESS' as any, 'Acme', 'single-freelancer-radar'),
+    ).resolves.toEqual(expect.objectContaining({ success: true, organizationId: 'org_1' }));
+
+    expect(mockPrisma.source.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        organizationId: 'org_1',
+        type: 'HN_SEARCH',
+      }),
+    }));
+    expect(mockPrisma.keyword.create).toHaveBeenCalled();
   });
 });

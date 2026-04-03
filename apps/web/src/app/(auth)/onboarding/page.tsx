@@ -5,8 +5,39 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { authApi } from '@/lib/api';
 import { getOnboardingWorkspaceSeed } from '@/lib/auth-page-helpers';
 import { useAuth } from '@/hooks/useAuth';
-import { Briefcase, UserRound, ArrowRight } from 'lucide-react';
+import { Briefcase, UserRound, ArrowRight, Sparkles, Search, ShoppingBag, Code2 } from 'lucide-react';
 import { AuthShell } from '@/components/auth/AuthShell';
+
+const STARTER_PACK_OPTIONS = [
+  {
+    id: 'single-freelancer-radar',
+    label: 'Freelancer Radar',
+    description: 'Track direct "need a freelancer/consultant" asks from operator communities.',
+    outcome: 'Fastest path to your first qualified lead signal.',
+    icon: Sparkles,
+  },
+  {
+    id: 'single-web-buyer-intent',
+    label: 'B2B Buyer Intent',
+    description: 'Monitor broad buyer-intent phrases across trusted web communities.',
+    outcome: 'Broader deal coverage with one source to start.',
+    icon: Search,
+  },
+  {
+    id: 'single-shopify-migration-watch',
+    label: 'Shopify Migration',
+    description: 'Capture stores actively asking for replatform and migration help.',
+    outcome: 'High-intent ecommerce implementation opportunities.',
+    icon: ShoppingBag,
+  },
+  {
+    id: 'single-stackoverflow-urgent',
+    label: 'Technical Rescue',
+    description: 'Find urgent "blocked / need support" implementation threads.',
+    outcome: 'Surface pain-led leads that need help now.',
+    icon: Code2,
+  },
+] as const;
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -14,6 +45,7 @@ export default function OnboardingPage() {
   const { isLoading, isAuthenticated, emailVerified, onboardingCompleted, currentOrg, user } = useAuth();
   const [accountType, setAccountType] = useState<'FREELANCER' | 'BUSINESS'>('BUSINESS');
   const [workspaceName, setWorkspaceName] = useState('');
+  const [starterPackId, setStarterPackId] = useState<(typeof STARTER_PACK_OPTIONS)[number]['id']>('single-freelancer-radar');
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.replace('/');
@@ -35,7 +67,7 @@ export default function OnboardingPage() {
   }, [accountType, currentOrg?.name, user?.name, workspaceName]);
 
   const complete = useMutation({
-    mutationFn: () => authApi.completeOnboarding({ accountType, workspaceName }),
+    mutationFn: () => authApi.completeOnboarding({ accountType, workspaceName, starterPackId }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['auth', 'me'] });
       router.replace('/dashboard');
@@ -49,7 +81,7 @@ export default function OnboardingPage() {
   return (
     <AuthShell
       eyebrow="Onboarding"
-      title="Let’s set up your workspace"
+      title="Let's set up your workspace"
       description="Choose the setup that best matches how you sell, then create the workspace where your team will review buyer intent."
     >
       <div className="space-y-6">
@@ -112,9 +144,41 @@ export default function OnboardingPage() {
 
           <p className="text-sm text-muted-foreground">
             {accountType === 'FREELANCER'
-              ? 'You’ll start with a personal workspace designed for solo outreach, saved signals, and alerts.'
-              : 'You’ll start with a shared workspace built for agencies, consultancies, and team-based workflows.'}
+              ? "You'll start with a personal workspace designed for solo outreach, saved signals, and alerts."
+              : "You'll start with a shared workspace built for agencies, consultancies, and team-based workflows."}
           </p>
+
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">Choose your first demand lane</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {STARTER_PACK_OPTIONS.map((pack) => {
+                const Icon = pack.icon;
+                const selected = starterPackId === pack.id;
+                return (
+                  <button
+                    key={pack.id}
+                    type="button"
+                    onClick={() => setStarterPackId(pack.id)}
+                    className={`rounded-xl border p-3 text-left transition-colors ${
+                      selected
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border bg-secondary/40 hover:border-primary/30'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Icon className="h-4 w-4 text-primary" />
+                      <p className="text-sm font-medium text-foreground">{pack.label}</p>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">{pack.description}</p>
+                    <p className="mt-1 text-xs text-primary">{pack.outcome}</p>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              We'll pre-load one starter source and keywords so you can reach your first signal faster.
+            </p>
+          </div>
 
           {complete.error ? (
             <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -129,7 +193,7 @@ export default function OnboardingPage() {
             className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
           >
             <span className="inline-flex items-center gap-2">
-              {complete.isPending ? 'Creating workspace…' : 'Continue to dashboard'}
+              {complete.isPending ? 'Creating workspace...' : 'Continue to dashboard'}
               <ArrowRight className="h-4 w-4" />
             </span>
           </button>

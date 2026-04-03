@@ -188,7 +188,7 @@ export class AuthController {
   @HttpCode(200)
   @ApiOperation({ summary: 'Complete post-signup onboarding' })
   async completeOnboarding(@Req() req: any, @Body() dto: CompleteOnboardingDto) {
-    return this.auth.completeOnboarding(req.user.id, dto.accountType, dto.workspaceName);
+    return this.auth.completeOnboarding(req.user.id, dto.accountType, dto.workspaceName, dto.starterPackId);
   }
 
   @Patch('me')

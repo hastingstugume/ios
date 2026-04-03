@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import { AccountType, UserRole } from '@prisma/client';
+import { AccountType, SourceType, UserRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { generateBackupCodes, generateOtpAuthUri, generateTotpSecret, verifyTotpCode } from './totp.util';
 
@@ -49,6 +49,83 @@ type MfaChallengeResult = {
   mfaRequired: true;
   challengeToken: string;
   authState: AuthState;
+};
+
+type OnboardingStarterPack = {
+  id: string;
+  name: string;
+  audience: string;
+  recommendedKeywords: string[];
+  source: {
+    name: string;
+    type: SourceType;
+    config: Record<string, any>;
+  };
+};
+
+const ONBOARDING_STARTER_PACKS: Record<string, OnboardingStarterPack> = {
+  'single-freelancer-radar': {
+    id: 'single-freelancer-radar',
+    name: 'Freelancer Radar',
+    audience: 'Freelancers and consultants looking for direct implementation demand',
+    recommendedKeywords: ['need freelancer', 'consultant', 'implementation help', 'need support'],
+    source: {
+      name: 'Ask HN freelancer demand',
+      type: SourceType.HN_SEARCH,
+      config: {
+        query: '"need freelancer" OR "looking for consultant" OR "implementation help"',
+        tags: 'story,comment',
+        sourceWeight: 1.0,
+      },
+    },
+  },
+  'single-web-buyer-intent': {
+    id: 'single-web-buyer-intent',
+    name: 'B2B Buyer Intent',
+    audience: 'Teams looking for broad buyer-intent conversations in operator communities',
+    recommendedKeywords: ['looking for consultant', 'need agency', 'implementation partner', 'need help'],
+    source: {
+      name: 'Web buyer-intent search',
+      type: SourceType.WEB_SEARCH,
+      config: {
+        query: '"looking for consultant" OR "need agency" OR "implementation partner"',
+        domains: ['news.ycombinator.com', 'stackoverflow.com', 'github.com'],
+        excludeTerms: ['course', 'job board'],
+        sourceWeight: 1.0,
+      },
+    },
+  },
+  'single-shopify-migration-watch': {
+    id: 'single-shopify-migration-watch',
+    name: 'Shopify Migration Watch',
+    audience: 'Shopify experts and agencies looking for replatform and rebuild opportunities',
+    recommendedKeywords: ['shopify migration', 'replatform', 'shopify expert', 'store rebuild'],
+    source: {
+      name: 'Shopify migration requests',
+      type: SourceType.WEB_SEARCH,
+      config: {
+        query: '"shopify migration" OR "moving to shopify" OR "need a shopify expert" OR "store rebuild"',
+        domains: ['community.shopify.com', 'news.ycombinator.com', 'indiehackers.com'],
+        excludeTerms: ['theme giveaway', 'job opening'],
+        sourceWeight: 1.05,
+      },
+    },
+  },
+  'single-stackoverflow-urgent': {
+    id: 'single-stackoverflow-urgent',
+    name: 'Technical Rescue',
+    audience: 'Technical consultants solving urgent migration and delivery blockers',
+    recommendedKeywords: ['urgent help', 'blocked', 'migration help', 'need support'],
+    source: {
+      name: 'Stack Overflow rescue issues',
+      type: SourceType.STACKOVERFLOW_SEARCH,
+      config: {
+        query: '"urgent" OR "blocked" OR "migration help" OR "need support"',
+        sort: 'activity',
+        sourceWeight: 1.0,
+      },
+    },
+  },
 };
 
 @Injectable()
@@ -376,7 +453,12 @@ export class AuthService {
     return { success: true };
   }
 
-  async completeOnboarding(userId: string, accountType: AccountType, workspaceName: string) {
+  async completeOnboarding(
+    userId: string,
+    accountType: AccountType,
+    workspaceName: string,
+    starterPackId?: string,
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { memberships: true },
@@ -389,6 +471,7 @@ export class AuthService {
 
     const existingMembership = user.memberships[0];
     let orgId = existingMembership?.organizationId;
+    let createdWorkspace = false;
 
     if (!existingMembership) {
       const slug = safeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
@@ -400,6 +483,7 @@ export class AuthService {
         data: { userId, organizationId: organization.id, role: UserRole.OWNER },
       });
       orgId = organization.id;
+      createdWorkspace = true;
     }
 
     await this.prisma.user.update({
@@ -410,6 +494,10 @@ export class AuthService {
       },
     });
 
+    if (orgId && createdWorkspace && starterPackId) {
+      await this.installStarterPack(orgId, userId, starterPackId);
+    }
+
     if (orgId) {
       await this.prisma.auditLog.create({
         data: { organizationId: orgId, userId, action: 'LOGIN' },
@@ -417,6 +505,69 @@ export class AuthService {
     }
 
     return { success: true, organizationId: orgId };
+  }
+
+  private async installStarterPack(orgId: string, userId: string, starterPackId: string) {
+    const pack = ONBOARDING_STARTER_PACKS[starterPackId];
+    if (!pack) {
+      return;
+    }
+
+    const [sourceCount, keywordCount, organization] = await Promise.all([
+      this.prisma.source.count({ where: { organizationId: orgId } }),
+      this.prisma.keyword.count({ where: { organizationId: orgId } }),
+      this.prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { businessFocus: true, targetAudience: true },
+      }),
+    ]);
+
+    if (sourceCount > 0 || keywordCount > 0) {
+      return;
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      if (organization && (!organization.businessFocus || !organization.targetAudience)) {
+        await tx.organization.update({
+          where: { id: orgId },
+          data: {
+            ...(organization.businessFocus ? {} : { businessFocus: pack.name }),
+            ...(organization.targetAudience ? {} : { targetAudience: pack.audience }),
+          },
+        });
+      }
+
+      await tx.source.create({
+        data: {
+          organizationId: orgId,
+          name: pack.source.name,
+          type: pack.source.type,
+          config: pack.source.config,
+        },
+      });
+
+      for (const phrase of pack.recommendedKeywords.slice(0, 6)) {
+        await tx.keyword.create({
+          data: {
+            organizationId: orgId,
+            phrase,
+          },
+        });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: orgId,
+          userId,
+          action: 'SOURCE_CREATED',
+          metadata: {
+            seededBy: 'onboarding',
+            packId: pack.id,
+            sourceName: pack.source.name,
+          },
+        },
+      });
+    });
   }
 
   async setupMfa(userId: string) {

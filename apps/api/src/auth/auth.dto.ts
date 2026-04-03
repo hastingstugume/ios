@@ -44,6 +44,7 @@ export class ResetPasswordDto {
 export class CompleteOnboardingDto {
   @ApiProperty({ enum: AccountType }) @IsEnum(AccountType) accountType!: AccountType;
   @ApiProperty() @IsString() @MinLength(2) @MaxLength(80) workspaceName!: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsString() starterPackId?: string;
 }
 
 export class VerifyMfaLoginDto {
