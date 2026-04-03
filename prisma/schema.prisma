@@ -94,6 +94,9 @@ enum AuditAction {
   SIGNAL_BOOKMARKED
   SIGNAL_WORKFLOW_UPDATED
   ORG_SETTINGS_UPDATED
+  BILLING_CHECKOUT_STARTED
+  BILLING_PORTAL_OPENED
+  BILLING_PLAN_UPDATED
 }
 
 // ─── Org & Users ─────────────────────────────────────────────────────────────

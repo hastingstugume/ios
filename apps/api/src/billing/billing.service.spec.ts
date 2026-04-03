@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 const mockPrisma: any = {
   organization: { findUnique: jest.fn() },
+  auditLog: { create: jest.fn().mockResolvedValue({ id: 'log_1' }) },
 };
 
 const mockConfig: Partial<ConfigService> = {
@@ -69,6 +70,14 @@ describe('BillingService', () => {
       expect.objectContaining({
         customer: 'cus_123',
         return_url: 'http://localhost:3000/settings#plan-limits',
+      }),
+    );
+    expect(mockPrisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          organizationId: 'org_1',
+          action: 'BILLING_PORTAL_OPENED',
+        }),
       }),
     );
   });

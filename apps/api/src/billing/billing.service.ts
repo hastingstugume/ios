@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { UserRole } from '@prisma/client';
+import { AuditAction, Prisma, UserRole } from '@prisma/client';
 import Stripe from 'stripe';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -27,6 +27,7 @@ const STRIPE_PRICE_ENV_MAP: Record<PaidWorkspacePlan, string> = {
 
 interface CreateCheckoutSessionInput {
   orgId: string;
+  userId?: string;
   targetPlan: string;
   userEmail: string;
   membershipRole?: UserRole;
@@ -36,6 +37,7 @@ interface CreateCheckoutSessionInput {
 
 interface CreateBillingPortalSessionInput {
   orgId: string;
+  userId?: string;
   userEmail: string;
   membershipRole?: UserRole;
   returnPath?: string;
@@ -126,6 +128,18 @@ export class BillingService {
       throw new InternalServerErrorException('Checkout session did not return a redirect URL');
     }
 
+    await this.createBillingAuditLog({
+      organizationId: organization.id,
+      userId: input.userId,
+      action: AuditAction.BILLING_CHECKOUT_STARTED,
+      metadata: {
+        sessionId: session.id,
+        currentPlan,
+        targetPlan,
+        priceId,
+      },
+    });
+
     return { checkoutUrl: session.url, sessionId: session.id };
   }
 
@@ -160,6 +174,16 @@ export class BillingService {
     if (!session.url) {
       throw new InternalServerErrorException('Billing portal session did not return a redirect URL');
     }
+
+    await this.createBillingAuditLog({
+      organizationId: organization.id,
+      userId: input.userId,
+      action: AuditAction.BILLING_PORTAL_OPENED,
+      metadata: {
+        sessionId: session.id,
+        customerId,
+      },
+    });
 
     return { portalUrl: session.url, sessionId: session.id };
   }
@@ -458,8 +482,39 @@ export class BillingService {
       data: { plan },
     });
 
+    await this.createBillingAuditLog({
+      organizationId,
+      action: AuditAction.BILLING_PLAN_UPDATED,
+      metadata: {
+        stripeEventId,
+        reason,
+        previousPlan: currentPlan,
+        updatedPlan: plan,
+      },
+    });
+
     this.logger.log(
       `Updated org ${organizationId} plan ${currentPlan} -> ${plan} via Stripe event ${stripeEventId} (${reason})`,
     );
+  }
+
+  private async createBillingAuditLog(input: {
+    organizationId: string;
+    userId?: string;
+    action: AuditAction;
+    metadata?: Record<string, unknown>;
+  }) {
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          organizationId: input.organizationId,
+          userId: input.userId,
+          action: input.action,
+          metadata: (input.metadata ?? {}) as Prisma.InputJsonValue,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(`Could not persist billing audit log (${input.action}): ${String(error)}`);
+    }
   }
 }

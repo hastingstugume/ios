@@ -44,6 +44,7 @@ export class BillingController {
       targetPlan: dto.targetPlan,
       successPath: dto.successPath,
       cancelPath: dto.cancelPath,
+      userId: req.user?.id,
       userEmail: req.user?.email || '',
       membershipRole: req.membership?.role as UserRole | undefined,
     });
@@ -58,6 +59,7 @@ export class BillingController {
     return this.billing.createBillingPortalSession({
       orgId,
       returnPath: dto.returnPath,
+      userId: req.user?.id,
       userEmail: req.user?.email || '',
       membershipRole: req.membership?.role as UserRole | undefined,
     });
