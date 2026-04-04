@@ -10,7 +10,7 @@ import { getPlanLimitUpgradeHint } from '@/lib/planLimitErrors';
 import { getNextPlan, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
 import { useTheme, type ThemeMode } from '@/components/theme-provider';
 import { formatDate, formatPlanName } from '@/lib/utils';
-import { User, Building2, Shield, Users, Clock3, Link as LinkIcon, Trash2, Plus, Pencil, Sun, Moon, Monitor, CreditCard } from 'lucide-react';
+import { User, Building2, Shield, Users, Clock3, Link as LinkIcon, Trash2, Plus, Pencil, Sun, Moon, Monitor, CreditCard, Download } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 import QRCode from 'qrcode';
 import { Switch } from '@/components/ui/switch';
@@ -113,6 +113,27 @@ function formatCurrencyCents(amount: number | null, currency: string) {
   } catch {
     return `$${(amount / 100).toFixed(2)}`;
   }
+}
+
+function escapeCsvCell(value: unknown) {
+  const text = value === null || value === undefined ? '' : String(value);
+  if (!/[",\n]/.test(text)) return text;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function buildCsv(rows: unknown[][]) {
+  return rows.map((row) => row.map((cell) => escapeCsvCell(cell)).join(',')).join('\n');
+}
+
+function downloadCsv(filename: string, csv: string) {
+  if (typeof window === 'undefined') return;
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export default function SettingsPage() {
@@ -393,6 +414,46 @@ export default function SettingsPage() {
   const checkoutToUpgradeRate = checkoutStartedCount > 0
     ? Math.round((planUpgradeCount / checkoutStartedCount) * 100)
     : null;
+  const funnelSteps = [
+    { label: 'Portal opens', count: billingPortalOpenedCount },
+    { label: 'Checkout starts', count: checkoutStartedCount },
+    { label: 'Plan upgrades', count: planUpgradeCount },
+  ];
+  const maxFunnelCount = Math.max(1, ...funnelSteps.map((step) => step.count));
+  const billingEventsCsv = useMemo(() => {
+    const rows: unknown[][] = [
+      ['event_id', 'action', 'created_at', 'actor', 'metadata_json'],
+      ...billingAuditLogs.map((entry) => [
+        entry.id,
+        entry.action,
+        entry.createdAt,
+        entry.user?.name || entry.user?.email || 'System',
+        JSON.stringify(entry.metadata || {}),
+      ]),
+    ];
+    return buildCsv(rows);
+  }, [billingAuditLogs]);
+  const billingFunnelSummaryCsv = useMemo(() => {
+    const rows: unknown[][] = [
+      ['range_days', 'portal_opens', 'checkout_starts', 'plan_upgrades', 'portal_to_checkout_rate_pct', 'checkout_to_upgrade_rate_pct'],
+      [
+        auditRangeDays,
+        billingPortalOpenedCount,
+        checkoutStartedCount,
+        planUpgradeCount,
+        portalToCheckoutRate ?? '',
+        checkoutToUpgradeRate ?? '',
+      ],
+    ];
+    return buildCsv(rows);
+  }, [
+    auditRangeDays,
+    billingPortalOpenedCount,
+    checkoutStartedCount,
+    planUpgradeCount,
+    portalToCheckoutRate,
+    checkoutToUpgradeRate,
+  ]);
   const activeSessions = sessionsQuery.data?.sessions || [];
   const themeOptions: Array<{ value: ThemeMode; label: string; description: string; icon: any }> = [
     { value: 'light', label: 'Light', description: 'Bright interface for daytime work.', icon: Sun },
@@ -1524,7 +1585,25 @@ export default function SettingsPage() {
                 <p className="text-sm font-medium text-foreground">Billing conversion funnel</p>
                 <p className="mt-1 text-xs text-muted-foreground">Portal opened -&gt; checkout started -&gt; plan upgraded.</p>
               </div>
-              <span className="text-xs text-muted-foreground">Last {auditRangeDays} days</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted-foreground">Last {auditRangeDays} days</span>
+                <button
+                  type="button"
+                  onClick={() => downloadCsv(`billing-funnel-${auditRangeDays}d.csv`, billingFunnelSummaryCsv)}
+                  className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Export funnel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadCsv(`billing-events-${auditRangeDays}d.csv`, billingEventsCsv)}
+                  className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Export events
+                </button>
+              </div>
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
               <div className="rounded-lg border border-border bg-background px-3 py-2">
@@ -1545,6 +1624,22 @@ export default function SettingsPage() {
                   {checkoutToUpgradeRate === null ? '—' : `${checkoutToUpgradeRate}% of checkout starts`}
                 </p>
               </div>
+            </div>
+            <div className="mt-4 space-y-2">
+              {funnelSteps.map((step) => (
+                <div key={step.label}>
+                  <div className="mb-1 flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">{step.label}</span>
+                    <span className="font-medium text-foreground">{step.count}</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-background">
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{ width: `${Math.max(4, Math.round((step.count / maxFunnelCount) * 100))}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
