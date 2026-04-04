@@ -512,7 +512,7 @@ export default function SourcesPage() {
               {nextPlan ? (
                 <button
                   type="button"
-                  onClick={() => startUpgradeCheckout(nextPlan)}
+                  onClick={() => startUpgradeCheckout(nextPlan, { sourceContext: 'sources_fetch_limit_banner' })}
                   disabled={!!redirectingPlan}
                   className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
                 >
@@ -936,7 +936,7 @@ export default function SourcesPage() {
                   {sourceUpgradeHint.nextPlan ? (
                     <button
                       type="button"
-                      onClick={() => startUpgradeCheckout(sourceUpgradeHint.nextPlan!)}
+                      onClick={() => startUpgradeCheckout(sourceUpgradeHint.nextPlan!, { sourceContext: 'sources_limit_modal' })}
                       disabled={redirectingPlan === sourceUpgradeHint.nextPlan}
                       className="rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
                     >

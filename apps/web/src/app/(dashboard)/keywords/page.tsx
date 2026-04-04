@@ -153,7 +153,7 @@ export default function KeywordsPage() {
                   {keywordUpgradeHint.nextPlan ? (
                     <button
                       type="button"
-                      onClick={() => startUpgradeCheckout(keywordUpgradeHint.nextPlan!)}
+                      onClick={() => startUpgradeCheckout(keywordUpgradeHint.nextPlan!, { sourceContext: 'keywords_limit_modal' })}
                       disabled={redirectingPlan === keywordUpgradeHint.nextPlan}
                       className="rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
                     >

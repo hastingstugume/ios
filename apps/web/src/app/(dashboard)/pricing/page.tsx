@@ -212,7 +212,7 @@ export default function PricingPage() {
                     ) : isUpgrade ? (
                       <button
                         type="button"
-                        onClick={() => startUpgradeCheckout(plan.key)}
+                        onClick={() => startUpgradeCheckout(plan.key, { sourceContext: `pricing_card_${plan.key}` })}
                         disabled={!!redirectingPlan}
                         className="inline-flex w-full items-center justify-center rounded-2xl bg-primary px-4 py-3 text-base font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
                       >
@@ -273,7 +273,7 @@ export default function PricingPage() {
                 onClick={() => {
                   const nextPlan = WORKSPACE_PLAN_ORDER[currentPlanIndex + 1];
                   if (!nextPlan || nextPlan === 'free') return;
-                  startUpgradeCheckout(nextPlan);
+                  startUpgradeCheckout(nextPlan, { sourceContext: 'pricing_recommended_upgrade' });
                 }}
                 disabled={!!redirectingPlan || !WORKSPACE_PLAN_ORDER[currentPlanIndex + 1]}
                 className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"

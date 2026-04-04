@@ -405,7 +405,7 @@ export default function AlertsPage() {
                   {alertUpgradeHint.nextPlan ? (
                     <button
                       type="button"
-                      onClick={() => startUpgradeCheckout(alertUpgradeHint.nextPlan!)}
+                      onClick={() => startUpgradeCheckout(alertUpgradeHint.nextPlan!, { sourceContext: 'alerts_limit_modal' })}
                       disabled={redirectingPlan === alertUpgradeHint.nextPlan}
                       className="rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
                     >

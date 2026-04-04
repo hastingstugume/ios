@@ -19,6 +19,14 @@ class CreateCheckoutSessionDto {
   @IsOptional()
   @IsString()
   cancelPath?: string;
+
+  @IsOptional()
+  @IsString()
+  sourceContext?: string;
+
+  @IsOptional()
+  @IsString()
+  experimentVariant?: string;
 }
 
 class CreateBillingPortalSessionDto {
@@ -44,6 +52,8 @@ export class BillingController {
       targetPlan: dto.targetPlan,
       successPath: dto.successPath,
       cancelPath: dto.cancelPath,
+      sourceContext: dto.sourceContext,
+      experimentVariant: dto.experimentVariant,
       userId: req.user?.id,
       userEmail: req.user?.email || '',
       membershipRole: req.membership?.role as UserRole | undefined,

@@ -1,15 +1,19 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { billingApi } from '@/lib/api';
 import { WorkspacePlan } from '@/lib/plans';
 
 interface CheckoutOptions {
   successPath?: string;
   cancelPath?: string;
+  sourceContext?: string;
+  experimentVariant?: string;
 }
 
 export function useUpgradeCheckout(currentOrgId?: string) {
+  const pathname = usePathname();
   const [redirectingPlan, setRedirectingPlan] = useState<WorkspacePlan | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
@@ -28,10 +32,14 @@ export function useUpgradeCheckout(currentOrgId?: string) {
     setRedirectingPlan(targetPlan);
 
     try {
+      const sourceContext = options?.sourceContext || (pathname ? `page:${pathname}` : 'page:unknown');
+      const experimentVariant = options?.experimentVariant || getUpgradeExperimentVariant();
       const result = await billingApi.createCheckoutSession(currentOrgId, {
         targetPlan,
         successPath: options?.successPath || '/pricing?checkout=success',
         cancelPath: options?.cancelPath || '/pricing?checkout=cancelled',
+        sourceContext,
+        experimentVariant,
       });
       window.location.assign(result.checkoutUrl);
     } catch (error) {
@@ -46,4 +54,14 @@ export function useUpgradeCheckout(currentOrgId?: string) {
     startUpgradeCheckout,
     clearCheckoutError: () => setCheckoutError(null),
   };
+}
+
+function getUpgradeExperimentVariant() {
+  if (typeof window === 'undefined') return 'control';
+  const storageKey = 'ios_upgrade_cta_variant_v1';
+  const existing = window.localStorage.getItem(storageKey);
+  if (existing === 'a' || existing === 'b') return existing;
+  const assigned = Math.random() < 0.5 ? 'a' : 'b';
+  window.localStorage.setItem(storageKey, assigned);
+  return assigned;
 }

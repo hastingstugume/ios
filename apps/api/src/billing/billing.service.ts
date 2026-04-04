@@ -29,6 +29,8 @@ interface CreateCheckoutSessionInput {
   orgId: string;
   userId?: string;
   targetPlan: string;
+  sourceContext?: string;
+  experimentVariant?: string;
   userEmail: string;
   membershipRole?: UserRole;
   successPath?: string;
@@ -95,6 +97,8 @@ export class BillingService {
     }
 
     const frontendUrl = this.config.get<string>('FRONTEND_URL', 'http://localhost:3000');
+    const sourceContext = this.normalizeTrackingValue(input.sourceContext) || 'unknown';
+    const experimentVariant = this.normalizeTrackingValue(input.experimentVariant) || 'control';
     const successUrl = this.appendQueryParam(
       this.buildAbsoluteUrl(frontendUrl, input.successPath, '/pricing?checkout=success'),
       'session_id',
@@ -115,11 +119,15 @@ export class BillingService {
         organizationId: organization.id,
         targetPlan,
         currentPlan,
+        sourceContext,
+        experimentVariant,
       },
       subscription_data: {
         metadata: {
           organizationId: organization.id,
           targetPlan,
+          sourceContext,
+          experimentVariant,
         },
       },
     });
@@ -137,6 +145,8 @@ export class BillingService {
         currentPlan,
         targetPlan,
         priceId,
+        sourceContext,
+        experimentVariant,
       },
     });
 
@@ -424,7 +434,10 @@ export class BillingService {
           this.logger.warn(`Skipping checkout completion event ${event.id}: missing org/plan metadata`);
           return;
         }
-        await this.syncOrganizationPlan(organizationId, targetPlan, event.id, 'checkout_completed');
+        await this.syncOrganizationPlan(organizationId, targetPlan, event.id, 'checkout_completed', {
+          sourceContext: this.normalizeTrackingValue(session.metadata?.sourceContext),
+          experimentVariant: this.normalizeTrackingValue(session.metadata?.experimentVariant),
+        });
         return;
       }
 
@@ -440,7 +453,10 @@ export class BillingService {
         const shouldDowngradeToFree = event.type === 'customer.subscription.deleted'
           || ['canceled', 'unpaid', 'incomplete_expired'].includes(subscription.status);
         if (shouldDowngradeToFree) {
-          await this.syncOrganizationPlan(organizationId, 'free', event.id, 'subscription_inactive');
+          await this.syncOrganizationPlan(organizationId, 'free', event.id, 'subscription_inactive', {
+            sourceContext: this.normalizeTrackingValue(subscription.metadata?.sourceContext),
+            experimentVariant: this.normalizeTrackingValue(subscription.metadata?.experimentVariant),
+          });
           return;
         }
 
@@ -450,7 +466,10 @@ export class BillingService {
           return;
         }
 
-        await this.syncOrganizationPlan(organizationId, targetPlan, event.id, 'subscription_updated');
+        await this.syncOrganizationPlan(organizationId, targetPlan, event.id, 'subscription_updated', {
+          sourceContext: this.normalizeTrackingValue(subscription.metadata?.sourceContext),
+          experimentVariant: this.normalizeTrackingValue(subscription.metadata?.experimentVariant),
+        });
         return;
       }
 
@@ -464,6 +483,10 @@ export class BillingService {
     plan: WorkspacePlan,
     stripeEventId: string,
     reason: 'checkout_completed' | 'subscription_updated' | 'subscription_inactive',
+    attribution?: {
+      sourceContext?: string | null;
+      experimentVariant?: string | null;
+    },
   ) {
     const organization = await this.prisma.organization.findUnique({
       where: { id: organizationId },
@@ -490,6 +513,8 @@ export class BillingService {
         reason,
         previousPlan: currentPlan,
         updatedPlan: plan,
+        ...(attribution?.sourceContext ? { sourceContext: attribution.sourceContext } : {}),
+        ...(attribution?.experimentVariant ? { experimentVariant: attribution.experimentVariant } : {}),
       },
     });
 
@@ -516,5 +541,12 @@ export class BillingService {
     } catch (error) {
       this.logger.warn(`Could not persist billing audit log (${input.action}): ${String(error)}`);
     }
+  }
+
+  private normalizeTrackingValue(value?: string | null) {
+    if (!value) return null;
+    const normalized = value.trim().toLowerCase().replace(/[^a-z0-9:_-]+/g, '_');
+    if (!normalized) return null;
+    return normalized.slice(0, 120);
   }
 }

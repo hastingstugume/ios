@@ -147,6 +147,8 @@ export const billingApi = {
       targetPlan: 'starter' | 'growth' | 'scale';
       successPath?: string;
       cancelPath?: string;
+      sourceContext?: string;
+      experimentVariant?: string;
     },
   ) => api.post<{ checkoutUrl: string; sessionId: string }>(`/orgs/${orgId}/billing/checkout`, data),
   createPortalSession: (

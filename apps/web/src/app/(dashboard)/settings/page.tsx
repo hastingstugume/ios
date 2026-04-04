@@ -513,6 +513,81 @@ export default function SettingsPage() {
     ];
     return buildCsv(rows);
   }, [auditRangeDays, perPlanBreakdown]);
+  const attributionBreakdown = useMemo(() => {
+    const sourceStats = new Map<string, { checkoutStarts: number; upgrades: number }>();
+    const experimentStats = new Map<string, { checkoutStarts: number; upgrades: number }>();
+
+    const ensure = (map: Map<string, { checkoutStarts: number; upgrades: number }>, key: string) => {
+      if (!map.has(key)) map.set(key, { checkoutStarts: 0, upgrades: 0 });
+      return map.get(key)!;
+    };
+
+    for (const entry of billingAuditLogs) {
+      const sourceContext = String(entry.metadata?.sourceContext || 'unknown');
+      const experimentVariant = String(entry.metadata?.experimentVariant || 'control');
+      const sourceRow = ensure(sourceStats, sourceContext);
+      const experimentRow = ensure(experimentStats, experimentVariant);
+
+      if (entry.action === 'BILLING_CHECKOUT_STARTED') {
+        sourceRow.checkoutStarts += 1;
+        experimentRow.checkoutStarts += 1;
+      }
+
+      if (entry.action === 'BILLING_PLAN_UPDATED') {
+        const previousPlan = String(entry.metadata?.previousPlan || '');
+        const updatedPlan = String(entry.metadata?.updatedPlan || '');
+        if (updatedPlan && planRank(updatedPlan) > planRank(previousPlan)) {
+          sourceRow.upgrades += 1;
+          experimentRow.upgrades += 1;
+        }
+      }
+    }
+
+    const sourceRows = [...sourceStats.entries()]
+      .map(([sourceContext, stats]) => ({
+        sourceContext,
+        ...stats,
+        conversionRate: stats.checkoutStarts > 0 ? Math.round((stats.upgrades / stats.checkoutStarts) * 100) : null,
+      }))
+      .sort((a, b) => (b.upgrades - a.upgrades) || (b.checkoutStarts - a.checkoutStarts));
+
+    const experimentRows = [...experimentStats.entries()]
+      .map(([experimentVariant, stats]) => ({
+        experimentVariant,
+        ...stats,
+        conversionRate: stats.checkoutStarts > 0 ? Math.round((stats.upgrades / stats.checkoutStarts) * 100) : null,
+      }))
+      .sort((a, b) => (b.upgrades - a.upgrades) || (b.checkoutStarts - a.checkoutStarts));
+
+    return { sourceRows, experimentRows };
+  }, [billingAuditLogs]);
+  const maxAttributionCheckouts = Math.max(1, ...attributionBreakdown.sourceRows.map((row) => row.checkoutStarts));
+  const attributionBreakdownCsv = useMemo(() => {
+    const rows: unknown[][] = [
+      ['range_days', 'source_context', 'checkout_starts', 'plan_upgrades', 'checkout_to_upgrade_rate_pct'],
+      ...attributionBreakdown.sourceRows.map((row) => [
+        auditRangeDays,
+        row.sourceContext,
+        row.checkoutStarts,
+        row.upgrades,
+        row.conversionRate ?? '',
+      ]),
+    ];
+    return buildCsv(rows);
+  }, [auditRangeDays, attributionBreakdown.sourceRows]);
+  const experimentBreakdownCsv = useMemo(() => {
+    const rows: unknown[][] = [
+      ['range_days', 'experiment_variant', 'checkout_starts', 'plan_upgrades', 'checkout_to_upgrade_rate_pct'],
+      ...attributionBreakdown.experimentRows.map((row) => [
+        auditRangeDays,
+        row.experimentVariant,
+        row.checkoutStarts,
+        row.upgrades,
+        row.conversionRate ?? '',
+      ]),
+    ];
+    return buildCsv(rows);
+  }, [auditRangeDays, attributionBreakdown.experimentRows]);
   const activeSessions = sessionsQuery.data?.sessions || [];
   const themeOptions: Array<{ value: ThemeMode; label: string; description: string; icon: any }> = [
     { value: 'light', label: 'Light', description: 'Bright interface for daytime work.', icon: Sun },
@@ -795,7 +870,7 @@ export default function SettingsPage() {
                 {nextPlan ? (
                   <button
                     type="button"
-                    onClick={() => startUpgradeCheckout(nextPlan)}
+                    onClick={() => startUpgradeCheckout(nextPlan, { sourceContext: 'settings_plan_limits' })}
                     disabled={!!redirectingPlan}
                     className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
                   >
@@ -1043,7 +1118,7 @@ export default function SettingsPage() {
                 {nextPlan ? (
                   <button
                     type="button"
-                    onClick={() => startUpgradeCheckout(nextPlan)}
+                    onClick={() => startUpgradeCheckout(nextPlan, { sourceContext: 'settings_team_seat_limit' })}
                     disabled={!!redirectingPlan}
                     className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
                   >
@@ -1189,7 +1264,7 @@ export default function SettingsPage() {
                   {inviteUpgradeHint.nextPlan ? (
                     <button
                       type="button"
-                      onClick={() => startUpgradeCheckout(inviteUpgradeHint.nextPlan!)}
+                      onClick={() => startUpgradeCheckout(inviteUpgradeHint.nextPlan!, { sourceContext: 'settings_invite_limit_modal' })}
                       disabled={redirectingPlan === inviteUpgradeHint.nextPlan}
                       className="rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
                     >
@@ -1753,6 +1828,93 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-secondary p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Attribution leaderboard</p>
+                <p className="mt-1 text-xs text-muted-foreground">Which upgrade entry points produce the most successful plan upgrades.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => downloadCsv(`billing-attribution-${auditRangeDays}d.csv`, attributionBreakdownCsv)}
+                  className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Export attribution
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadCsv(`billing-experiments-${auditRangeDays}d.csv`, experimentBreakdownCsv)}
+                  className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Export experiments
+                </button>
+              </div>
+            </div>
+            <div className="mt-3 space-y-2">
+              {attributionBreakdown.sourceRows.slice(0, 8).map((row) => (
+                <div key={row.sourceContext} className="rounded-lg border border-border bg-background px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-foreground">{row.sourceContext}</p>
+                    <span className="text-xs text-muted-foreground">{row.conversionRate === null ? '—' : `${row.conversionRate}%`}</span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-3 text-[11px] text-muted-foreground">
+                    <div>
+                      <div className="mb-1 flex items-center justify-between">
+                        <span>Checkout starts</span>
+                        <span className="font-medium text-foreground">{row.checkoutStarts}</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{ width: `${Math.max(4, Math.round((row.checkoutStarts / maxAttributionCheckouts) * 100))}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="mb-1 flex items-center justify-between">
+                        <span>Upgrades</span>
+                        <span className="font-medium text-foreground">{row.upgrades}</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+                        <div
+                          className="h-full rounded-full bg-emerald-500"
+                          style={{ width: `${row.conversionRate === null ? 4 : Math.max(4, row.conversionRate)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {!attributionBreakdown.sourceRows.length ? (
+                <p className="text-sm text-muted-foreground">No attribution data captured yet. New checkouts will appear here.</p>
+              ) : null}
+            </div>
+            <details className="mt-3 rounded-lg border border-border bg-background">
+              <summary className="cursor-pointer list-none px-3 py-2 text-xs text-foreground">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">Experiment variant performance</span>
+                  <span className="text-muted-foreground">{attributionBreakdown.experimentRows.length} variants</span>
+                </div>
+              </summary>
+              <div className="space-y-2 border-t border-border px-3 py-3">
+                {attributionBreakdown.experimentRows.map((row) => (
+                  <div key={row.experimentVariant} className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-xs">
+                    <span className="font-medium text-foreground">{row.experimentVariant}</span>
+                    <span className="text-muted-foreground">
+                      {row.checkoutStarts} checkouts · {row.upgrades} upgrades · {row.conversionRate === null ? '—' : `${row.conversionRate}%`}
+                    </span>
+                  </div>
+                ))}
+                {!attributionBreakdown.experimentRows.length ? (
+                  <p className="text-xs text-muted-foreground">No experiment data yet.</p>
+                ) : null}
+              </div>
+            </details>
           </div>
 
           <details className="overflow-hidden rounded-xl border border-border bg-secondary/70" open={billingAuditLogs.length > 0}>

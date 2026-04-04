@@ -276,7 +276,7 @@ export default function SourceTemplatesPage() {
               {nextPlan ? (
                 <button
                   type="button"
-                  onClick={() => startUpgradeCheckout(nextPlan)}
+                  onClick={() => startUpgradeCheckout(nextPlan, { sourceContext: 'source_templates_limit_banner' })}
                   disabled={!!redirectingPlan}
                   className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
                 >
@@ -373,7 +373,7 @@ export default function SourceTemplatesPage() {
                           {nextPlan ? (
                             <button
                               type="button"
-                              onClick={() => startUpgradeCheckout(nextPlan)}
+                              onClick={() => startUpgradeCheckout(nextPlan, { sourceContext: 'source_templates_card_limit' })}
                               disabled={!!redirectingPlan}
                               className="inline-flex items-center justify-center rounded-md bg-primary px-2.5 py-1 text-[11px] text-primary-foreground transition-colors hover:bg-primary/90"
                             >

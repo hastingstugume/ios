@@ -100,7 +100,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </span>
                 <button
                   type="button"
-                  onClick={() => startUpgradeCheckout('starter')}
+                  onClick={() => startUpgradeCheckout('starter', { sourceContext: 'layout_floating_upgrade' })}
                   disabled={!!redirectingPlan}
                   className="rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
                 >
