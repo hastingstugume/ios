@@ -32,6 +32,8 @@ const BILLING_AUDIT_ACTIONS = new Set([
   'BILLING_PORTAL_OPENED',
   'BILLING_PLAN_UPDATED',
 ]);
+const BILLING_BREAKDOWN_PLANS = ['starter', 'growth', 'scale'] as const;
+type BillingBreakdownPlan = (typeof BILLING_BREAKDOWN_PLANS)[number];
 
 function planRank(plan?: string | null): number {
   if (!plan) return 0;
@@ -48,6 +50,15 @@ function formatAuditActionLabel(action: string): string {
   if (action === 'BILLING_PORTAL_OPENED') return 'Billing portal opened';
   if (action === 'BILLING_PLAN_UPDATED') return 'Plan updated';
   return action.replaceAll('_', ' ');
+}
+
+function normalizePaidPlanForBreakdown(value: unknown): BillingBreakdownPlan | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'starter') return 'starter';
+  if (normalized === 'growth' || normalized === 'pro' || normalized === 'team') return 'growth';
+  if (normalized === 'scale' || normalized === 'enterprise') return 'scale';
+  return null;
 }
 
 function SectionTitle({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle: string }) {
@@ -454,6 +465,54 @@ export default function SettingsPage() {
     portalToCheckoutRate,
     checkoutToUpgradeRate,
   ]);
+  const perPlanBreakdown = useMemo(() => {
+    const stats = Object.fromEntries(
+      BILLING_BREAKDOWN_PLANS.map((plan) => [plan, { checkoutStarts: 0, upgrades: 0 }]),
+    ) as Record<BillingBreakdownPlan, { checkoutStarts: number; upgrades: number }>;
+
+    for (const entry of billingAuditLogs) {
+      if (entry.action === 'BILLING_CHECKOUT_STARTED') {
+        const targetPlan = normalizePaidPlanForBreakdown(entry.metadata?.targetPlan);
+        if (targetPlan) {
+          stats[targetPlan].checkoutStarts += 1;
+        }
+      }
+
+      if (entry.action === 'BILLING_PLAN_UPDATED') {
+        const previousPlan = String(entry.metadata?.previousPlan || '');
+        const updatedPlan = normalizePaidPlanForBreakdown(entry.metadata?.updatedPlan);
+        if (updatedPlan && planRank(updatedPlan) > planRank(previousPlan)) {
+          stats[updatedPlan].upgrades += 1;
+        }
+      }
+    }
+
+    return BILLING_BREAKDOWN_PLANS.map((plan) => {
+      const checkoutStarts = stats[plan].checkoutStarts;
+      const upgrades = stats[plan].upgrades;
+      return {
+        plan,
+        label: WORKSPACE_PLAN_MAP[plan].label,
+        checkoutStarts,
+        upgrades,
+        conversionRate: checkoutStarts > 0 ? Math.round((upgrades / checkoutStarts) * 100) : null,
+      };
+    });
+  }, [billingAuditLogs]);
+  const maxPlanCheckoutStarts = Math.max(1, ...perPlanBreakdown.map((row) => row.checkoutStarts));
+  const perPlanBreakdownCsv = useMemo(() => {
+    const rows: unknown[][] = [
+      ['range_days', 'plan', 'checkout_starts', 'plan_upgrades', 'checkout_to_upgrade_rate_pct'],
+      ...perPlanBreakdown.map((row) => [
+        auditRangeDays,
+        row.plan,
+        row.checkoutStarts,
+        row.upgrades,
+        row.conversionRate ?? '',
+      ]),
+    ];
+    return buildCsv(rows);
+  }, [auditRangeDays, perPlanBreakdown]);
   const activeSessions = sessionsQuery.data?.sessions || [];
   const themeOptions: Array<{ value: ThemeMode; label: string; description: string; icon: any }> = [
     { value: 'light', label: 'Light', description: 'Bright interface for daytime work.', icon: Sun },
@@ -1637,6 +1696,59 @@ export default function SettingsPage() {
                       className="h-full rounded-full bg-primary"
                       style={{ width: `${Math.max(4, Math.round((step.count / maxFunnelCount) * 100))}%` }}
                     />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-secondary p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Per-plan conversion breakdown</p>
+                <p className="mt-1 text-xs text-muted-foreground">Checkout starts and successful upgrades by paid plan.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => downloadCsv(`billing-plan-breakdown-${auditRangeDays}d.csv`, perPlanBreakdownCsv)}
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export plan CSV
+              </button>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              {perPlanBreakdown.map((row) => (
+                <div key={row.plan} className="rounded-lg border border-border bg-background px-3 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-foreground">{row.label}</p>
+                    <span className="text-xs text-muted-foreground">{row.conversionRate === null ? '—' : `${row.conversionRate}%`}</span>
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    <div>
+                      <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span>Checkout starts</span>
+                        <span className="font-medium text-foreground">{row.checkoutStarts}</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{ width: `${Math.max(4, Math.round((row.checkoutStarts / maxPlanCheckoutStarts) * 100))}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span>Upgrades</span>
+                        <span className="font-medium text-foreground">{row.upgrades}</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+                        <div
+                          className="h-full rounded-full bg-emerald-500"
+                          style={{ width: `${row.conversionRate === null ? 4 : Math.max(4, row.conversionRate)}%` }}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
