@@ -10,7 +10,7 @@ import { getPlanLimitUpgradeHint } from '@/lib/planLimitErrors';
 import { keywordsApi, organizationsApi, sourcesApi } from '@/lib/api';
 import { SOURCE_TYPE_META, formatDate } from '@/lib/utils';
 import { SOURCE_QUERY_TEMPLATES } from '@/lib/sourcePresets';
-import { Database, Plus, Trash2, PauseCircle, PlayCircle, AlertCircle, CheckCircle2, Search, Wand2, Activity, TrendingUp, Target, ArrowRight, BrainCircuit, RefreshCw } from 'lucide-react';
+import { Database, Plus, Trash2, PauseCircle, PlayCircle, AlertCircle, CheckCircle2, Search, Wand2, Activity, TrendingUp, Target, ArrowRight, BrainCircuit, RefreshCw, ChevronDown } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 
 const SOURCE_TYPES = [
@@ -293,6 +293,10 @@ export default function SourcesPage() {
   const [deleteCandidate, setDeleteCandidate] = useState<{ id: string; name: string } | null>(null);
   const [fetchingSourceId, setFetchingSourceId] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [showIntelligencePanel, setShowIntelligencePanel] = useState(false);
+  const [showAdvancedFormFields, setShowAdvancedFormFields] = useState(false);
+  const [selectedTemplateLabel, setSelectedTemplateLabel] = useState<string | null>(null);
+  const [expandedSourceIds, setExpandedSourceIds] = useState<string[]>([]);
 
   const installedTemplate = searchParams.get('installed');
   const installedCreated = searchParams.get('created');
@@ -487,6 +491,18 @@ export default function SourcesPage() {
 
   const selectedType = SOURCE_TYPES.find((t) => t.value === form.type)!;
   const queryTemplates = SOURCE_QUERY_TEMPLATES.filter((template) => template.type === form.type);
+  const selectedTemplate = queryTemplates.find((template) => template.label === selectedTemplateLabel) || queryTemplates[0] || null;
+
+  useEffect(() => {
+    if (!queryTemplates.length) {
+      setSelectedTemplateLabel(null);
+      return;
+    }
+    if (!selectedTemplateLabel || !queryTemplates.some((template) => template.label === selectedTemplateLabel)) {
+      setSelectedTemplateLabel(queryTemplates[0].label);
+    }
+  }, [form.type, queryTemplates, selectedTemplateLabel]);
+
   const filteredSources = sources.filter((src) => {
     const q = search.toLowerCase();
     const configText = JSON.stringify(src.config || {}).toLowerCase();
@@ -553,6 +569,8 @@ export default function SourcesPage() {
     setForm(EMPTY_FORM);
     setPreviewFeedback(null);
     setPresetFeedback(null);
+    setShowAdvancedFormFields(false);
+    setSelectedTemplateLabel(null);
     create.reset();
     updateSource.reset();
     previewSource.reset();
@@ -563,6 +581,14 @@ export default function SourcesPage() {
   const closeDeleteModal = () => {
     setDeleteCandidate(null);
     remove.reset();
+  };
+
+  const toggleSourceDetails = (sourceId: string) => {
+    setExpandedSourceIds((current) =>
+      current.includes(sourceId)
+        ? current.filter((id) => id !== sourceId)
+        : [...current, sourceId],
+    );
   };
 
   return (
@@ -680,58 +706,72 @@ export default function SourcesPage() {
             </div>
           </div>
         </div>
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => setShowIntelligencePanel((value) => !value)}
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            {showIntelligencePanel ? 'Hide detailed recommendations' : 'Show detailed recommendations'}
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showIntelligencePanel ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
 
-        {sourceIntelligence?.recommendations?.length ? (
-          <div className="mt-4 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
-            {sourceIntelligence.recommendations.slice(0, 4).map((recommendation) => (
-              <article key={`${recommendation.sourceName}-${recommendation.action}`} className="rounded-xl border border-border bg-background px-4 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-foreground">{recommendation.sourceName}</p>
-                  <div className="flex items-center gap-2">
-                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-                      recommendation.priority === 'HIGH'
-                        ? 'border-destructive/20 bg-destructive/10 text-destructive'
-                        : recommendation.priority === 'MEDIUM'
-                          ? 'border-amber-400/20 bg-amber-400/10 text-amber-300'
-                          : 'border-border bg-secondary text-muted-foreground'
-                    }`}>
-                      {recommendation.priority.toLowerCase()}
-                    </span>
-                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-                      recommendation.action === 'SCALE'
-                        ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
-                        : recommendation.action === 'FIX'
-                          ? 'border-destructive/20 bg-destructive/10 text-destructive'
-                          : recommendation.action === 'PAUSE'
-                            ? 'border-border bg-secondary text-muted-foreground'
-                            : 'border-primary/20 bg-primary/10 text-primary'
-                    }`}>
-                      {recommendation.action.toLowerCase()}
-                    </span>
-                  </div>
+        {showIntelligencePanel ? (
+          <>
+            {sourceIntelligence?.recommendations?.length ? (
+              <div className="mt-4 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
+                {sourceIntelligence.recommendations.slice(0, 4).map((recommendation) => (
+                  <article key={`${recommendation.sourceName}-${recommendation.action}`} className="rounded-xl border border-border bg-background px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-foreground">{recommendation.sourceName}</p>
+                      <div className="flex items-center gap-2">
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                          recommendation.priority === 'HIGH'
+                            ? 'border-destructive/20 bg-destructive/10 text-destructive'
+                            : recommendation.priority === 'MEDIUM'
+                              ? 'border-amber-400/20 bg-amber-400/10 text-amber-300'
+                              : 'border-border bg-secondary text-muted-foreground'
+                        }`}>
+                          {recommendation.priority.toLowerCase()}
+                        </span>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                          recommendation.action === 'SCALE'
+                            ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+                            : recommendation.action === 'FIX'
+                              ? 'border-destructive/20 bg-destructive/10 text-destructive'
+                              : recommendation.action === 'PAUSE'
+                                ? 'border-border bg-secondary text-muted-foreground'
+                                : 'border-primary/20 bg-primary/10 text-primary'
+                        }`}>
+                          {recommendation.action.toLowerCase()}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs leading-6 text-muted-foreground">{recommendation.reason}</p>
+                    {recommendation.nextSteps?.length ? (
+                      <p className="mt-2 text-xs text-foreground/90">Next: {recommendation.nextSteps[0]}</p>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+                {intelligenceLoading ? 'Analyzing source performance…' : 'No recommendations yet. Add or fetch sources to generate optimization guidance.'}
+              </div>
+            )}
+
+            {sourceIntelligence?.globalActions?.length ? (
+              <div className="mt-4 rounded-xl border border-border bg-background px-4 py-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Workspace-level actions</p>
+                <div className="mt-2 flex flex-col gap-2">
+                  {sourceIntelligence.globalActions.map((action) => (
+                    <p key={action} className="text-sm text-foreground/90">{action}</p>
+                  ))}
                 </div>
-                <p className="mt-2 text-xs leading-6 text-muted-foreground">{recommendation.reason}</p>
-                {recommendation.nextSteps?.length ? (
-                  <p className="mt-2 text-xs text-foreground/90">Next: {recommendation.nextSteps[0]}</p>
-                ) : null}
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="mt-4 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-            {intelligenceLoading ? 'Analyzing source performance…' : 'No recommendations yet. Add or fetch sources to generate optimization guidance.'}
-          </div>
-        )}
-
-        {sourceIntelligence?.globalActions?.length ? (
-          <div className="mt-4 rounded-xl border border-border bg-background px-4 py-3">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Workspace-level actions</p>
-            <div className="mt-2 flex flex-col gap-2">
-              {sourceIntelligence.globalActions.map((action) => (
-                <p key={action} className="text-sm text-foreground/90">{action}</p>
-              ))}
-            </div>
-          </div>
+              </div>
+            ) : null}
+          </>
         ) : null}
       </section>
 
@@ -783,16 +823,13 @@ export default function SourcesPage() {
                 className="w-full rounded-lg border border-border bg-secondary py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <p className="text-sm text-muted-foreground">Keep source names clear so the feed stays easy to scan.</p>
-              <button
-                type="button"
-                onClick={() => router.push('/sources/templates')}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-              >
-                Use template
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => router.push('/sources/templates')}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            >
+              Use template
+            </button>
           </div>
         </section>
       )}
@@ -938,8 +975,15 @@ export default function SourcesPage() {
                   <button
                     key={`${template.type}-${template.label}`}
                     type="button"
-                    onClick={() => applyTemplate(template)}
-                    className="rounded-full border border-border bg-secondary px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    onClick={() => {
+                      setSelectedTemplateLabel(template.label);
+                      applyTemplate(template);
+                    }}
+                    className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                      selectedTemplate?.label === template.label
+                        ? 'border-primary/20 bg-primary/10 text-primary'
+                        : 'border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground'
+                    }`}
                     title={template.description}
                   >
                     {template.label}
@@ -947,15 +991,15 @@ export default function SourcesPage() {
                 ))}
               </div>
               <p className="mt-2 text-[11px] text-muted-foreground">Use a template, then tune the query to fit your niche and offer.</p>
-              {queryTemplates.map((template) => (
-                <div key={`${template.type}-${template.label}-meta`} className="mt-3 rounded-lg border border-border bg-background px-3 py-3">
-                  <p className="text-xs font-medium text-foreground">{template.label}</p>
-                  {template.description ? <p className="mt-1 text-xs text-muted-foreground">{template.description}</p> : null}
-                  {template.recommendedKeywords?.length ? (
+              {selectedTemplate ? (
+                <div key={`${selectedTemplate.type}-${selectedTemplate.label}-meta`} className="mt-3 rounded-lg border border-border bg-background px-3 py-3">
+                  <p className="text-xs font-medium text-foreground">{selectedTemplate.label}</p>
+                  {selectedTemplate.description ? <p className="mt-1 text-xs text-muted-foreground">{selectedTemplate.description}</p> : null}
+                  {selectedTemplate.recommendedKeywords?.length ? (
                     <div className="mt-2">
                       <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Suggested tracked keywords</p>
                       <div className="flex flex-wrap gap-2">
-                        {template.recommendedKeywords.map((keyword) => (
+                        {selectedTemplate.recommendedKeywords.map((keyword) => (
                           <span key={keyword} className="rounded-full border border-border px-2 py-1 text-[11px] text-foreground/80">
                             {keyword}
                           </span>
@@ -963,7 +1007,7 @@ export default function SourcesPage() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => addRecommendedKeywords.mutate(template.recommendedKeywords || [])}
+                        onClick={() => addRecommendedKeywords.mutate(selectedTemplate.recommendedKeywords || [])}
                         disabled={addRecommendedKeywords.isPending}
                         className="mt-3 rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
                       >
@@ -971,11 +1015,11 @@ export default function SourcesPage() {
                       </button>
                     </div>
                   ) : null}
-                  {template.recommendedNegativeKeywords?.length ? (
+                  {selectedTemplate.recommendedNegativeKeywords?.length ? (
                     <div className="mt-2">
                       <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Suggested negatives</p>
                       <div className="flex flex-wrap gap-2">
-                        {template.recommendedNegativeKeywords.map((keyword) => (
+                        {selectedTemplate.recommendedNegativeKeywords.map((keyword) => (
                           <span key={keyword} className="rounded-full border border-border px-2 py-1 text-[11px] text-muted-foreground">
                             {keyword}
                           </span>
@@ -983,7 +1027,7 @@ export default function SourcesPage() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => applyRecommendedNegatives.mutate(template.recommendedNegativeKeywords || [])}
+                        onClick={() => applyRecommendedNegatives.mutate(selectedTemplate.recommendedNegativeKeywords || [])}
                         disabled={applyRecommendedNegatives.isPending}
                         className="mt-3 rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
                       >
@@ -992,38 +1036,50 @@ export default function SourcesPage() {
                     </div>
                   ) : null}
                 </div>
-              ))}
+              ) : null}
             </div>
           ) : null}
-          <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Exclude terms</label>
-              <input
-                value={form.excludeTerms}
-                onChange={(e) => {
-                  previewSource.reset();
-                  setPreviewFeedback(null);
-                  setForm((f) => ({ ...f, excludeTerms: e.target.value }));
-                }}
-                placeholder="job board, affiliate, newsletter"
-                className="w-full rounded-lg border border-border bg-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-              <p className="mt-1 text-[11px] text-muted-foreground">Optional comma-separated filters to suppress noisy matches.</p>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Source weight</label>
-              <input
-                value={form.sourceWeight}
-                onChange={(e) => {
-                  previewSource.reset();
-                  setPreviewFeedback(null);
-                  setForm((f) => ({ ...f, sourceWeight: e.target.value }));
-                }}
-                placeholder="1.0"
-                className="w-full rounded-lg border border-border bg-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-              <p className="mt-1 text-[11px] text-muted-foreground">Boost or reduce ranking impact from 0.5 to 1.5.</p>
-            </div>
+          <div className="rounded-lg border border-border bg-background px-3 py-2">
+            <button
+              type="button"
+              onClick={() => setShowAdvancedFormFields((value) => !value)}
+              className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {showAdvancedFormFields ? 'Hide advanced settings' : 'Show advanced settings'}
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAdvancedFormFields ? 'rotate-180' : ''}`} />
+            </button>
+            {showAdvancedFormFields ? (
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Exclude terms</label>
+                  <input
+                    value={form.excludeTerms}
+                    onChange={(e) => {
+                      previewSource.reset();
+                      setPreviewFeedback(null);
+                      setForm((f) => ({ ...f, excludeTerms: e.target.value }));
+                    }}
+                    placeholder="job board, affiliate, newsletter"
+                    className="w-full rounded-lg border border-border bg-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">Optional comma-separated filters to suppress noisy matches.</p>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Source weight</label>
+                  <input
+                    value={form.sourceWeight}
+                    onChange={(e) => {
+                      previewSource.reset();
+                      setPreviewFeedback(null);
+                      setForm((f) => ({ ...f, sourceWeight: e.target.value }));
+                    }}
+                    placeholder="1.0"
+                    className="w-full rounded-lg border border-border bg-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">Boost or reduce ranking impact from 0.5 to 1.5.</p>
+                </div>
+              </div>
+            ) : null}
           </div>
           {form.type !== 'MANUAL' ? (
             <div className="rounded-xl border border-border bg-background p-4">
@@ -1226,6 +1282,7 @@ export default function SourcesPage() {
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(360px,1fr))]">
           {filteredSources.map((src) => {
             const typeMeta = SOURCE_TYPE_META[src.type] || { label: src.type, icon: '🔗' };
+            const isExpanded = expandedSourceIds.includes(src.id);
             const freeFetchCooldown = normalizedPlan === 'free' ? getFreeFetchCooldown(src.lastFetchedAt, nowMs) : null;
             const fetchOnCooldown = !!freeFetchCooldown?.isCoolingDown;
             const fetchDisabled = fetchNow.isPending || src.status === 'PAUSED' || fetchOnCooldown;
@@ -1267,21 +1324,16 @@ export default function SourcesPage() {
                 : 'Manual source';
 
             return (
-              <div key={src.id} className="section-card px-5 py-5">
-                <div className="space-y-4">
+              <div key={src.id} className="section-card px-4 py-3">
+                <div className="space-y-3">
                   <div className="flex items-start gap-4">
                     <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-secondary text-xl">{typeMeta.icon}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className={`text-lg font-semibold ${src.status === 'PAUSED' ? 'text-muted-foreground' : 'text-foreground'}`}>{src.name}</span>
+                            <span className={`text-base font-semibold ${src.status === 'PAUSED' ? 'text-muted-foreground' : 'text-foreground'}`}>{src.name}</span>
                             <span className="rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] font-medium text-muted-foreground">{typeMeta.label}</span>
-                            {src.sourceProfile ? (
-                              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-                                {src.sourceProfile.badgeLabel}
-                              </span>
-                            ) : null}
                             {src._count?.signals ? (
                               <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">{src._count.signals} signals</span>
                             ) : null}
@@ -1357,29 +1409,20 @@ export default function SourcesPage() {
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
+                          <button
+                            onClick={() => toggleSourceDetails(src.id)}
+                            className="rounded-lg border border-border px-2.5 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                          >
+                            {isExpanded ? 'Less' : 'Details'}
+                          </button>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-2">
                     <div className="min-w-0">
-                      <p className="break-words text-sm leading-7 text-muted-foreground">{configSummary}</p>
-                      {src.sourceProfile ? (
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <span className="rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] text-muted-foreground">
-                            {src.sourceProfile.providerLabel}
-                          </span>
-                          <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getSupportBadgeClass(src.sourceProfile.supportStatus)}`}>
-                            {src.sourceProfile.supportStatus.replaceAll('_', ' ')}
-                          </span>
-                        </div>
-                      ) : null}
-                      {src.sourceProfile?.complianceNotes ? (
-                        <p className="mt-2 text-xs leading-6 text-muted-foreground">
-                          {src.sourceProfile.complianceNotes}
-                        </p>
-                      ) : null}
+                      <p className="truncate text-sm leading-6 text-muted-foreground" title={configSummary}>{configSummary}</p>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         {src.status === 'ERROR' ? (
                           <span className="flex items-center gap-1.5 rounded-full border border-destructive/20 bg-destructive/10 px-3 py-1.5 text-xs text-destructive"><AlertCircle className="w-3.5 h-3.5" />{src.errorMessage?.slice(0, 80)}</span>
@@ -1393,49 +1436,71 @@ export default function SourcesPage() {
                         )}
                       </div>
                     </div>
-                    {src.health ? (
-                      <div className="rounded-xl border border-border bg-background px-3 py-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
-                            src.health.label === 'Strong'
-                              ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
-                              : src.health.label === 'Promising'
-                                ? 'border-primary/20 bg-primary/10 text-primary'
-                                : src.health.label === 'Needs attention'
-                                  ? 'border-destructive/20 bg-destructive/10 text-destructive'
-                                  : 'border-border bg-secondary text-muted-foreground'
-                          }`}>
-                            Health: {src.health.label}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground">Score {src.health.score}</span>
-                        </div>
-                        <div className="mt-3 grid gap-2 lg:grid-cols-2">
-                          <div className="rounded-lg border border-border bg-secondary px-3 py-2">
-                            <p className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-                              <Activity className="h-3.5 w-3.5" />
-                              Last 7 Days
-                            </p>
-                            <p className="mt-1 text-sm font-medium text-foreground">{src.health.last7dSignals} signals</p>
+                    {isExpanded ? (
+                      <div className="space-y-3">
+                        {src.sourceProfile ? (
+                          <div className="rounded-xl border border-border bg-background px-3 py-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] text-muted-foreground">
+                                {src.sourceProfile.providerLabel}
+                              </span>
+                              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                                {src.sourceProfile.badgeLabel}
+                              </span>
+                              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getSupportBadgeClass(src.sourceProfile.supportStatus)}`}>
+                                {src.sourceProfile.supportStatus.replaceAll('_', ' ')}
+                              </span>
+                            </div>
+                            {src.sourceProfile?.complianceNotes ? (
+                              <p className="mt-2 text-xs leading-6 text-muted-foreground">{src.sourceProfile.complianceNotes}</p>
+                            ) : null}
                           </div>
-                          <div className="rounded-lg border border-border bg-secondary px-3 py-2">
-                            <p className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-                              <Target className="h-3.5 w-3.5" />
-                              High Confidence
-                            </p>
-                            <p className="mt-1 text-sm font-medium text-foreground">{src.health.highConfidenceSignals} strong leads</p>
+                        ) : null}
+                        {src.health ? (
+                          <div className="rounded-xl border border-border bg-background px-3 py-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                                src.health.label === 'Strong'
+                                  ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+                                  : src.health.label === 'Promising'
+                                    ? 'border-primary/20 bg-primary/10 text-primary'
+                                    : src.health.label === 'Needs attention'
+                                      ? 'border-destructive/20 bg-destructive/10 text-destructive'
+                                      : 'border-border bg-secondary text-muted-foreground'
+                              }`}>
+                                Health: {src.health.label}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground">Score {src.health.score}</span>
+                            </div>
+                            <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                              <div className="rounded-lg border border-border bg-secondary px-3 py-2">
+                                <p className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                                  <Activity className="h-3.5 w-3.5" />
+                                  Last 7 Days
+                                </p>
+                                <p className="mt-1 text-sm font-medium text-foreground">{src.health.last7dSignals} signals</p>
+                              </div>
+                              <div className="rounded-lg border border-border bg-secondary px-3 py-2">
+                                <p className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                                  <Target className="h-3.5 w-3.5" />
+                                  High Confidence
+                                </p>
+                                <p className="mt-1 text-sm font-medium text-foreground">{src.health.highConfidenceSignals} strong leads</p>
+                              </div>
+                              <div className="rounded-lg border border-border bg-secondary px-3 py-2">
+                                <p className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                                  <TrendingUp className="h-3.5 w-3.5" />
+                                  Pipeline Impact
+                                </p>
+                                <p className="mt-1 text-sm font-medium text-foreground">{src.health.pipelineSignals} active or won</p>
+                              </div>
+                              <div className="rounded-lg border border-border bg-secondary px-3 py-2">
+                                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Saved by Team</p>
+                                <p className="mt-1 text-sm font-medium text-foreground">{src.health.savedSignals} saved</p>
+                              </div>
+                            </div>
                           </div>
-                          <div className="rounded-lg border border-border bg-secondary px-3 py-2">
-                            <p className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-                              <TrendingUp className="h-3.5 w-3.5" />
-                              Pipeline Impact
-                            </p>
-                            <p className="mt-1 text-sm font-medium text-foreground">{src.health.pipelineSignals} active or won</p>
-                          </div>
-                          <div className="rounded-lg border border-border bg-secondary px-3 py-2">
-                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Saved by Team</p>
-                            <p className="mt-1 text-sm font-medium text-foreground">{src.health.savedSignals} saved</p>
-                          </div>
-                        </div>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
