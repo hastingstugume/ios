@@ -573,11 +573,18 @@ export class IngestionService {
   }) {
     const { query, naicsCode, agency, noticeTypes = [], postedWithinDays = 30, limit = 20 } = config;
     const apiKey = this.config.get('SAM_GOV_API_KEY', '');
+    const apiBaseUrlRaw = this.config.get('SAM_GOV_API_BASE_URL', 'https://api.sam.gov').trim();
+    const apiBaseUrl = apiBaseUrlRaw.replace(/\/+$/, '');
     if (!apiKey) {
       throw new Error('SAM.gov is selected, but SAM_GOV_API_KEY is not configured');
     }
 
-    const toIsoDate = (date: Date) => date.toISOString().slice(0, 10);
+    const toSamDate = (date: Date) => {
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const year = String(date.getFullYear());
+      return `${month}/${day}/${year}`;
+    };
     const postedTo = new Date();
     const postedFrom = new Date(Date.now() - postedWithinDays * 24 * 60 * 60 * 1000);
 
@@ -585,25 +592,48 @@ export class IngestionService {
       const qs = new URLSearchParams({
         api_key: apiKey,
         keyword: query,
-        postedFrom: toIsoDate(postedFrom),
-        postedTo: toIsoDate(postedTo),
+        postedFrom: toSamDate(postedFrom),
+        postedTo: toSamDate(postedTo),
         limit: String(Math.min(limit, 50)),
+        offset: '0',
       });
 
       if (naicsCode) qs.set('ncode', naicsCode);
       if (agency) qs.set('organizationName', agency);
-      if (noticeTypes.length) qs.set('ptype', noticeTypes.join(','));
+      const normalizedNoticeTypes = this.normalizeSamNoticeTypes(noticeTypes);
+      if (normalizedNoticeTypes.length) qs.set('ptype', normalizedNoticeTypes.join(','));
 
-      const response = await fetch(`https://api.sam.gov/prod/opportunities/v2/search?${qs.toString()}`, {
-        headers: {
-          Accept: 'application/json',
-          'User-Agent': 'InternetOpportunityScanner/0.1',
-        },
-      });
-      if (!response.ok) {
-        throw new Error(`SAM.gov API returned ${response.status}`);
+      const candidatePaths = ['/opportunities/v2/search', '/prod/opportunities/v2/search'];
+      const triedUrls: string[] = [];
+      let response: Response | null = null;
+
+      for (const path of candidatePaths) {
+        const baseWithoutSamPath = apiBaseUrl.replace(/\/(?:prod\/)?opportunities\/v2\/search$/i, '');
+        const url = `${baseWithoutSamPath}${path}?${qs.toString()}`;
+        triedUrls.push(url);
+        response = await fetch(url, {
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'InternetOpportunityScanner/0.1',
+          },
+        });
+        if (response.ok || response.status !== 404) {
+          break;
+        }
       }
 
+      if (response?.status === 404) {
+        // SAM.gov returns 404 for "No Data found" in some query combinations.
+        return [];
+      }
+
+      if (!response || !response.ok) {
+        const status = response?.status ?? 0;
+        const body = response ? await response.text().catch(() => '') : '';
+        const detail = body.slice(0, 180).replace(/\s+/g, ' ').trim();
+        const attempted = triedUrls.join(' | ');
+        throw new Error(`SAM.gov API returned ${status}${detail ? `: ${detail}` : ''} (attempted: ${attempted})`);
+      }
       const data = await response.json() as any;
       const opportunities = data?.opportunitiesData || data?.opportunities || [];
 
@@ -627,6 +657,41 @@ export class IngestionService {
     } catch (err: any) {
       throw new Error(`SAM.gov fetch failed: ${err.message}`);
     }
+  }
+
+  private normalizeSamNoticeTypes(noticeTypes: string[]) {
+    const typeMap: Record<string, string> = {
+      a: 'a',
+      award: 'a',
+      award_notice: 'a',
+      p: 'p',
+      presolicitation: 'p',
+      pre_solicitation: 'p',
+      r: 'r',
+      sources_sought: 'r',
+      source_sought: 'r',
+      s: 's',
+      special_notice: 's',
+      o: 'o',
+      solicitation: 'o',
+      g: 'g',
+      sale_of_surplus_property: 'g',
+      k: 'k',
+      combined_synopsis_solicitation: 'k',
+      i: 'i',
+      intent_to_bundle_requirements: 'i',
+      u: 'u',
+      justification: 'u',
+    };
+
+    return Array.from(
+      new Set(
+        noticeTypes
+          .map((type) => String(type || '').trim().toLowerCase())
+          .filter(Boolean)
+          .map((type) => typeMap[type] || ''),
+      ),
+    ).filter(Boolean);
   }
 
   private async processItems(

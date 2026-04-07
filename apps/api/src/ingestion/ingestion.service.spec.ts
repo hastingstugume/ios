@@ -81,6 +81,159 @@ describe('IngestionService', () => {
     ).rejects.toThrow('SAM.gov is selected, but SAM_GOV_API_KEY is not configured');
   });
 
+  it('uses the current SAM.gov v2 endpoint and falls back to /prod when needed', async () => {
+    const config = {
+      get: jest.fn((key: string, defaultValue?: any) => {
+        if (key === 'SAM_GOV_API_KEY') return 'sam_test_key';
+        if (key === 'SAM_GOV_API_BASE_URL') return 'https://api.sam.gov';
+        return defaultValue ?? '';
+      }),
+    };
+    const isolated = new IngestionService(
+      {} as any,
+      { normalize: jest.fn((text: string) => text), classify: jest.fn() } as any,
+      config as any,
+      {} as any,
+    );
+
+    const originalFetch = global.fetch;
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        text: async () => 'Not Found',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          opportunitiesData: [
+            {
+              noticeId: 'notice-1',
+              title: 'IT modernization support',
+              description: 'Need implementation support',
+              uiLink: 'https://sam.gov/opp/notice-1/view',
+              postedDate: '2026-04-01 10:00:00',
+            },
+          ],
+        }),
+      });
+    global.fetch = fetchMock as any;
+
+    const results = await (isolated as any).fetchSamGov({
+      query: 'implementation support',
+      postedWithinDays: 7,
+      limit: 10,
+    });
+
+    expect(results).toHaveLength(1);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(/^https:\/\/api\.sam\.gov\/opportunities\/v2\/search\?/),
+      expect.any(Object),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/^https:\/\/api\.sam\.gov\/prod\/opportunities\/v2\/search\?/),
+      expect.any(Object),
+    );
+    expect(fetchMock.mock.calls[0][0]).toContain('postedFrom=');
+    expect(fetchMock.mock.calls[0][0]).toContain('postedTo=');
+
+    global.fetch = originalFetch;
+  });
+
+  it('normalizes SAM.gov base URLs that already include /prod path', async () => {
+    const config = {
+      get: jest.fn((key: string, defaultValue?: any) => {
+        if (key === 'SAM_GOV_API_KEY') return 'sam_test_key';
+        if (key === 'SAM_GOV_API_BASE_URL') return 'https://api.sam.gov/prod/opportunities/v2/search';
+        return defaultValue ?? '';
+      }),
+    };
+    const isolated = new IngestionService(
+      {} as any,
+      { normalize: jest.fn((text: string) => text), classify: jest.fn() } as any,
+      config as any,
+      {} as any,
+    );
+
+    const originalFetch = global.fetch;
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ opportunitiesData: [] }),
+    });
+    global.fetch = fetchMock as any;
+
+    await (isolated as any).fetchSamGov({
+      query: 'implementation support',
+      postedWithinDays: 7,
+      limit: 10,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toMatch(/^https:\/\/api\.sam\.gov\/opportunities\/v2\/search\?/);
+    expect(fetchMock.mock.calls[0][0]).not.toContain('/prod/opportunities/v2/search/prod');
+
+    global.fetch = originalFetch;
+  });
+
+  it('maps human-readable SAM notice types to API ptype codes', () => {
+    const mapped = (service as any).normalizeSamNoticeTypes([
+      'solicitation',
+      'presolicitation',
+      'sources_sought',
+      'combined_synopsis_solicitation',
+      'award_notice',
+      'o',
+      'invalid_type',
+    ]);
+    expect(mapped).toEqual(['o', 'p', 'r', 'k', 'a']);
+  });
+
+  it('treats SAM.gov 404 responses as no-data, not a hard failure', async () => {
+    const config = {
+      get: jest.fn((key: string, defaultValue?: any) => {
+        if (key === 'SAM_GOV_API_KEY') return 'sam_test_key';
+        if (key === 'SAM_GOV_API_BASE_URL') return 'https://api.sam.gov';
+        return defaultValue ?? '';
+      }),
+    };
+    const isolated = new IngestionService(
+      {} as any,
+      { normalize: jest.fn((text: string) => text), classify: jest.fn() } as any,
+      config as any,
+      {} as any,
+    );
+
+    const originalFetch = global.fetch;
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        text: async () => 'No Data found',
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        text: async () => 'No Data found',
+      });
+    global.fetch = fetchMock as any;
+
+    const results = await (isolated as any).fetchSamGov({
+      query: 'implementation support',
+      noticeTypes: ['solicitation'],
+      postedWithinDays: 7,
+      limit: 10,
+    });
+
+    expect(results).toEqual([]);
+    expect(fetchMock.mock.calls[0][0]).toContain('ptype=o');
+
+    global.fetch = originalFetch;
+  });
+
   it('filters discourse latest topics using query and tags', async () => {
     const originalFetch = global.fetch;
     global.fetch = jest.fn().mockResolvedValue({
