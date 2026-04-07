@@ -77,4 +77,32 @@ describe('ClassificationService (fallback)', () => {
       .flatMap((source) => (source.config.domains || []) as string[]);
     expect(webDomains).not.toContain('reddit.com');
   });
+
+  it('builds fallback source intelligence recommendations without AI key', async () => {
+    const report = await service.generateSourceIntelligence({
+      workspaceName: 'Pipeline Partners',
+      trackedKeywords: ['crm migration', 'revops'],
+      negativeKeywords: ['job'],
+      sources: [
+        {
+          sourceId: 'src_1',
+          name: 'GitHub pain monitor',
+          type: 'GITHUB_SEARCH',
+          status: 'ACTIVE',
+          totalSignals: 14,
+          last7dSignals: 7,
+          highConfidenceSignals: 3,
+          pipelineSignals: 2,
+          savedSignals: 4,
+          healthScore: 81,
+          healthLabel: 'Strong',
+          errorMessage: null,
+        },
+      ],
+    });
+
+    expect(report.generatedBy).toBe('fallback');
+    expect(report.recommendations.length).toBeGreaterThan(0);
+    expect(report.recommendations[0]?.action).toBe('SCALE');
+  });
 });

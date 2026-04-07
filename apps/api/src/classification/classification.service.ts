@@ -33,9 +33,43 @@ export interface SourceSuggestionPack {
   recommendedNegativeKeywords: string[];
   sources: Array<{
     name: string;
-    type: 'REDDIT_SEARCH' | 'WEB_SEARCH' | 'STACKOVERFLOW_SEARCH' | 'GITHUB_SEARCH' | 'HN_SEARCH' | 'RSS' | 'DISCOURSE';
+    type: 'REDDIT_SEARCH' | 'WEB_SEARCH' | 'STACKOVERFLOW_SEARCH' | 'GITHUB_SEARCH' | 'HN_SEARCH' | 'RSS' | 'DISCOURSE' | 'DEVTO_SEARCH' | 'GITLAB_SEARCH' | 'YOUTUBE_SEARCH';
     config: Record<string, any>;
   }>;
+}
+
+export interface SourceIntelligenceContext {
+  workspaceName: string;
+  trackedKeywords: string[];
+  negativeKeywords: string[];
+  sources: Array<{
+    sourceId: string;
+    name: string;
+    type: string;
+    status: 'ACTIVE' | 'PAUSED' | 'ERROR';
+    totalSignals: number;
+    last7dSignals: number;
+    highConfidenceSignals: number;
+    pipelineSignals: number;
+    savedSignals: number;
+    healthScore: number;
+    healthLabel: string;
+    errorMessage?: string | null;
+  }>;
+}
+
+export interface SourceIntelligenceReport {
+  summary: string;
+  weeklySignalGoal: number;
+  recommendations: Array<{
+    sourceName: string;
+    action: 'SCALE' | 'TUNE' | 'PAUSE' | 'FIX';
+    priority: 'HIGH' | 'MEDIUM' | 'LOW';
+    reason: string;
+    nextSteps: string[];
+  }>;
+  globalActions: string[];
+  generatedBy: 'ai' | 'fallback';
 }
 
 const SYSTEM_PROMPT = `You are a B2B lead qualification expert. Your job is to analyze public internet posts and determine if they represent a genuine business opportunity for AI automation agencies, DevOps consultants, software implementation partners, or B2B technical service firms.
@@ -75,7 +109,7 @@ Return ONLY a valid JSON array with exactly 3 template packs. Each item must mat
   "sources": [
     {
       "name": "source display name",
-      "type": one of "REDDIT_SEARCH" | "WEB_SEARCH" | "STACKOVERFLOW_SEARCH" | "GITHUB_SEARCH" | "HN_SEARCH" | "RSS" | "DISCOURSE",
+      "type": one of "REDDIT_SEARCH" | "WEB_SEARCH" | "STACKOVERFLOW_SEARCH" | "GITHUB_SEARCH" | "HN_SEARCH" | "RSS" | "DISCOURSE" | "DEVTO_SEARCH" | "GITLAB_SEARCH" | "YOUTUBE_SEARCH",
       "config": { source config object }
     }
   ]
@@ -90,6 +124,31 @@ Rules:
 - Keep recommended keywords concise and high-signal.
 - Negative keywords should reduce noise like jobs, courses, newsletters, and hobby traffic where relevant.
 - Return valid JSON only.`;
+
+const SOURCE_INTELLIGENCE_SYSTEM_PROMPT = `You are an AI advisor for a lead discovery product.
+
+Given source performance metrics, return ONLY valid JSON with:
+{
+  "summary": "1-2 sentence executive summary focused on outcomes",
+  "weeklySignalGoal": number,
+  "recommendations": [
+    {
+      "sourceName": "exact source name from input",
+      "action": one of "SCALE" | "TUNE" | "PAUSE" | "FIX",
+      "priority": one of "HIGH" | "MEDIUM" | "LOW",
+      "reason": "short reason tied to metrics",
+      "nextSteps": ["2-4 concrete changes"]
+    }
+  ],
+  "globalActions": ["2-4 cross-workspace actions"]
+}
+
+Rules:
+- Keep recommendations practical and specific.
+- Prefer fixing and tuning over pausing unless the source is clearly noisy.
+- If a source has errors, include a FIX recommendation.
+- Reference outcomes: more high-confidence signals, pipeline movement, less noise.
+- Return JSON only.`;
 
 @Injectable()
 export class ClassificationService {
@@ -195,6 +254,51 @@ Create three source template packs tailored for this workspace.`;
     }
   }
 
+  async generateSourceIntelligence(context: SourceIntelligenceContext): Promise<SourceIntelligenceReport> {
+    if (!this.client) {
+      return this.buildFallbackSourceIntelligence(context);
+    }
+
+    const sourceLines = context.sources.map((source) =>
+      [
+        `- ${source.name} (${source.type}, ${source.status})`,
+        `  last7d=${source.last7dSignals}, highConfidence=${source.highConfidenceSignals}, pipeline=${source.pipelineSignals}, saved=${source.savedSignals}, total=${source.totalSignals}, health=${source.healthScore}/${source.healthLabel}`,
+        source.errorMessage ? `  error=${source.errorMessage}` : '',
+      ].filter(Boolean).join('\n'),
+    ).join('\n');
+
+    const userPrompt = `Workspace: ${context.workspaceName}
+Tracked keywords: ${context.trackedKeywords.join(', ') || 'none'}
+Negative keywords: ${context.negativeKeywords.join(', ') || 'none'}
+
+Source performance:
+${sourceLines || '- no sources configured'}`;
+
+    try {
+      const response = await this.client.chat.completions.create({
+        model: this.config.get('AI_MODEL', 'gpt-4o-mini'),
+        max_tokens: this.config.get('AI_MAX_TOKENS', 512) * 2,
+        temperature: 0.2,
+        messages: [
+          { role: 'system', content: SOURCE_INTELLIGENCE_SYSTEM_PROMPT },
+          { role: 'user', content: userPrompt },
+        ],
+      });
+
+      const raw = response.choices[0]?.message?.content || '{}';
+      const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+      const normalized = this.normalizeSourceIntelligenceReport(parsed, context.sources);
+      if (normalized) {
+        return { ...normalized, generatedBy: 'ai' };
+      }
+
+      return this.buildFallbackSourceIntelligence(context);
+    } catch (err) {
+      this.logger.error('Source intelligence generation failed, using fallback', err);
+      return this.buildFallbackSourceIntelligence(context);
+    }
+  }
+
   private fallbackClassify(title: string | null, text: string, keywords: string[]): ClassificationResult {
     const content = `${title || ''} ${text}`.toLowerCase();
     const buyingWords = ['looking for', 'need a', 'hire', 'budget', 'consultant', 'agency', 'vendor', 'implement'];
@@ -297,7 +401,7 @@ Create three source template packs tailored for this workspace.`;
             if (!source || typeof source !== 'object') return null;
             const candidate = source as { type?: unknown; name?: unknown; config?: unknown };
             const type = String(candidate.type || '').toUpperCase();
-            if (!['REDDIT_SEARCH', 'WEB_SEARCH', 'STACKOVERFLOW_SEARCH', 'GITHUB_SEARCH', 'HN_SEARCH', 'RSS', 'DISCOURSE'].includes(type)) {
+            if (!['REDDIT_SEARCH', 'WEB_SEARCH', 'STACKOVERFLOW_SEARCH', 'GITHUB_SEARCH', 'HN_SEARCH', 'RSS', 'DISCOURSE', 'DEVTO_SEARCH', 'GITLAB_SEARCH', 'YOUTUBE_SEARCH'].includes(type)) {
               return null;
             }
 
@@ -319,6 +423,62 @@ Create three source template packs tailored for this workspace.`;
       recommendedKeywords: this.normalizeStringArray(input.recommendedKeywords, 6),
       recommendedNegativeKeywords: this.normalizeStringArray(input.recommendedNegativeKeywords, 6),
       sources,
+    };
+  }
+
+  private normalizeSourceIntelligenceReport(
+    input: any,
+    sourceSnapshots: SourceIntelligenceContext['sources'],
+  ): Omit<SourceIntelligenceReport, 'generatedBy'> | null {
+    if (!input || typeof input !== 'object') return null;
+    const sourceNameSet = new Set(sourceSnapshots.map((source) => source.name.toLowerCase()));
+
+    const recommendations = Array.isArray(input.recommendations)
+      ? input.recommendations
+          .map((recommendation: unknown) => {
+            if (!recommendation || typeof recommendation !== 'object') return null;
+            const candidate = recommendation as {
+              sourceName?: unknown;
+              action?: unknown;
+              priority?: unknown;
+              reason?: unknown;
+              nextSteps?: unknown;
+            };
+            const sourceName = String(candidate.sourceName || '').trim();
+            if (!sourceName || !sourceNameSet.has(sourceName.toLowerCase())) return null;
+
+            const action = String(candidate.action || '').toUpperCase();
+            const priority = String(candidate.priority || '').toUpperCase();
+            if (!['SCALE', 'TUNE', 'PAUSE', 'FIX'].includes(action)) return null;
+            if (!['HIGH', 'MEDIUM', 'LOW'].includes(priority)) return null;
+
+            const nextSteps = this.normalizeStringArray(candidate.nextSteps, 4);
+            return {
+              sourceName,
+              action: action as SourceIntelligenceReport['recommendations'][number]['action'],
+              priority: priority as SourceIntelligenceReport['recommendations'][number]['priority'],
+              reason: String(candidate.reason || '').trim().slice(0, 280),
+              nextSteps,
+            };
+          })
+          .filter(Boolean)
+      : [];
+
+    if (!recommendations.length) return null;
+
+    const weeklySignalGoalRaw = Number(input.weeklySignalGoal);
+    const weeklySignalGoal = Number.isFinite(weeklySignalGoalRaw)
+      ? Math.max(4, Math.min(200, Math.round(weeklySignalGoalRaw)))
+      : 10;
+
+    return {
+      summary: String(input.summary || 'Source performance summary generated from current workspace metrics.')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 320),
+      weeklySignalGoal,
+      recommendations: recommendations.slice(0, 8),
+      globalActions: this.normalizeStringArray(input.globalActions, 4),
     };
   }
 
@@ -349,6 +509,7 @@ Create three source template packs tailored for this workspace.`;
           sources: [
             { name: 'Ask HN freelancer demand', type: 'HN_SEARCH', config: { query: `"need freelancer" OR "looking for consultant" OR "recommend ${focus}"`, tags: 'story,comment', sourceWeight: 1.05 } },
             { name: 'Web search specialist requests', type: 'WEB_SEARCH', config: { query: `"recommend ${focus}" OR "need help with ${focus}"`, domains: ['news.ycombinator.com', 'stackoverflow.com', 'github.com'], excludeTerms: commonNegatives, sourceWeight: 0.95 } },
+            { name: 'Dev.to implementation pain', type: 'DEVTO_SEARCH', config: { query: `"need help" OR migration OR consultant OR ${focus}`, tags: ['ai', 'devops', 'webdev'], sourceWeight: 0.95 } },
             { name: 'Stack Overflow buyer pain', type: 'STACKOVERFLOW_SEARCH', config: { query: `"need help" OR consultant OR migration`, stackSort: 'activity', sourceWeight: 0.9 } },
           ],
         },
@@ -360,7 +521,8 @@ Create three source template packs tailored for this workspace.`;
           recommendedNegativeKeywords: commonNegatives,
           sources: [
             { name: 'Ask HN urgent blockers', type: 'HN_SEARCH', config: { query: `"urgent" ${focus} OR "blocked" ${focus} OR "need help now"`, tags: 'story,comment', sourceWeight: 1.05 } },
-            { name: 'HN technical pain', type: 'HN_SEARCH', config: { query: `${focus} OR migration OR incident OR consultant`, tags: 'story,comment', sourceWeight: 0.95 } },
+            { name: 'GitLab public issue blockers', type: 'GITLAB_SEARCH', config: { query: `blocked OR incident OR migration OR support`, scope: 'issues', sourceWeight: 0.95 } },
+            { name: 'Dev.to urgent engineering posts', type: 'DEVTO_SEARCH', config: { query: `incident OR blocked OR "need support" OR ${focus}`, tags: ['devops', 'programming', 'backend'], sourceWeight: 0.9 } },
             { name: 'GitHub implementation pain', type: 'GITHUB_SEARCH', config: { query: `"need support" OR "looking for help" OR migration`, contentType: 'issues', sourceWeight: 0.85 } },
           ],
         },
@@ -373,6 +535,7 @@ Create three source template packs tailored for this workspace.`;
           sources: [
             { name: 'Ask HN recommendation requests', type: 'HN_SEARCH', config: { query: `"recommend" ${focus} OR "who should I hire" consultant`, tags: 'story,comment', sourceWeight: 1.05 } },
             { name: 'Web vendor search', type: 'WEB_SEARCH', config: { query: `"recommend ${focus} consultant" OR "best ${focus} agency"`, domains: ['news.ycombinator.com', 'github.com'], excludeTerms: commonNegatives, sourceWeight: 0.9 } },
+            { name: 'Dev.to vendor comparisons', type: 'DEVTO_SEARCH', config: { query: `"recommend" OR "best" OR consultant OR agency`, tags: ['career', 'software'], sourceWeight: 0.85 } },
             { name: 'HN vendor comparisons', type: 'HN_SEARCH', config: { query: `${focus} consultant OR agency OR recommendation`, tags: 'story', sourceWeight: 0.85 } },
           ],
         },
@@ -389,6 +552,7 @@ Create three source template packs tailored for this workspace.`;
         sources: [
           { name: 'Ask HN buyer intent', type: 'HN_SEARCH', config: { query: `"looking for" consultant OR "need help" ${focus} OR "recommend" agency`, tags: 'story,comment', sourceWeight: 1.05 } },
           { name: 'Web buyer search', type: 'WEB_SEARCH', config: { query: `"need ${focus} help" OR "recommend ${focus} consultant"`, domains: ['news.ycombinator.com', 'stackoverflow.com', 'github.com'], excludeTerms: commonNegatives, sourceWeight: 0.95 } },
+          { name: 'Dev.to buyer intent', type: 'DEVTO_SEARCH', config: { query: `"need help" OR "looking for" OR consultant OR agency`, tags: ['devops', 'saas', 'webdev'], sourceWeight: 0.9 } },
           { name: 'HN buying signals', type: 'HN_SEARCH', config: { query: `${focus} consultant OR implementation OR agency`, tags: 'story,comment', sourceWeight: 0.9 } },
         ],
       },
@@ -401,7 +565,8 @@ Create three source template packs tailored for this workspace.`;
         sources: [
           { name: 'Stack Overflow implementation pain', type: 'STACKOVERFLOW_SEARCH', config: { query: `"need help" OR "production issue" OR migration OR consultant`, stackSort: 'activity', sourceWeight: 0.95 } },
           { name: 'GitHub community pain', type: 'GITHUB_SEARCH', config: { query: `"looking for help" OR migration OR consultant`, contentType: 'discussions', sourceWeight: 0.85 } },
-          { name: 'Ask HN ops rescue', type: 'HN_SEARCH', config: { query: `"stuck" ${focus} OR "need help" ${focus}`, tags: 'story,comment', sourceWeight: 1.0 } },
+          { name: 'Dev.to implementation friction', type: 'DEVTO_SEARCH', config: { query: `migration OR incident OR "need support" OR ${focus}`, tags: ['programming', 'backend'], sourceWeight: 0.9 } },
+          { name: 'YouTube implementation pressure', type: 'YOUTUBE_SEARCH', config: { query: `"migration failed" OR "need help" OR "integration issue"`, postedWithinDays: 30, order: 'date', sourceWeight: 0.85 } },
         ],
       },
       {
@@ -413,10 +578,117 @@ Create three source template packs tailored for this workspace.`;
         sources: [
           { name: 'Ask HN who-to-hire threads', type: 'HN_SEARCH', config: { query: `"who should I hire" OR "best agency" ${focus} OR "recommend consultant"`, tags: 'story,comment', sourceWeight: 1.05 } },
           { name: 'Web recommendation search', type: 'WEB_SEARCH', config: { query: `"best ${focus} agency" OR "recommend ${focus} consultant"`, domains: ['news.ycombinator.com', 'github.com'], excludeTerms: commonNegatives, sourceWeight: 0.9 } },
+          { name: 'Dev.to recommendation signals', type: 'DEVTO_SEARCH', config: { query: `"recommend" OR "best" OR consultant OR partner`, tags: ['saas', 'startup'], sourceWeight: 0.85 } },
           { name: 'HN tool/vendor evaluation', type: 'HN_SEARCH', config: { query: `${focus} OR vendor OR implementation partner`, tags: 'story', sourceWeight: 0.85 } },
         ],
       },
     ];
+  }
+
+  private buildFallbackSourceIntelligence(context: SourceIntelligenceContext): SourceIntelligenceReport {
+    if (!context.sources.length) {
+      return {
+        summary: 'No sources are configured yet. Add 2-3 search-driven sources to start generating consistent weekly opportunities.',
+        weeklySignalGoal: 6,
+        recommendations: [],
+        globalActions: [
+          'Add one high-intent search source focused on recommendation or hiring language.',
+          'Add one pain-monitor source focused on migration, outage, or blocker language.',
+          'Add 5-8 tracked keywords and 3-5 negative keywords before the next fetch cycle.',
+        ],
+        generatedBy: 'fallback',
+      };
+    }
+
+    const recommendations = context.sources
+      .map((source) => {
+        if (source.status === 'ERROR') {
+          return {
+            sourceName: source.name,
+            action: 'FIX' as const,
+            priority: 'HIGH' as const,
+            reason: 'Source fetches are failing, so this channel cannot produce opportunities.',
+            nextSteps: [
+              'Open source settings and fix invalid credentials or query fields.',
+              'Run a test fetch and confirm at least 1 matching result.',
+              'Resume the source after the next successful fetch.',
+            ],
+          };
+        }
+
+        if (source.last7dSignals >= 6 && (source.highConfidenceSignals >= 2 || source.pipelineSignals >= 1)) {
+          return {
+            sourceName: source.name,
+            action: 'SCALE' as const,
+            priority: 'HIGH' as const,
+            reason: 'This source is producing both volume and conversion-quality signals.',
+            nextSteps: [
+              'Clone this source with one adjacent query variation.',
+              'Increase source weight slightly to prioritize in ranking.',
+              'Create an alert rule for high-confidence hits from this source.',
+            ],
+          };
+        }
+
+        if (source.last7dSignals === 0) {
+          return {
+            sourceName: source.name,
+            action: 'TUNE' as const,
+            priority: 'MEDIUM' as const,
+            reason: 'The source is active but not producing fresh opportunities this week.',
+            nextSteps: [
+              'Rewrite query with stronger buyer language like "looking for", "need help", or "recommend".',
+              'Reduce noisy exclusions that may be over-filtering valid demand.',
+              'Test with broader tags/domains, then re-tighten after signals appear.',
+            ],
+          };
+        }
+
+        if (source.last7dSignals >= 8 && source.highConfidenceSignals === 0 && source.pipelineSignals === 0) {
+          return {
+            sourceName: source.name,
+            action: 'PAUSE' as const,
+            priority: 'LOW' as const,
+            reason: 'High activity with no quality outcomes suggests this source is noisy.',
+            nextSteps: [
+              'Pause temporarily and compare pipeline impact after one week.',
+              'If retained, narrow the query to intent-heavy phrases only.',
+              'Increase negative keywords to remove recurring low-signal chatter.',
+            ],
+          };
+        }
+
+        return {
+          sourceName: source.name,
+          action: 'TUNE' as const,
+          priority: 'MEDIUM' as const,
+          reason: 'Source shows some activity but needs refinement for higher-intent outcomes.',
+          nextSteps: [
+            'Add one query variant focused on pain + urgency language.',
+            'Tune source weight based on confidence and conversion quality.',
+            'Review top 5 matches and add exclusions for repeated noise patterns.',
+          ],
+        };
+      })
+      .slice(0, 8);
+
+    const totalLast7d = context.sources.reduce((sum, source) => sum + source.last7dSignals, 0);
+    const weeklySignalGoal = Math.max(6, Math.min(200, Math.round(totalLast7d * 1.35 + 4)));
+    const highPriorityCount = recommendations.filter((recommendation) => recommendation.priority === 'HIGH').length;
+
+    return {
+      summary: highPriorityCount > 0
+        ? `You have ${highPriorityCount} source${highPriorityCount === 1 ? '' : 's'} that can move outcomes quickly this week. Prioritize fix/scale actions first, then tune the rest for cleaner intent.`
+        : 'Your source mix is active, but tuning is needed to consistently produce high-intent opportunities.',
+      weeklySignalGoal,
+      recommendations,
+      globalActions: [
+        'Focus weekly reviews on high-confidence and pipeline-moving signals, not just total volume.',
+        'Refresh weak queries every 7-10 days using real phrases from closed-won or replied signals.',
+        'Keep negative keywords updated to suppress recurring low-signal content.',
+      ],
+      generatedBy: 'fallback',
+    };
   }
 
   private getSuggestionFocus(context: SourceSuggestionContext) {

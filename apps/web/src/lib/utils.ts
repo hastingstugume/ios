@@ -61,6 +61,9 @@ export const SOURCE_TYPE_META: Record<string, { label: string; icon: string }> =
   STACKOVERFLOW_SEARCH: { label: 'Stack Overflow', icon: '🧱' },
   SAM_GOV:       { label: 'SAM.gov',        icon: '🏛️' },
   WEB_SEARCH:    { label: 'Web Search',     icon: '🌐' },
+  DEVTO_SEARCH:  { label: 'Dev.to Search',  icon: '🧠' },
+  GITLAB_SEARCH: { label: 'GitLab Search',  icon: '🦊' },
+  YOUTUBE_SEARCH:{ label: 'YouTube Search', icon: '▶️' },
   MANUAL:        { label: 'Manual',         icon: '📝' },
   TWITTER:       { label: 'X/Twitter',      icon: '𝕏' },
 };

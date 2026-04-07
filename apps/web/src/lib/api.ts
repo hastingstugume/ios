@@ -102,6 +102,7 @@ export const keywordsApi = {
 
 export const sourcesApi = {
   list: (orgId: string) => api.get<Source[]>(`/orgs/${orgId}/sources`),
+  intelligence: (orgId: string) => api.get<SourceIntelligence>(`/orgs/${orgId}/sources/intelligence`),
   suggestions: (orgId: string) => api.get<{ source: 'cache' | 'similar-cache' | 'generated'; suggestions: SourceTemplateSuggestion[] }>(`/orgs/${orgId}/sources/suggestions`),
   templates: (orgId: string) => api.get<{ templates: SourceTemplateSuggestion[] }>(`/orgs/${orgId}/sources/templates`),
   createTemplate: (
@@ -356,6 +357,33 @@ export interface SourceTemplateSuggestion {
     type: string;
     config: Record<string, any>;
   }>;
+}
+export interface SourceIntelligence {
+  generatedAt: string;
+  generatedBy: 'ai' | 'fallback';
+  summary: string;
+  weeklySignalGoal: number;
+  globalActions: string[];
+  recommendations: Array<{
+    sourceName: string;
+    sourceId: string | null;
+    sourceType: string | null;
+    healthLabel: string | null;
+    healthScore: number | null;
+    action: 'SCALE' | 'TUNE' | 'PAUSE' | 'FIX';
+    priority: 'HIGH' | 'MEDIUM' | 'LOW';
+    reason: string;
+    nextSteps: string[];
+  }>;
+  coverage: {
+    totalSources: number;
+    activeSources: number;
+    errorSources: number;
+    staleSources: number;
+    strongSources: number;
+    totalSignals: number;
+    highPriorityActions: number;
+  };
 }
 export interface SourcePreview {
   totalFetched: number;

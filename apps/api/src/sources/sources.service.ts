@@ -5,7 +5,11 @@ import { SourceType, SourceStatus } from '@prisma/client';
 import { EntitlementsService } from '../entitlements/entitlements.service';
 import { IngestionService } from '../ingestion/ingestion.service';
 import { getSourceProfile } from './source-profiles';
-import { ClassificationService, type SourceSuggestionPack } from '../classification/classification.service';
+import {
+  ClassificationService,
+  type SourceSuggestionPack,
+  type SourceIntelligenceReport,
+} from '../classification/classification.service';
 import { createHash } from 'crypto';
 
 @Injectable()
@@ -293,6 +297,74 @@ export class SourcesService {
     };
   }
 
+  async getSourceIntelligence(orgId: string) {
+    const [organization, keywords, sources] = await Promise.all([
+      this.prisma.organization.findUnique({
+        where: { id: orgId },
+        select: {
+          id: true,
+          name: true,
+          negativeKeywords: true,
+        },
+      }),
+      this.prisma.keyword.findMany({
+        where: { organizationId: orgId, isActive: true },
+        select: { phrase: true },
+        orderBy: { createdAt: 'asc' },
+        take: 12,
+      }),
+      this.findAll(orgId),
+    ]);
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    const intelligence = await this.classification.generateSourceIntelligence({
+      workspaceName: organization.name,
+      trackedKeywords: keywords.map((keyword) => keyword.phrase.trim()).filter(Boolean),
+      negativeKeywords: (organization.negativeKeywords || []).map((keyword) => keyword.trim()).filter(Boolean),
+      sources: sources.map((source) => ({
+        sourceId: source.id,
+        name: source.name,
+        type: source.type,
+        status: source.status,
+        totalSignals: source._count?.signals ?? 0,
+        last7dSignals: source.health?.last7dSignals ?? 0,
+        highConfidenceSignals: source.health?.highConfidenceSignals ?? 0,
+        pipelineSignals: source.health?.pipelineSignals ?? 0,
+        savedSignals: source.health?.savedSignals ?? 0,
+        healthScore: source.health?.score ?? 0,
+        healthLabel: source.health?.label ?? 'Unknown',
+        errorMessage: source.errorMessage ?? null,
+      })),
+    });
+
+    const sourceByName = new Map(
+      sources.map((source) => [source.name.trim().toLowerCase(), source]),
+    );
+    const recommendations = intelligence.recommendations.map((recommendation) => {
+      const matchedSource = sourceByName.get(recommendation.sourceName.trim().toLowerCase()) || null;
+      return {
+        ...recommendation,
+        sourceId: matchedSource?.id || null,
+        sourceType: matchedSource?.type || null,
+        healthLabel: matchedSource?.health?.label || null,
+        healthScore: matchedSource?.health?.score ?? null,
+      };
+    });
+
+    return {
+      generatedAt: new Date().toISOString(),
+      generatedBy: intelligence.generatedBy,
+      summary: intelligence.summary,
+      weeklySignalGoal: intelligence.weeklySignalGoal,
+      globalActions: intelligence.globalActions,
+      recommendations,
+      coverage: this.buildCoverageSummary(sources, intelligence),
+    };
+  }
+
   async createSavedTemplate(
     orgId: string,
     userId: string,
@@ -459,6 +531,45 @@ export class SourcesService {
         throw new BadRequestException('Web search domains must be an array of hostnames');
       }
     }
+    if (String(type) === 'DEVTO_SEARCH') {
+      if (!config?.query || typeof config.query !== 'string') {
+        throw new BadRequestException('Dev.to sources require a search query');
+      }
+      if (config.tags !== undefined && (!Array.isArray(config.tags) || config.tags.some((tag: unknown) => typeof tag !== 'string'))) {
+        throw new BadRequestException('Dev.to tags must be an array of strings');
+      }
+      if (config.top !== undefined) {
+        const top = Number(config.top);
+        if (!Number.isFinite(top) || top < 1 || top > 365) {
+          throw new BadRequestException('Dev.to top window must be between 1 and 365 days');
+        }
+      }
+    }
+    if (String(type) === 'GITLAB_SEARCH') {
+      if (!config?.query || typeof config.query !== 'string') {
+        throw new BadRequestException('GitLab search sources require a search query');
+      }
+      if (config.scope !== undefined && !['issues', 'merge_requests'].includes(String(config.scope))) {
+        throw new BadRequestException('GitLab search scope must be "issues" or "merge_requests"');
+      }
+      if (config.project !== undefined && typeof config.project !== 'string') {
+        throw new BadRequestException('GitLab project filter must be a string');
+      }
+    }
+    if (String(type) === 'YOUTUBE_SEARCH') {
+      if (!config?.query || typeof config.query !== 'string') {
+        throw new BadRequestException('YouTube search sources require a search query');
+      }
+      if (config.postedWithinDays !== undefined) {
+        const postedWithinDays = Number(config.postedWithinDays);
+        if (!Number.isFinite(postedWithinDays) || postedWithinDays < 1 || postedWithinDays > 365) {
+          throw new BadRequestException('YouTube posted-within window must be between 1 and 365 days');
+        }
+      }
+      if (config.order !== undefined && !['relevance', 'date', 'viewCount'].includes(String(config.order))) {
+        throw new BadRequestException('YouTube order must be "relevance", "date", or "viewCount"');
+      }
+    }
   }
 
   private calculateHealthScore(input: {
@@ -569,6 +680,31 @@ export class SourcesService {
       generatedBy: 'workspace',
       createdAt: template.createdAt,
       updatedAt: template.updatedAt,
+    };
+  }
+
+  private buildCoverageSummary(
+    sources: Array<{
+      status: SourceStatus;
+      health?: { label: string };
+      _count?: { signals: number };
+    }>,
+    intelligence: SourceIntelligenceReport,
+  ) {
+    const activeSources = sources.filter((source) => source.status === SourceStatus.ACTIVE).length;
+    const errorSources = sources.filter((source) => source.status === SourceStatus.ERROR).length;
+    const staleSources = sources.filter((source) => source.health?.label === 'Stale' || source.health?.label === 'Idle').length;
+    const strongSources = sources.filter((source) => source.health?.label === 'Strong').length;
+    const totalSignals = sources.reduce((sum, source) => sum + (source._count?.signals ?? 0), 0);
+
+    return {
+      totalSources: sources.length,
+      activeSources,
+      errorSources,
+      staleSources,
+      strongSources,
+      totalSignals,
+      highPriorityActions: intelligence.recommendations.filter((recommendation) => recommendation.priority === 'HIGH').length,
     };
   }
 }

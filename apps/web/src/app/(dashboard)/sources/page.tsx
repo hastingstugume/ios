@@ -97,6 +97,36 @@ const SOURCE_TYPES = [
       { key: 'domains', label: 'Optional domains', placeholder: 'reddit.com, stackoverflow.com, news.ycombinator.com' },
     ],
   },
+  {
+    value: 'DEVTO_SEARCH',
+    label: 'Dev.to Search',
+    recommended: true,
+    fields: [
+      { key: 'query', label: 'Search query', placeholder: 'need help with migration OR looking for consultant' },
+      { key: 'devtoTags', label: 'Optional tags', placeholder: 'ai, devops, webdev' },
+      { key: 'devtoTop', label: 'Top posts window', placeholder: '30', kind: 'select', options: ['7', '14', '30', '90'] },
+    ],
+  },
+  {
+    value: 'GITLAB_SEARCH',
+    label: 'GitLab Search',
+    recommended: true,
+    fields: [
+      { key: 'query', label: 'Search query', placeholder: 'blocked migration OR need support OR consultant' },
+      { key: 'gitlabScope', label: 'Scope', placeholder: 'issues', kind: 'select', options: ['issues', 'merge_requests'] },
+      { key: 'gitlabProject', label: 'Optional project path', placeholder: 'gitlab-org/gitlab' },
+    ],
+  },
+  {
+    value: 'YOUTUBE_SEARCH',
+    label: 'YouTube Search',
+    recommended: false,
+    fields: [
+      { key: 'query', label: 'Search query', placeholder: 'need help automation OR migration blockers' },
+      { key: 'youtubePostedWithinDays', label: 'Posted within', placeholder: '30', kind: 'select', options: ['7', '14', '30', '90'] },
+      { key: 'youtubeOrder', label: 'Order', placeholder: 'date', kind: 'select', options: ['date', 'relevance', 'viewCount'] },
+    ],
+  },
   { value: 'MANUAL', label: 'Manual Import', recommended: true, fields: [] },
 ];
 
@@ -120,6 +150,12 @@ const EMPTY_FORM = {
   noticeTypes: 'solicitation',
   postedWithinDays: '30',
   domains: '',
+  devtoTags: '',
+  devtoTop: '30',
+  gitlabScope: 'issues',
+  gitlabProject: '',
+  youtubePostedWithinDays: '30',
+  youtubeOrder: 'date',
   excludeTerms: '',
   sourceWeight: '1.0',
 };
@@ -183,6 +219,24 @@ const SOURCE_TYPE_SUPPORT: Record<string, {
     badgeLabel: 'Search Provider',
     supportStatus: 'limited',
     complianceNotes: 'Only use in production with an approved configured provider; otherwise treat as limited.',
+  },
+  DEVTO_SEARCH: {
+    providerLabel: 'Dev.to Public API',
+    badgeLabel: 'Official API',
+    supportStatus: 'production_ready',
+    complianceNotes: 'Strong for engineering and implementation pain narratives from public technical communities.',
+  },
+  GITLAB_SEARCH: {
+    providerLabel: 'GitLab Search API',
+    badgeLabel: 'Official API',
+    supportStatus: 'production_ready',
+    complianceNotes: 'Great for implementation blockers, migration discussions, and issue-level pain in public GitLab projects.',
+  },
+  YOUTUBE_SEARCH: {
+    providerLabel: 'YouTube Data API',
+    badgeLabel: 'Official API',
+    supportStatus: 'production_ready',
+    complianceNotes: 'Useful for trend and pain discovery from practitioner content; requires YOUTUBE_API_KEY.',
   },
   MANUAL: {
     providerLabel: 'Manual Import',
@@ -282,15 +336,28 @@ export default function SourcesPage() {
     enabled: !!currentOrgId,
   });
 
+  const { data: sourceIntelligence, isFetching: intelligenceLoading } = useQuery({
+    queryKey: ['sources-intelligence', currentOrgId],
+    queryFn: () => sourcesApi.intelligence(currentOrgId!),
+    enabled: !!currentOrgId,
+    staleTime: 60_000,
+  });
+
   const create = useMutation({
     mutationFn: () => sourcesApi.create(currentOrgId!, { name: form.name, type: form.type, config: buildSourceConfig(form) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sources', currentOrgId] }); setAdding(false); setForm(EMPTY_FORM); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sources', currentOrgId] });
+      qc.invalidateQueries({ queryKey: ['sources-intelligence', currentOrgId] });
+      setAdding(false);
+      setForm(EMPTY_FORM);
+    },
   });
 
   const updateSource = useMutation({
     mutationFn: () => sourcesApi.update(currentOrgId!, editingId!, { name: form.name, config: buildSourceConfig(form) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['sources', currentOrgId] });
+      qc.invalidateQueries({ queryKey: ['sources-intelligence', currentOrgId] });
       setEditingId(null);
       setAdding(false);
       setForm(EMPTY_FORM);
@@ -299,13 +366,17 @@ export default function SourcesPage() {
 
   const toggleStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => sourcesApi.update(currentOrgId!, id, { status }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sources', currentOrgId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sources', currentOrgId] });
+      qc.invalidateQueries({ queryKey: ['sources-intelligence', currentOrgId] });
+    },
   });
 
   const remove = useMutation({
     mutationFn: (id: string) => sourcesApi.delete(currentOrgId!, id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['sources', currentOrgId] });
+      qc.invalidateQueries({ queryKey: ['sources-intelligence', currentOrgId] });
       setDeleteCandidate(null);
     },
   });
@@ -319,6 +390,7 @@ export default function SourcesPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['sources', currentOrgId] });
+      qc.invalidateQueries({ queryKey: ['sources-intelligence', currentOrgId] });
       qc.invalidateQueries({ queryKey: ['dashboard', currentOrgId] });
       qc.invalidateQueries({ queryKey: ['signals', currentOrgId] });
     },
@@ -454,6 +526,12 @@ export default function SourcesPage() {
       noticeTypes: current.noticeTypes,
       postedWithinDays: current.postedWithinDays,
       domains: template.domains ? template.domains.join(', ') : current.domains,
+      devtoTags: template.tags ? template.tags.join(', ') : current.devtoTags,
+      devtoTop: template.postedWithinDays ? String(template.postedWithinDays) : current.devtoTop,
+      gitlabScope: template.gitlabScope ?? current.gitlabScope,
+      gitlabProject: template.project ?? current.gitlabProject,
+      youtubePostedWithinDays: template.postedWithinDays ? String(template.postedWithinDays) : current.youtubePostedWithinDays,
+      youtubeOrder: template.youtubeOrder ?? current.youtubeOrder,
     }));
   };
 
@@ -574,6 +652,88 @@ export default function SourcesPage() {
           ) : null}
         </section>
       ) : null}
+
+      <section className="section-card p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+              <BrainCircuit className="h-3.5 w-3.5" />
+              AI source intelligence
+            </div>
+            <h2 className="text-xl font-semibold tracking-tight text-foreground">What to scale, fix, or tune this week</h2>
+            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+              {sourceIntelligence?.summary || 'Analyzing source health and outcome quality to suggest next actions.'}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-sm sm:flex sm:flex-wrap">
+            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground">
+              Goal <span className="font-medium text-foreground">{sourceIntelligence?.weeklySignalGoal ?? '—'}</span>/week
+            </div>
+            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground">
+              Strong <span className="font-medium text-foreground">{sourceIntelligence?.coverage.strongSources ?? 0}</span>
+            </div>
+            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground">
+              Needs fix <span className="font-medium text-foreground">{sourceIntelligence?.coverage.errorSources ?? 0}</span>
+            </div>
+            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground">
+              High priority <span className="font-medium text-foreground">{sourceIntelligence?.coverage.highPriorityActions ?? 0}</span>
+            </div>
+          </div>
+        </div>
+
+        {sourceIntelligence?.recommendations?.length ? (
+          <div className="mt-4 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
+            {sourceIntelligence.recommendations.slice(0, 4).map((recommendation) => (
+              <article key={`${recommendation.sourceName}-${recommendation.action}`} className="rounded-xl border border-border bg-background px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-foreground">{recommendation.sourceName}</p>
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                      recommendation.priority === 'HIGH'
+                        ? 'border-destructive/20 bg-destructive/10 text-destructive'
+                        : recommendation.priority === 'MEDIUM'
+                          ? 'border-amber-400/20 bg-amber-400/10 text-amber-300'
+                          : 'border-border bg-secondary text-muted-foreground'
+                    }`}>
+                      {recommendation.priority.toLowerCase()}
+                    </span>
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                      recommendation.action === 'SCALE'
+                        ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+                        : recommendation.action === 'FIX'
+                          ? 'border-destructive/20 bg-destructive/10 text-destructive'
+                          : recommendation.action === 'PAUSE'
+                            ? 'border-border bg-secondary text-muted-foreground'
+                            : 'border-primary/20 bg-primary/10 text-primary'
+                    }`}>
+                      {recommendation.action.toLowerCase()}
+                    </span>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs leading-6 text-muted-foreground">{recommendation.reason}</p>
+                {recommendation.nextSteps?.length ? (
+                  <p className="mt-2 text-xs text-foreground/90">Next: {recommendation.nextSteps[0]}</p>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-4 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+            {intelligenceLoading ? 'Analyzing source performance…' : 'No recommendations yet. Add or fetch sources to generate optimization guidance.'}
+          </div>
+        )}
+
+        {sourceIntelligence?.globalActions?.length ? (
+          <div className="mt-4 rounded-xl border border-border bg-background px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Workspace-level actions</p>
+            <div className="mt-2 flex flex-col gap-2">
+              {sourceIntelligence.globalActions.map((action) => (
+                <p key={action} className="text-sm text-foreground/90">{action}</p>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </section>
 
       {showEmptySourceState ? (
         <section className="section-card p-6 md:p-8">
@@ -707,7 +867,7 @@ export default function SourcesPage() {
               </select>
               {!editingId ? (
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Start with RSS, GitHub, Stack Overflow, Discourse, or Manual unless you specifically need a limited or approval-dependent source.
+                  Start with RSS, Dev.to, GitHub, GitLab, Stack Overflow, Discourse, or Manual unless you specifically need a limited source.
                 </p>
               ) : null}
             </div>
@@ -1098,6 +1258,12 @@ export default function SourcesPage() {
                       ? `SAM.gov: ${src.config?.query || 'n/a'}${src.config?.agency ? ` · ${src.config.agency}` : ''}${src.config?.naicsCode ? ` · NAICS ${src.config.naicsCode}` : ''}`
                   : src.type === 'WEB_SEARCH'
                     ? `Web query: ${src.config?.query || 'n/a'}${src.config?.domains?.length ? ` on ${src.config.domains.join(', ')}` : ''}`
+                  : src.type === 'DEVTO_SEARCH'
+                    ? `Dev.to: ${src.config?.query || 'n/a'}${src.config?.tags?.length ? ` · tags ${src.config.tags.join(', ')}` : ''}${src.config?.top ? ` · top ${src.config.top}d` : ''}`
+                  : src.type === 'GITLAB_SEARCH'
+                    ? `GitLab ${src.config?.scope || 'issues'}: ${src.config?.query || 'n/a'}${src.config?.project ? ` in ${src.config.project}` : ''}`
+                  : src.type === 'YOUTUBE_SEARCH'
+                    ? `YouTube: ${src.config?.query || 'n/a'}${src.config?.postedWithinDays ? ` · last ${src.config.postedWithinDays}d` : ''}${src.config?.order ? ` · ${src.config.order}` : ''}`
                 : 'Manual source';
 
             return (
@@ -1147,7 +1313,7 @@ export default function SourcesPage() {
                                 subreddit: src.type === 'REDDIT' ? src.config?.subreddit || '' : '',
                                 url: src.type === 'RSS' ? src.config?.url || '' : '',
                                 baseUrl: src.type === 'DISCOURSE' ? src.config?.baseUrl || '' : '',
-                                query: src.type === 'REDDIT_SEARCH' || src.type === 'DISCOURSE' || src.type === 'HN_SEARCH' || src.type === 'WEB_SEARCH' || src.type === 'GITHUB_SEARCH' || src.type === 'STACKOVERFLOW_SEARCH' ? src.config?.query || '' : '',
+                                query: src.type === 'REDDIT_SEARCH' || src.type === 'DISCOURSE' || src.type === 'HN_SEARCH' || src.type === 'WEB_SEARCH' || src.type === 'GITHUB_SEARCH' || src.type === 'STACKOVERFLOW_SEARCH' || src.type === 'DEVTO_SEARCH' || src.type === 'GITLAB_SEARCH' || src.type === 'YOUTUBE_SEARCH' ? src.config?.query || '' : '',
                                 sort: src.type === 'REDDIT_SEARCH' ? src.config?.sort || 'new' : 'new',
                                 tags: src.type === 'HN_SEARCH' ? src.config?.tags || 'story' : 'story',
                                 repo: src.type === 'GITHUB_SEARCH' ? src.config?.repo || '' : '',
@@ -1161,6 +1327,12 @@ export default function SourcesPage() {
                                 noticeTypes: src.type === 'SAM_GOV' ? (src.config?.noticeTypes?.[0] || 'solicitation') : 'solicitation',
                                 postedWithinDays: src.type === 'SAM_GOV' ? String(src.config?.postedWithinDays || '30') : '30',
                                 domains: src.type === 'WEB_SEARCH' ? (src.config?.domains || []).join(', ') : '',
+                                devtoTags: src.type === 'DEVTO_SEARCH' ? (src.config?.tags || []).join(', ') : '',
+                                devtoTop: src.type === 'DEVTO_SEARCH' ? String(src.config?.top || '30') : '30',
+                                gitlabScope: src.type === 'GITLAB_SEARCH' ? src.config?.scope || 'issues' : 'issues',
+                                gitlabProject: src.type === 'GITLAB_SEARCH' ? src.config?.project || '' : '',
+                                youtubePostedWithinDays: src.type === 'YOUTUBE_SEARCH' ? String(src.config?.postedWithinDays || '30') : '30',
+                                youtubeOrder: src.type === 'YOUTUBE_SEARCH' ? src.config?.order || 'date' : 'date',
                                 excludeTerms: (src.config?.excludeTerms || []).join(', '),
                                 sourceWeight: String(src.config?.sourceWeight ?? 1.0),
                               });
@@ -1290,6 +1462,10 @@ function buildSourceConfig(form: typeof EMPTY_FORM) {
         ? rawValue.split(',').map((tag) => tag.trim()).filter(Boolean)
         : field.key === 'discourseTags'
           ? rawValue.split(',').map((tag) => tag.trim()).filter(Boolean)
+        : field.key === 'devtoTags'
+          ? rawValue.split(',').map((tag) => tag.trim()).filter(Boolean)
+        : field.key === 'gitlabProject'
+          ? rawValue.trim()
         : field.key === 'noticeTypes'
           ? [rawValue]
         : rawValue;
@@ -1320,6 +1496,30 @@ function buildSourceConfig(form: typeof EMPTY_FORM) {
   if (config.discoursePostedWithinDays) {
     config.postedWithinDays = Number(config.discoursePostedWithinDays);
     delete config.discoursePostedWithinDays;
+  }
+  if (config.devtoTags) {
+    config.tags = config.devtoTags;
+    delete config.devtoTags;
+  }
+  if (config.devtoTop) {
+    config.top = Number(config.devtoTop);
+    delete config.devtoTop;
+  }
+  if (config.gitlabScope) {
+    config.scope = config.gitlabScope;
+    delete config.gitlabScope;
+  }
+  if (config.gitlabProject) {
+    config.project = config.gitlabProject;
+    delete config.gitlabProject;
+  }
+  if (config.youtubePostedWithinDays) {
+    config.postedWithinDays = Number(config.youtubePostedWithinDays);
+    delete config.youtubePostedWithinDays;
+  }
+  if (config.youtubeOrder) {
+    config.order = config.youtubeOrder;
+    delete config.youtubeOrder;
   }
   if (config.postedWithinDays) {
     config.postedWithinDays = Number(config.postedWithinDays);

@@ -17,8 +17,11 @@ This document is the source of truth for which source types are considered produ
 | `RSS` | Publisher feeds | RSS / Atom | `rss` | `production_ready` | Allowed |
 | `STACKOVERFLOW_SEARCH` | Stack Overflow | Stack Exchange API | `official_api` | `production_ready` | Allowed with attribution |
 | `GITHUB_SEARCH` | GitHub | GitHub Search API | `official_api` | `production_ready` | Allowed with rate-limit handling |
+| `DEVTO_SEARCH` | Dev.to | Dev.to Public API | `official_api` | `production_ready` | Allowed |
+| `GITLAB_SEARCH` | GitLab | GitLab Search API | `official_api` | `production_ready` | Allowed |
+| `YOUTUBE_SEARCH` | YouTube | YouTube Data API v3 | `official_api` | `production_ready` | Allowed with API key + quota monitoring |
 | `HN_SEARCH` | Hacker News | Public search/feed provider | `provider_api` | `limited` | Allowed as limited-support pending fuller lawful feed migration |
-| `WEB_SEARCH` | Web search | Legacy search adapter | `legacy` | `legacy` | Do not expand; replace with approved provider before wider rollout |
+| `WEB_SEARCH` | Web search | Configured search provider | `provider_api` | `limited` | Allowed as limited-support; use approved providers in production |
 | `MANUAL` | Manual import | User-supplied | `manual_only` | `production_ready` | Allowed |
 | `TWITTER` | X | Partner integration required | `partner_required` | `planned` | Do not expose until lawful provider access exists |
 

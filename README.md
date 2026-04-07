@@ -135,6 +135,11 @@ REDDIT_CLIENT_SECRET=your_client_secret
 # AI Classification (OpenAI or compatible)
 AI_API_KEY=sk-your-key
 AI_MODEL=gpt-4o-mini
+
+# Optional source connectors (recommended)
+DEVTO_API_KEY=...
+GITLAB_TOKEN=...
+YOUTUBE_API_KEY=...
 ```
 
 Without Reddit credentials, the demo seed data is used. Without an AI key, a keyword-based fallback classifier runs automatically.

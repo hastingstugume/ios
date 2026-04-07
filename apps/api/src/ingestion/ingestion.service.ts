@@ -280,6 +280,90 @@ export class IngestionService {
     }
   }
 
+  private async fetchDevToSearch(config: {
+    query: string;
+    tags?: string[];
+    top?: number;
+    limit?: number;
+  }) {
+    const { query, tags = [], top = 30, limit = 25 } = config;
+    const cleanTags = tags
+      .map((tag) => String(tag || '').trim().toLowerCase())
+      .filter(Boolean)
+      .slice(0, 4);
+    const apiKey = this.config.get('DEVTO_API_KEY', '');
+
+    const buildUrl = (tag?: string) => {
+      const qs = new URLSearchParams({
+        per_page: String(Math.min(60, Math.max(limit * 2, 20))),
+        top: String(Math.min(365, Math.max(1, Number(top) || 30))),
+      });
+      if (tag) qs.set('tag', tag);
+      return `https://dev.to/api/articles?${qs.toString()}`;
+    };
+
+    try {
+      const requests = cleanTags.length
+        ? cleanTags.map((tag) => fetch(buildUrl(tag), {
+            headers: {
+              Accept: 'application/json',
+              'User-Agent': 'InternetOpportunityScanner/0.1',
+              ...(apiKey ? { 'api-key': apiKey } : {}),
+            },
+          }))
+        : [fetch(buildUrl(), {
+            headers: {
+              Accept: 'application/json',
+              'User-Agent': 'InternetOpportunityScanner/0.1',
+              ...(apiKey ? { 'api-key': apiKey } : {}),
+            },
+          })];
+
+      const responses = await Promise.all(requests);
+      for (const response of responses) {
+        if (!response.ok) {
+          throw new Error(`Dev.to API returned ${response.status}`);
+        }
+      }
+
+      const payloads = await Promise.all(responses.map((response) => response.json() as Promise<any[]>));
+      const articles = payloads.flat();
+      const deduped = new Map<string, IngestionItem>();
+      for (const article of articles) {
+        const id = article?.id ? `devto-${article.id}` : null;
+        if (!id) continue;
+
+        const combined = this.stripHtml(
+          [
+            article.title,
+            article.description,
+            article.tag_list ? `Tags: ${Array.isArray(article.tag_list) ? article.tag_list.join(', ') : article.tag_list}` : '',
+          ].filter(Boolean).join(' · '),
+        );
+
+        if (query && !this.matchesLooseSearchQuery(combined.toLowerCase(), query.toLowerCase())) {
+          continue;
+        }
+
+        deduped.set(id, {
+          externalId: id,
+          title: this.stripHtml(article.title || query),
+          text: combined.slice(0, 1500),
+          url: article.url || article.canonical_url || '',
+          author: article.user?.username || article.user?.name || null,
+          publishedAt: article.published_at ? new Date(article.published_at) : new Date(),
+        });
+      }
+
+      return [...deduped.values()]
+        .filter((item) => item.url)
+        .sort((left, right) => right.publishedAt!.getTime() - left.publishedAt!.getTime())
+        .slice(0, limit);
+    } catch (err: any) {
+      throw new Error(`Dev.to search failed: ${err.message}`);
+    }
+  }
+
   private async fetchSerpApiSearch(config: { query: string; domains?: string[]; limit?: number }) {
     const { query, domains = [], limit = 20 } = config;
     const apiKey = this.config.get('SERPAPI_API_KEY', '');
@@ -381,6 +465,101 @@ export class IngestionService {
       })).filter((item: any) => item.url);
     } catch (err: any) {
       throw new Error(`Stack Overflow search failed: ${err.message}`);
+    }
+  }
+
+  private async fetchGitLabSearch(config: {
+    query: string;
+    scope?: 'issues' | 'merge_requests';
+    project?: string;
+    limit?: number;
+  }) {
+    const { query, scope = 'issues', project, limit = 20 } = config;
+    const gitlabToken = this.config.get('GITLAB_TOKEN', '');
+    const searchScope = scope === 'merge_requests' ? 'merge_requests' : 'issues';
+    const headers = {
+      Accept: 'application/json',
+      'User-Agent': 'InternetOpportunityScanner/0.1',
+      ...(gitlabToken ? { 'PRIVATE-TOKEN': gitlabToken } : {}),
+    };
+
+    try {
+      const endpoint = project
+        ? `https://gitlab.com/api/v4/projects/${encodeURIComponent(project)}/search?scope=${searchScope}&search=${encodeURIComponent(query)}&per_page=${Math.min(limit, 50)}`
+        : `https://gitlab.com/api/v4/search?scope=${searchScope}&search=${encodeURIComponent(query)}&per_page=${Math.min(limit, 50)}`;
+      const response = await fetch(endpoint, { headers });
+      if (!response.ok) {
+        throw new Error(`GitLab API returned ${response.status}`);
+      }
+
+      const data = await response.json() as any[];
+      return (data || []).slice(0, limit).map((item: any, index: number) => ({
+        externalId: `gitlab-${searchScope}-${item.id || item.iid || index}`,
+        title: this.stripHtml(item.title || item.name || query),
+        text: this.stripHtml(
+          [
+            item.description,
+            item.state ? `State: ${item.state}` : '',
+            item.labels?.length ? `Labels: ${item.labels.join(', ')}` : '',
+          ].filter(Boolean).join(' · '),
+        ).slice(0, 1500),
+        url: item.web_url || item.url || '',
+        author: item.author?.username || item.author?.name || null,
+        publishedAt: item.created_at ? new Date(item.created_at) : new Date(),
+      })).filter((item: IngestionItem) => item.url);
+    } catch (err: any) {
+      throw new Error(`GitLab search failed: ${err.message}`);
+    }
+  }
+
+  private async fetchYoutubeSearch(config: {
+    query: string;
+    postedWithinDays?: number;
+    order?: 'relevance' | 'date' | 'viewCount';
+    limit?: number;
+  }) {
+    const { query, postedWithinDays = 30, order = 'date', limit = 20 } = config;
+    const apiKey = this.config.get('YOUTUBE_API_KEY', '');
+    if (!apiKey) {
+      throw new Error('YouTube search is selected, but YOUTUBE_API_KEY is not configured');
+    }
+
+    const publishedAfter = new Date(Date.now() - postedWithinDays * 24 * 60 * 60 * 1000).toISOString();
+    try {
+      const qs = new URLSearchParams({
+        key: apiKey,
+        part: 'snippet',
+        type: 'video',
+        q: query,
+        order,
+        maxResults: String(Math.min(limit, 50)),
+        publishedAfter,
+      }).toString();
+
+      const response = await fetch(`https://www.googleapis.com/youtube/v3/search?${qs}`, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'InternetOpportunityScanner/0.1',
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`YouTube API returned ${response.status}`);
+      }
+
+      const data = await response.json() as any;
+      return (data.items || []).slice(0, limit).map((item: any, index: number) => {
+        const videoId = item.id?.videoId || item.id?.playlistId || item.id?.channelId || String(index);
+        return {
+          externalId: `yt-${videoId}`,
+          title: this.stripHtml(item.snippet?.title || query),
+          text: this.stripHtml(item.snippet?.description || item.snippet?.title || '').slice(0, 1500),
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          author: item.snippet?.channelTitle || null,
+          publishedAt: item.snippet?.publishedAt ? new Date(item.snippet.publishedAt) : new Date(),
+        };
+      }).filter((item: IngestionItem) => item.url);
+    } catch (err: any) {
+      throw new Error(`YouTube search failed: ${err.message}`);
     }
   }
 
@@ -713,6 +892,15 @@ export class IngestionService {
     if (sourceType === SourceType.WEB_SEARCH) {
       return this.fetchWebSearch(sourceConfig as any);
     }
+    if (String(sourceType) === 'DEVTO_SEARCH') {
+      return this.fetchDevToSearch(sourceConfig as any);
+    }
+    if (String(sourceType) === 'GITLAB_SEARCH') {
+      return this.fetchGitLabSearch(sourceConfig as any);
+    }
+    if (String(sourceType) === 'YOUTUBE_SEARCH') {
+      return this.fetchYoutubeSearch(sourceConfig as any);
+    }
 
     return [];
   }
@@ -911,14 +1099,16 @@ export class IngestionService {
     text: string,
     matchedKeywordCount: number,
   ) {
-    const typesWithStrongerNoiseFiltering = new Set<SourceType>([
+    const typesWithStrongerNoiseFiltering = new Set<string>([
       SourceType.WEB_SEARCH,
       SourceType.RSS,
       SourceType.DISCOURSE,
       SourceType.HN_SEARCH,
+      'DEVTO_SEARCH',
+      'YOUTUBE_SEARCH',
     ]);
 
-    if (!typesWithStrongerNoiseFiltering.has(sourceType)) {
+    if (!typesWithStrongerNoiseFiltering.has(String(sourceType))) {
       return false;
     }
 
@@ -960,7 +1150,7 @@ export class IngestionService {
     sourceType: SourceType,
     sourceConfig: Record<string, any>,
   ) {
-    const queryDrivenTypes = new Set<SourceType>([
+    const queryDrivenTypes = new Set<string>([
       SourceType.REDDIT_SEARCH,
       SourceType.HN_SEARCH,
       SourceType.GITHUB_SEARCH,
@@ -968,9 +1158,12 @@ export class IngestionService {
       SourceType.SAM_GOV,
       SourceType.WEB_SEARCH,
       SourceType.DISCOURSE,
+      'DEVTO_SEARCH',
+      'GITLAB_SEARCH',
+      'YOUTUBE_SEARCH',
     ]);
 
-    if (!queryDrivenTypes.has(sourceType)) {
+    if (!queryDrivenTypes.has(String(sourceType))) {
       return false;
     }
 
@@ -1039,6 +1232,9 @@ export class IngestionService {
       STACKOVERFLOW_SEARCH: 0.9,
       SAM_GOV: 1.15,
       WEB_SEARCH: 0.85,
+      DEVTO_SEARCH: 0.92,
+      GITLAB_SEARCH: 0.95,
+      YOUTUBE_SEARCH: 0.8,
       MANUAL: 1.0,
       TWITTER: 0.9,
     };

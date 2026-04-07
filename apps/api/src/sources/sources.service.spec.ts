@@ -45,6 +45,7 @@ describe('SourcesService', () => {
   };
   const mockClassification = {
     generateSourceSuggestions: jest.fn(),
+    generateSourceIntelligence: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -216,5 +217,67 @@ describe('SourcesService', () => {
     expect(mockPrisma.savedSourceTemplate.create).toHaveBeenCalled();
     expect(result.name).toBe('My saved pack');
     expect(result.sources).toHaveLength(2);
+  });
+
+  it('builds source intelligence with mapped recommendations', async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({
+      id: 'org_1',
+      name: 'Acme Growth Agency',
+      negativeKeywords: ['job'],
+    });
+    mockPrisma.keyword.findMany.mockResolvedValue([{ phrase: 'crm migration' }]);
+    mockPrisma.source.findMany.mockResolvedValue([
+      {
+        id: 'src_1',
+        name: 'GitHub pain monitor',
+        type: 'GITHUB_SEARCH',
+        status: 'ACTIVE',
+        config: { query: 'need support' },
+        errorMessage: null,
+        _count: { signals: 9 },
+      },
+    ]);
+    mockPrisma.signal.groupBy
+      .mockResolvedValueOnce([{ sourceId: 'src_1', _count: { _all: 3 } }])
+      .mockResolvedValueOnce([{ sourceId: 'src_1', _count: { _all: 2 } }])
+      .mockResolvedValueOnce([{ sourceId: 'src_1', _count: { _all: 1 } }])
+      .mockResolvedValueOnce([{ sourceId: 'src_1', _count: { _all: 2 } }]);
+
+    mockClassification.generateSourceIntelligence.mockResolvedValue({
+      generatedBy: 'fallback',
+      summary: 'Scale top-performing sources and tune weak ones.',
+      weeklySignalGoal: 12,
+      globalActions: ['Refresh weak queries weekly.'],
+      recommendations: [
+        {
+          sourceName: 'GitHub pain monitor',
+          action: 'SCALE',
+          priority: 'HIGH',
+          reason: 'High-intent outcomes are already flowing from this source.',
+          nextSteps: ['Clone with a second high-intent query variation.'],
+        },
+      ],
+    });
+
+    const result = await service.getSourceIntelligence('org_1');
+
+    expect(mockClassification.generateSourceIntelligence).toHaveBeenCalled();
+    expect(result.weeklySignalGoal).toBe(12);
+    expect(result.recommendations[0]).toEqual(expect.objectContaining({
+      sourceId: 'src_1',
+      sourceType: 'GITHUB_SEARCH',
+      action: 'SCALE',
+      priority: 'HIGH',
+    }));
+  });
+
+  it('validates GitLab and YouTube source configs', () => {
+    expect(() =>
+      service.validateConfig('GITLAB_SEARCH' as any, { query: 'blocked migration', scope: 'issues' }),
+    ).not.toThrow();
+
+    expect(() =>
+      service.validateConfig('YOUTUBE_SEARCH' as any, { query: 'migration issue', postedWithinDays: 30, order: 'date' }),
+    ).not.toThrow();
   });
 });

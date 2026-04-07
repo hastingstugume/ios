@@ -40,6 +40,9 @@ export class SourcesController {
   constructor(private sources: SourcesService) {}
 
   @Get() findAll(@Param('orgId') orgId: string) { return this.sources.findAll(orgId); }
+  @Get('intelligence') intelligence(@Param('orgId') orgId: string) {
+    return this.sources.getSourceIntelligence(orgId);
+  }
   @Get('suggestions') suggestions(@Param('orgId') orgId: string, @Req() req: any) {
     return this.sources.getSuggestedTemplates(orgId, req.user.id);
   }

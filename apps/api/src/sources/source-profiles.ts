@@ -23,7 +23,7 @@ export interface SourceProfile {
   complianceNotes: string;
 }
 
-const PROFILES: Record<SourceType, SourceProfile> = {
+const PROFILES: Record<string, SourceProfile> = {
   REDDIT: {
     platformLabel: 'Reddit',
     providerLabel: 'Reddit Data API',
@@ -96,6 +96,30 @@ const PROFILES: Record<SourceType, SourceProfile> = {
     badgeLabel: 'Search Provider',
     complianceNotes: 'Requires an approved search provider in production. Legacy adapters should only be used for local testing.',
   },
+  DEVTO_SEARCH: {
+    platformLabel: 'Dev.to',
+    providerLabel: 'Dev.to Public API',
+    acquisitionMode: 'official_api',
+    supportStatus: 'production_ready',
+    badgeLabel: 'Official API',
+    complianceNotes: 'Uses the Dev.to public API for engineering and product community demand discovery.',
+  },
+  GITLAB_SEARCH: {
+    platformLabel: 'GitLab',
+    providerLabel: 'GitLab Search API',
+    acquisitionMode: 'official_api',
+    supportStatus: 'production_ready',
+    badgeLabel: 'Official API',
+    complianceNotes: 'Uses GitLab public search endpoints with optional token-based higher rate limits.',
+  },
+  YOUTUBE_SEARCH: {
+    platformLabel: 'YouTube',
+    providerLabel: 'YouTube Data API',
+    acquisitionMode: 'official_api',
+    supportStatus: 'production_ready',
+    badgeLabel: 'Official API',
+    complianceNotes: 'Uses YouTube Data API v3 and requires a valid API key in production.',
+  },
   MANUAL: {
     platformLabel: 'Manual',
     providerLabel: 'Manual Import',
@@ -115,5 +139,5 @@ const PROFILES: Record<SourceType, SourceProfile> = {
 };
 
 export function getSourceProfile(sourceType: SourceType): SourceProfile {
-  return PROFILES[sourceType];
+  return PROFILES[sourceType] || PROFILES.MANUAL;
 }

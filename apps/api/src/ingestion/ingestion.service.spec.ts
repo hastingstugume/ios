@@ -125,6 +125,87 @@ describe('IngestionService', () => {
     global.fetch = originalFetch;
   });
 
+  it('filters Dev.to articles by configured query and optional tags', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([
+        {
+          id: 1001,
+          title: 'Need help with CRM migration',
+          description: 'Our team is blocked and looking for implementation support.',
+          tag_list: ['ai', 'devops'],
+          url: 'https://dev.to/example/need-help-with-crm-migration',
+          published_at: new Date().toISOString(),
+          user: { username: 'alice' },
+        },
+        {
+          id: 1002,
+          title: 'My weekly productivity stack',
+          description: 'A list of random tools.',
+          tag_list: ['tools'],
+          url: 'https://dev.to/example/weekly-productivity-stack',
+          published_at: new Date().toISOString(),
+          user: { username: 'bob' },
+        },
+      ]),
+    } as any);
+
+    const results = await (service as any).fetchDevToSearch({
+      query: '"need help" OR migration OR consultant',
+      tags: ['ai'],
+      top: 30,
+      limit: 10,
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].title).toContain('Need help');
+    expect(results[0].url).toContain('dev.to');
+
+    global.fetch = originalFetch;
+  });
+
+  it('filters GitLab search results for issues and merge-request pain', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([
+        {
+          id: 701,
+          title: 'Blocked on migration rollout',
+          description: 'Need support with deployment migration',
+          web_url: 'https://gitlab.com/example/project/-/issues/701',
+          created_at: new Date().toISOString(),
+          author: { username: 'alice' },
+          labels: ['migration'],
+        },
+      ]),
+    } as any);
+
+    const results = await (service as any).fetchGitLabSearch({
+      query: 'blocked migration OR need support',
+      scope: 'issues',
+      limit: 10,
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].title).toContain('Blocked on migration');
+    expect(results[0].url).toContain('gitlab.com');
+
+    global.fetch = originalFetch;
+  });
+
+  it('fails clearly when YouTube search is selected without credentials', async () => {
+    configGet.mockImplementation((key: string, defaultValue?: any) => {
+      if (key === 'YOUTUBE_API_KEY') return '';
+      return defaultValue ?? '';
+    });
+
+    await expect(
+      (service as any).fetchYoutubeSearch({ query: 'migration issue' }),
+    ).rejects.toThrow('YouTube search is selected, but YOUTUBE_API_KEY is not configured');
+  });
+
   it('filters weak low-signal web search snippets without clear buying intent', () => {
     const excluded = (service as any).shouldExcludeAsLowSignal(
       'WEB_SEARCH',

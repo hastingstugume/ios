@@ -1092,9 +1092,70 @@ export const SOURCE_QUERY_TEMPLATES: Array<{
   stackTags?: string[];
   stackSort?: string;
   sort?: string;
+  gitlabScope?: string;
+  project?: string;
+  youtubeOrder?: string;
   recommendedKeywords?: string[];
   recommendedNegativeKeywords?: string[];
 }> = [
+  {
+    type: 'GITLAB_SEARCH',
+    label: 'GitLab Issue Blockers',
+    description: 'Public GitLab issues and merge requests where teams are blocked, migrating, or looking for implementation support.',
+    query: 'blocked OR migration OR "need support" OR consultant',
+    gitlabScope: 'issues',
+    recommendedKeywords: ['blocked migration', 'implementation support', 'consultant'],
+    recommendedNegativeKeywords: ['documentation typo', 'chore'],
+  },
+  {
+    type: 'GITLAB_SEARCH',
+    label: 'GitLab Merge-Request Friction',
+    description: 'Detects delivery friction in merge-request discussions that often imply implementation help demand.',
+    query: 'incident OR rollback OR "need help" OR "breaking change"',
+    gitlabScope: 'merge_requests',
+    recommendedKeywords: ['incident', 'rollback', 'breaking change'],
+    recommendedNegativeKeywords: ['release notes', 'minor refactor'],
+  },
+  {
+    type: 'YOUTUBE_SEARCH',
+    label: 'YouTube Migration Pain',
+    description: 'Recent practitioner videos discussing migration failures, integration pain, and implementation lessons.',
+    query: '"migration failed" OR "integration issue" OR "need help automation"',
+    postedWithinDays: 30,
+    youtubeOrder: 'date',
+    recommendedKeywords: ['migration', 'integration issue', 'automation help'],
+    recommendedNegativeKeywords: ['tutorial for beginners', 'course promo'],
+  },
+  {
+    type: 'YOUTUBE_SEARCH',
+    label: 'YouTube Tooling Complaints',
+    description: 'Fresh video content surfacing tooling pain, outages, and blocked workflows.',
+    query: 'incident OR outage OR "blocked workflow" OR "tooling pain"',
+    postedWithinDays: 14,
+    youtubeOrder: 'date',
+    recommendedKeywords: ['incident', 'outage', 'blocked workflow'],
+    recommendedNegativeKeywords: ['product review', 'unboxing'],
+  },
+  {
+    type: 'DEVTO_SEARCH',
+    label: 'Dev.to Implementation Pain',
+    description: 'Dev.to posts describing migration blockers, tooling pain, and requests for practical implementation help.',
+    query: '"need help" OR migration OR consultant OR "looking for support"',
+    tags: ['devops', 'webdev', 'ai'],
+    postedWithinDays: 30,
+    recommendedKeywords: ['migration', 'implementation help', 'consultant'],
+    recommendedNegativeKeywords: ['beginner tutorial', 'job post'],
+  },
+  {
+    type: 'DEVTO_SEARCH',
+    label: 'Dev.to Agency Recommendation Signals',
+    description: 'Recommendation-style posts where teams compare agencies, freelancers, or implementation partners.',
+    query: '"recommend" OR "best" OR agency OR consultant OR "implementation partner"',
+    tags: ['saas', 'startup', 'programming'],
+    postedWithinDays: 30,
+    recommendedKeywords: ['recommend consultant', 'agency', 'implementation partner'],
+    recommendedNegativeKeywords: ['course', 'hiring full-time'],
+  },
   {
     type: 'DISCOURSE',
     label: 'Operator Community Watch',
