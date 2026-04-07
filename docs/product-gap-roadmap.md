@@ -7,6 +7,8 @@ This document is the source of truth for two things:
 1. What the landing page and signed-in product can truthfully claim today.
 2. The implementation roadmap used to close the remaining product gaps without placeholder UX, fake data, or frontend-only states.
 
+See `docs/niche-growth-strategy.md` for the current beachhead ICP, expansion path, and growth assumptions.
+
 ## Hard Rules
 
 - No dummy metrics on the landing page.
@@ -30,6 +32,51 @@ This document is the source of truth for two things:
 | Settings | Real profile save, workspace save, password change, team admin, pending invites, and audit log UI are implemented. |
 | Workspace Admin | Workspace switching, member listing, invite/add teammate, role updates, member removal, and audit log browsing are implemented. |
 | Billing | Stripe Checkout self-serve upgrades are implemented for paid tiers, webhook events sync workspace plan changes, billing portal/invoice lifecycle UX is live, and retention lifecycle nudges are automated (in-app + email triggers). |
+
+## Niche Focus (2026)
+
+### Primary Beachhead
+
+- **Who we serve first:** Local SEO and reputation-management agencies (plus solo consultants) that sell recurring retainers to home-services businesses (plumbers, HVAC, electricians, roofers, cleaning).
+- **Core job-to-be-done:** Find local businesses with clear visibility/reputation pain and turn that pain into qualified discovery calls quickly.
+- **Why this is the right first wedge:**
+  - Pain is urgent and revenue-linked (calls, bookings, review trust, map visibility).
+  - Offers are standardized (GBP optimization, reviews, citation cleanup, website conversion fixes, local ads).
+  - Data is observable and explainable (listings, reviews, web presence, public discussions, search intent signals).
+
+### Million-Subscriber Reality Check
+
+- A single B2B niche is unlikely to produce one million **paying** subscribers alone.
+- One million **registered** users is plausible only with a staged expansion model:
+  1. Win the beachhead niche deeply.
+  2. Expand to adjacent local-vertical agencies (dental, legal, medspa, real estate services).
+  3. Add owner-operator self-serve workflows for SMBs directly.
+  4. Grow through channel partnerships, affiliates, and white-label distribution.
+
+### Niche Execution Track
+
+1. **Niche-specific source packs and templates**
+   - Home-services visibility pain
+   - GBP suspension/recovery and review-management pain
+   - Local lead-flow decline and recommendation-intent demand
+2. **Outcome-native scoring**
+   - Prioritize signals with explicit urgency + local-intent context
+   - Separate “interesting noise” from “likely to book a call”
+3. **Vertical proof assets**
+   - One-click audit summaries and outreach tailored for local-service owners
+   - Templates framed around concrete outcomes: more calls, more bookings, better review conversion
+4. **Acquisition loops**
+   - Shareable audit output and referral loops
+   - Agency playbooks and community distribution
+5. **Expansion gates**
+   - Do not expand to the next vertical until the current one hits retention and activation targets
+
+### Stage Gates Before Vertical Expansion
+
+- Week 1 activation: at least one source, one keyword cluster, and one saved qualified signal.
+- Week 2 value proof: at least one outreach-ready signal with rationale.
+- Monthly retention: consistent weekly high-intent signal flow and repeat workflow use.
+- Upgrade conversion: measurable lift from free to paid tied to signal quality and speed-to-outreach.
 
 ## Promise Matrix
 

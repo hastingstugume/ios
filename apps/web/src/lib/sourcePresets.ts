@@ -36,6 +36,78 @@ export const SOURCE_PRESET_PACKS: SourcePresetPack[] = [
     ],
   },
   {
+    id: 'single-home-services-visibility-rescue',
+    name: 'Single-source home services visibility rescue',
+    audience: 'Local SEO agencies and freelancers serving plumbers, HVAC, electricians, and roofers',
+    description: 'Captures owner pain around low call volume, poor map visibility, and broken local lead flow.',
+    recommendedKeywords: ['google business profile', 'local seo help', 'not getting leads', 'maps ranking'],
+    recommendedNegativeKeywords: ['job opening', 'course', 'internship'],
+    sources: [
+      {
+        name: 'Home services local visibility pain',
+        type: 'WEB_SEARCH',
+        config: {
+          query: '"plumber marketing help" OR "hvac not getting leads" OR "electrician local seo" OR "google business profile suspended"',
+          domains: ['reddit.com', 'support.google.com', 'community.hubspot.com', 'searchengineland.com'],
+          excludeTerms: ['job opening', 'course', 'internship'],
+          sourceWeight: 1.05,
+        },
+      },
+    ],
+  },
+  {
+    id: 'single-google-business-profile-rescue',
+    name: 'Single-source GBP rescue watch',
+    audience: 'Agencies selling Google Business Profile recovery, optimization, and review management',
+    description: 'Finds direct requests tied to GBP suspensions, review issues, and local map performance drops.',
+    recommendedKeywords: ['gbp suspended', 'google business profile help', 'review management', 'maps ranking'],
+    recommendedNegativeKeywords: ['template', 'free course'],
+    sources: [
+      {
+        name: 'Google Business Profile rescue intent',
+        type: 'REDDIT_SEARCH',
+        config: {
+          query: '"google business profile suspended" OR "need help with google maps ranking" OR "not getting calls from google"',
+          subreddit: 'smallbusiness',
+          sort: 'new',
+          excludeTerms: ['template', 'free course'],
+          sourceWeight: 1.0,
+        },
+      },
+    ],
+  },
+  {
+    id: 'two-source-home-services-demand',
+    name: 'Two-source home services demand',
+    audience: 'Local growth agencies looking for recurring monthly retainers in home services',
+    description: 'Combines broad web discovery with founder/operator threads for home-services demand that converts.',
+    recommendedKeywords: ['home services marketing', 'local seo agency', 'google maps leads'],
+    recommendedNegativeKeywords: ['career', 'job board', 'course'],
+    sources: [
+      {
+        name: 'Home services buyer-intent web search',
+        type: 'WEB_SEARCH',
+        config: {
+          query: '"need local seo agency" OR "home services leads down" OR "google maps not ranking"',
+          domains: ['reddit.com', 'community.hubspot.com', 'news.ycombinator.com'],
+          excludeTerms: ['career', 'job board', 'course'],
+          sourceWeight: 1.0,
+        },
+      },
+      {
+        name: 'Home services recommendation threads',
+        type: 'REDDIT_SEARCH',
+        config: {
+          query: '"recommend local seo" OR "recommend marketing agency" OR "need help getting local leads"',
+          subreddit: 'smallbusiness',
+          sort: 'new',
+          excludeTerms: ['career', 'job board', 'course'],
+          sourceWeight: 1.0,
+        },
+      },
+    ],
+  },
+  {
     id: 'single-ecommerce-tracking-rescue',
     name: 'Single-source ecommerce tracking rescue',
     audience: 'Consultants fixing checkout, attribution, pixel, and catalog issues for ecommerce brands',
@@ -1098,6 +1170,25 @@ export const SOURCE_QUERY_TEMPLATES: Array<{
   recommendedKeywords?: string[];
   recommendedNegativeKeywords?: string[];
 }> = [
+  {
+    type: 'REDDIT_SEARCH',
+    label: 'Home Services Local SEO Pain',
+    description: 'Small-business owner pain tied to local visibility, map rankings, and inconsistent lead flow.',
+    query: '"google business profile suspended" OR "not getting local leads" OR "need local seo help"',
+    subreddit: 'smallbusiness',
+    sort: 'new',
+    recommendedKeywords: ['google business profile', 'local seo help', 'maps ranking'],
+    recommendedNegativeKeywords: ['job opening', 'course'],
+  },
+  {
+    type: 'WEB_SEARCH',
+    label: 'Home Services Buyer Intent',
+    description: 'Web discovery query for owner-led requests around low call volume and poor local visibility.',
+    query: '"plumber marketing help" OR "hvac lead generation help" OR "electrician not getting calls" OR "google maps ranking dropped"',
+    domains: ['reddit.com', 'support.google.com', 'community.hubspot.com'],
+    recommendedKeywords: ['lead generation help', 'google maps ranking', 'local seo agency'],
+    recommendedNegativeKeywords: ['job board', 'internship'],
+  },
   {
     type: 'GITLAB_SEARCH',
     label: 'GitLab Issue Blockers',
