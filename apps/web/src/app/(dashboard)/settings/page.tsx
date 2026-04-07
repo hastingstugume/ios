@@ -10,7 +10,7 @@ import { getPlanLimitUpgradeHint } from '@/lib/planLimitErrors';
 import { getNextPlan, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
 import { useTheme, type ThemeMode } from '@/components/theme-provider';
 import { formatDate, formatPlanName } from '@/lib/utils';
-import { User, Building2, Shield, Users, Clock3, Link as LinkIcon, Trash2, Plus, Pencil, Sun, Moon, Monitor, CreditCard, Download } from 'lucide-react';
+import { User, Building2, Shield, Users, Clock3, Link as LinkIcon, Trash2, Plus, Pencil, Sun, Moon, Monitor, CreditCard, Download, Pin, PinOff, TrendingUp } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 import QRCode from 'qrcode';
 import { Switch } from '@/components/ui/switch';
@@ -32,8 +32,15 @@ const BILLING_AUDIT_ACTIONS = new Set([
   'BILLING_PORTAL_OPENED',
   'BILLING_PLAN_UPDATED',
 ]);
+const UPGRADE_EXPERIMENT_VARIANT_KEY = 'ios_upgrade_cta_variant_v1';
+const UPGRADE_EXPERIMENT_FORCED_KEY = 'ios_upgrade_cta_variant_forced_v1';
+const UPGRADE_EXPERIMENT_AUTOPIN_KEY = 'ios_upgrade_cta_variant_autopin_v1';
+const EXPERIMENT_CONFIDENCE_MIN_SAMPLE = 12;
+const EXPERIMENT_CONFIDENCE_MIN_Z = 1.64;
 const BILLING_BREAKDOWN_PLANS = ['starter', 'growth', 'scale'] as const;
 type BillingBreakdownPlan = (typeof BILLING_BREAKDOWN_PLANS)[number];
+type AttributionRow = { sourceContext: string; checkoutStarts: number; upgrades: number; conversionRate: number | null };
+type ExperimentRow = { experimentVariant: string; checkoutStarts: number; upgrades: number; conversionRate: number | null };
 
 function planRank(plan?: string | null): number {
   if (!plan) return 0;
@@ -59,6 +66,44 @@ function normalizePaidPlanForBreakdown(value: unknown): BillingBreakdownPlan | n
   if (normalized === 'growth' || normalized === 'pro' || normalized === 'team') return 'growth';
   if (normalized === 'scale' || normalized === 'enterprise') return 'scale';
   return null;
+}
+
+function formatExperimentVariantLabel(variant: string) {
+  if (variant === 'a') return 'Variant A';
+  if (variant === 'b') return 'Variant B';
+  if (variant === 'control') return 'Control';
+  return variant;
+}
+
+function formatSourceContextLabel(value: string) {
+  return value
+    .replace(/^page:/, '')
+    .replaceAll('_', ' ')
+    .replaceAll('/', ' / ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function formatRangeDateKey(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+function getWeekStartDate(value: Date) {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  const day = date.getDay();
+  const offset = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + offset);
+  return date;
+}
+
+function zScoreForConversionDifference(first: { upgrades: number; checkoutStarts: number }, second: { upgrades: number; checkoutStarts: number }) {
+  if (first.checkoutStarts <= 0 || second.checkoutStarts <= 0) return null;
+  const p1 = first.upgrades / first.checkoutStarts;
+  const p2 = second.upgrades / second.checkoutStarts;
+  const variance = (p1 * (1 - p1)) / first.checkoutStarts + (p2 * (1 - p2)) / second.checkoutStarts;
+  if (variance <= 0) return null;
+  return (p1 - p2) / Math.sqrt(variance);
 }
 
 function SectionTitle({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle: string }) {
@@ -169,6 +214,9 @@ export default function SettingsPage() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [editingMember, setEditingMember] = useState<OrganizationMember | null>(null);
   const [auditRangeDays, setAuditRangeDays] = useState<AuditRangeDays>(30);
+  const [pinnedExperimentVariant, setPinnedExperimentVariant] = useState<string | null>(null);
+  const [assignedExperimentVariant, setAssignedExperimentVariant] = useState<string | null>(null);
+  const [autoPinWinner, setAutoPinWinner] = useState(false);
 
   useEffect(() => {
     setName(user?.name || '');
@@ -247,6 +295,16 @@ export default function SettingsPage() {
       cancelled = true;
     };
   }, [mfaSetup]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const pinned = window.localStorage.getItem(UPGRADE_EXPERIMENT_FORCED_KEY);
+    const autoPinEnabled = window.localStorage.getItem(UPGRADE_EXPERIMENT_AUTOPIN_KEY) === '1';
+    const assigned = window.localStorage.getItem(UPGRADE_EXPERIMENT_VARIANT_KEY);
+    setPinnedExperimentVariant(pinned);
+    setAutoPinWinner(autoPinEnabled);
+    setAssignedExperimentVariant(assigned);
+  }, []);
 
   const membersQuery = useQuery({
     queryKey: ['org-members', currentOrgId],
@@ -543,7 +601,7 @@ export default function SettingsPage() {
       }
     }
 
-    const sourceRows = [...sourceStats.entries()]
+    const sourceRows: AttributionRow[] = [...sourceStats.entries()]
       .map(([sourceContext, stats]) => ({
         sourceContext,
         ...stats,
@@ -551,7 +609,7 @@ export default function SettingsPage() {
       }))
       .sort((a, b) => (b.upgrades - a.upgrades) || (b.checkoutStarts - a.checkoutStarts));
 
-    const experimentRows = [...experimentStats.entries()]
+    const experimentRows: ExperimentRow[] = [...experimentStats.entries()]
       .map(([experimentVariant, stats]) => ({
         experimentVariant,
         ...stats,
@@ -588,6 +646,157 @@ export default function SettingsPage() {
     ];
     return buildCsv(rows);
   }, [auditRangeDays, attributionBreakdown.experimentRows]);
+  const attributionRecommendation = useMemo(() => {
+    const bestSource = attributionBreakdown.sourceRows[0] || null;
+    const bestExperiment = attributionBreakdown.experimentRows[0] || null;
+    const secondExperiment = attributionBreakdown.experimentRows[1] || null;
+
+    let experimentConfidence: {
+      confident: boolean;
+      zScore: number | null;
+      reason: string;
+      conversionDeltaPct: number | null;
+    } = {
+      confident: false,
+      zScore: null,
+      reason: 'Not enough experiment data yet.',
+      conversionDeltaPct: null,
+    };
+
+    if (bestExperiment) {
+      if (bestExperiment.checkoutStarts < EXPERIMENT_CONFIDENCE_MIN_SAMPLE) {
+        experimentConfidence = {
+          confident: false,
+          zScore: null,
+          reason: `Need at least ${EXPERIMENT_CONFIDENCE_MIN_SAMPLE} checkouts on the leading variant.`,
+          conversionDeltaPct: null,
+        };
+      } else if (!secondExperiment || secondExperiment.checkoutStarts < EXPERIMENT_CONFIDENCE_MIN_SAMPLE) {
+        experimentConfidence = {
+          confident: false,
+          zScore: null,
+          reason: `Need at least ${EXPERIMENT_CONFIDENCE_MIN_SAMPLE} checkouts on a runner-up variant for a fair comparison.`,
+          conversionDeltaPct: null,
+        };
+      } else {
+        const zScore = zScoreForConversionDifference(bestExperiment, secondExperiment);
+        const delta = ((bestExperiment.upgrades / bestExperiment.checkoutStarts) - (secondExperiment.upgrades / secondExperiment.checkoutStarts)) * 100;
+        experimentConfidence = {
+          confident: zScore !== null && zScore >= EXPERIMENT_CONFIDENCE_MIN_Z,
+          zScore,
+          reason:
+            zScore === null
+              ? 'Could not compute confidence due to low variance.'
+              : zScore >= EXPERIMENT_CONFIDENCE_MIN_Z
+                ? 'Winner is likely real at ~90% confidence.'
+                : 'Difference may be noise; keep collecting data.',
+          conversionDeltaPct: Number.isFinite(delta) ? Math.round(delta * 10) / 10 : null,
+        };
+      }
+    }
+
+    return { bestSource, bestExperiment, secondExperiment, experimentConfidence };
+  }, [attributionBreakdown.experimentRows, attributionBreakdown.sourceRows]);
+  const dailyAttributionTrend = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - (auditRangeDays - 1));
+
+    const dayKeys: string[] = [];
+    const cursor = new Date(start);
+    while (cursor <= now) {
+      dayKeys.push(formatRangeDateKey(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    const stats = new Map<string, { checkoutStarts: number; upgrades: number }>();
+    for (const key of dayKeys) {
+      stats.set(key, { checkoutStarts: 0, upgrades: 0 });
+    }
+
+    for (const entry of billingAuditLogs) {
+      const key = formatRangeDateKey(new Date(entry.createdAt));
+      if (!stats.has(key)) continue;
+      const row = stats.get(key)!;
+      if (entry.action === 'BILLING_CHECKOUT_STARTED') {
+        row.checkoutStarts += 1;
+      }
+      if (entry.action === 'BILLING_PLAN_UPDATED') {
+        const previousPlan = String(entry.metadata?.previousPlan || '');
+        const updatedPlan = String(entry.metadata?.updatedPlan || '');
+        if (updatedPlan && planRank(updatedPlan) > planRank(previousPlan)) {
+          row.upgrades += 1;
+        }
+      }
+    }
+
+    return dayKeys.map((key) => {
+      const row = stats.get(key)!;
+      const label = new Date(`${key}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return {
+        key,
+        label,
+        checkoutStarts: row.checkoutStarts,
+        upgrades: row.upgrades,
+      };
+    });
+  }, [auditRangeDays, billingAuditLogs]);
+  const maxDailyTrendCheckouts = Math.max(1, ...dailyAttributionTrend.map((row) => row.checkoutStarts));
+  const weeklyReportCsv = useMemo(() => {
+    const weeklyStats = new Map<string, { checkoutStarts: number; upgrades: number; portalOpens: number }>();
+    for (const entry of billingAuditLogs) {
+      const weekStart = formatRangeDateKey(getWeekStartDate(new Date(entry.createdAt)));
+      if (!weeklyStats.has(weekStart)) {
+        weeklyStats.set(weekStart, { checkoutStarts: 0, upgrades: 0, portalOpens: 0 });
+      }
+      const row = weeklyStats.get(weekStart)!;
+      if (entry.action === 'BILLING_PORTAL_OPENED') {
+        row.portalOpens += 1;
+      }
+      if (entry.action === 'BILLING_CHECKOUT_STARTED') {
+        row.checkoutStarts += 1;
+      }
+      if (entry.action === 'BILLING_PLAN_UPDATED') {
+        const previousPlan = String(entry.metadata?.previousPlan || '');
+        const updatedPlan = String(entry.metadata?.updatedPlan || '');
+        if (updatedPlan && planRank(updatedPlan) > planRank(previousPlan)) {
+          row.upgrades += 1;
+        }
+      }
+    }
+
+    const rows: unknown[][] = [
+      [
+        'week_start',
+        'week_end',
+        'portal_opens',
+        'checkout_starts',
+        'plan_upgrades',
+        'portal_to_checkout_rate_pct',
+        'checkout_to_upgrade_rate_pct',
+      ],
+      ...[...weeklyStats.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([weekStart, row]) => {
+          const startDate = new Date(`${weekStart}T00:00:00`);
+          const endDate = new Date(startDate);
+          endDate.setDate(endDate.getDate() + 6);
+          const portalToCheckout = row.portalOpens > 0 ? Math.round((row.checkoutStarts / row.portalOpens) * 100) : '';
+          const checkoutToUpgrade = row.checkoutStarts > 0 ? Math.round((row.upgrades / row.checkoutStarts) * 100) : '';
+          return [
+            weekStart,
+            formatRangeDateKey(endDate),
+            row.portalOpens,
+            row.checkoutStarts,
+            row.upgrades,
+            portalToCheckout,
+            checkoutToUpgrade,
+          ];
+        }),
+    ];
+    return buildCsv(rows);
+  }, [billingAuditLogs]);
   const activeSessions = sessionsQuery.data?.sessions || [];
   const themeOptions: Array<{ value: ThemeMode; label: string; description: string; icon: any }> = [
     { value: 'light', label: 'Light', description: 'Bright interface for daytime work.', icon: Sun },
@@ -628,6 +837,35 @@ export default function SettingsPage() {
   const completedProfileItems = profileChecklist.filter(Boolean).length;
   const teamSeatLimitReached = Boolean(workspaceUsage?.resources.seats.atLimit);
   const inviteUpgradeHint = getPlanLimitUpgradeHint(inviteMutation.error, currentOrg?.plan);
+  const setPinnedVariant = (variant: string | null) => {
+    if (typeof window === 'undefined') return;
+    if (!variant) {
+      window.localStorage.removeItem(UPGRADE_EXPERIMENT_FORCED_KEY);
+      setPinnedExperimentVariant(null);
+      return;
+    }
+    window.localStorage.setItem(UPGRADE_EXPERIMENT_FORCED_KEY, variant);
+    setPinnedExperimentVariant(variant);
+  };
+  const toggleAutoPinWinner = (enabled: boolean) => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(UPGRADE_EXPERIMENT_AUTOPIN_KEY, enabled ? '1' : '0');
+    setAutoPinWinner(enabled);
+  };
+
+  useEffect(() => {
+    if (!autoPinWinner) return;
+    const winnerVariant = attributionRecommendation.bestExperiment?.experimentVariant || null;
+    if (!winnerVariant) return;
+    if (!attributionRecommendation.experimentConfidence.confident) return;
+    if (pinnedExperimentVariant === winnerVariant) return;
+    setPinnedVariant(winnerVariant);
+  }, [
+    attributionRecommendation.bestExperiment?.experimentVariant,
+    attributionRecommendation.experimentConfidence.confident,
+    autoPinWinner,
+    pinnedExperimentVariant,
+  ]);
 
   const closeInviteModal = () => {
     setShowInviteModal(false);
@@ -1834,7 +2072,7 @@ export default function SettingsPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-foreground">Attribution leaderboard</p>
-                <p className="mt-1 text-xs text-muted-foreground">Which upgrade entry points produce the most successful plan upgrades.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Which upgrade entry points and CTA variants drive the strongest paid conversion.</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -1853,13 +2091,126 @@ export default function SettingsPage() {
                   <Download className="h-3.5 w-3.5" />
                   Export experiments
                 </button>
+                <button
+                  type="button"
+                  onClick={() => downloadCsv(`billing-weekly-${auditRangeDays}d.csv`, weeklyReportCsv)}
+                  className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Export weekly
+                </button>
               </div>
             </div>
+
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              <div className="rounded-lg border border-border bg-background px-3 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recommended source placement</p>
+                  <TrendingUp className="h-3.5 w-3.5 text-primary" />
+                </div>
+                {attributionRecommendation.bestSource ? (
+                  <>
+                    <p className="mt-2 text-sm font-semibold text-foreground">{formatSourceContextLabel(attributionRecommendation.bestSource.sourceContext)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {attributionRecommendation.bestSource.checkoutStarts} checkouts · {attributionRecommendation.bestSource.upgrades} upgrades · {attributionRecommendation.bestSource.conversionRate === null ? '—' : `${attributionRecommendation.bestSource.conversionRate}% conversion`}
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-2 text-xs text-muted-foreground">No winning source yet. Data appears after the first checkout attempt.</p>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-border bg-background px-3 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Experiment winner</p>
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${attributionRecommendation.experimentConfidence.confident ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
+                      {attributionRecommendation.experimentConfidence.confident ? 'Confident' : 'Learning'}
+                    </span>
+                  </div>
+                </div>
+                {attributionRecommendation.bestExperiment ? (
+                  <>
+                    <p className="mt-2 text-sm font-semibold text-foreground">{formatExperimentVariantLabel(attributionRecommendation.bestExperiment.experimentVariant)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {attributionRecommendation.bestExperiment.checkoutStarts} checkouts · {attributionRecommendation.bestExperiment.upgrades} upgrades · {attributionRecommendation.bestExperiment.conversionRate === null ? '—' : `${attributionRecommendation.bestExperiment.conversionRate}% conversion`}
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {attributionRecommendation.experimentConfidence.reason}
+                      {attributionRecommendation.experimentConfidence.conversionDeltaPct !== null ? ` Lead vs runner-up: +${attributionRecommendation.experimentConfidence.conversionDeltaPct}%.` : ''}
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPinnedVariant(attributionRecommendation.bestExperiment.experimentVariant)}
+                        className="inline-flex items-center gap-1 rounded-md border border-border bg-secondary px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-accent"
+                      >
+                        <Pin className="h-3.5 w-3.5" />
+                        Pin winner
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPinnedVariant(null)}
+                        disabled={!pinnedExperimentVariant}
+                        className="inline-flex items-center gap-1 rounded-md border border-border bg-secondary px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                      >
+                        <PinOff className="h-3.5 w-3.5" />
+                        Clear pin
+                      </button>
+                      <div className="ml-auto flex items-center gap-2 rounded-md border border-border px-2 py-1">
+                        <span className="text-[11px] text-muted-foreground">Auto-pin winner</span>
+                        <Switch
+                          checked={autoPinWinner}
+                          onCheckedChange={toggleAutoPinWinner}
+                          aria-label="Automatically pin winning experiment variant"
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Active pin: {pinnedExperimentVariant ? formatExperimentVariantLabel(pinnedExperimentVariant) : `Random (${assignedExperimentVariant || 'unassigned'})`}
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-2 text-xs text-muted-foreground">No experiment variants captured yet.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-lg border border-border bg-background px-3 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Daily trend (checkouts vs upgrades)</p>
+                <span className="text-[11px] text-muted-foreground">Last {auditRangeDays} days</span>
+              </div>
+              <div className="mt-3 grid grid-cols-7 gap-1 md:grid-cols-10 lg:grid-cols-12">
+                {dailyAttributionTrend.map((row) => (
+                  <div key={row.key} className="group relative flex h-20 items-end justify-center rounded border border-border/70 bg-secondary/60 px-1 py-1">
+                    <div className="flex w-full items-end gap-0.5">
+                      <div
+                        className="w-1.5 rounded-sm bg-primary"
+                        style={{ height: `${Math.max(4, Math.round((row.checkoutStarts / maxDailyTrendCheckouts) * 100))}%` }}
+                      />
+                      <div
+                        className="w-1.5 rounded-sm bg-emerald-500"
+                        style={{ height: `${Math.max(4, Math.round((row.upgrades / maxDailyTrendCheckouts) * 100))}%` }}
+                      />
+                    </div>
+                    <div className="pointer-events-none absolute -top-9 left-1/2 hidden -translate-x-1/2 rounded border border-border bg-background px-2 py-1 text-[10px] text-muted-foreground shadow-sm group-hover:block">
+                      {row.label}: {row.checkoutStarts} / {row.upgrades}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 flex items-center gap-4 text-[11px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-primary" />Checkouts</span>
+                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />Upgrades</span>
+              </div>
+            </div>
+
             <div className="mt-3 space-y-2">
               {attributionBreakdown.sourceRows.slice(0, 8).map((row) => (
                 <div key={row.sourceContext} className="rounded-lg border border-border bg-background px-3 py-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-foreground">{row.sourceContext}</p>
+                    <p className="text-sm font-medium text-foreground">{formatSourceContextLabel(row.sourceContext)}</p>
                     <span className="text-xs text-muted-foreground">{row.conversionRate === null ? '—' : `${row.conversionRate}%`}</span>
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-3 text-[11px] text-muted-foreground">

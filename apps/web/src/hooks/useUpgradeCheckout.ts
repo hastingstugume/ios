@@ -58,6 +58,10 @@ export function useUpgradeCheckout(currentOrgId?: string) {
 
 function getUpgradeExperimentVariant() {
   if (typeof window === 'undefined') return 'control';
+  const forcedVariant = window.localStorage.getItem('ios_upgrade_cta_variant_forced_v1');
+  if (forcedVariant === 'a' || forcedVariant === 'b' || forcedVariant === 'control') {
+    return forcedVariant;
+  }
   const storageKey = 'ios_upgrade_cta_variant_v1';
   const existing = window.localStorage.getItem(storageKey);
   if (existing === 'a' || existing === 'b') return existing;
