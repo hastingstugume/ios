@@ -356,6 +356,11 @@ model Signal {
   stage            SignalStage     @default(TO_REVIEW)
   assigneeId       String?
   nextStep         String?
+  firstResponseAt  DateTime?
+  meetingBookedAt  DateTime?
+  pipelineValueUsd Int?
+  estimatedHoursSaved Int?
+  outcomeNotes     String?
   closedAt         DateTime?
   updatedAt        DateTime        @updatedAt
 

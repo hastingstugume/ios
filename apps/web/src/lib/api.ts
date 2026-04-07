@@ -70,14 +70,27 @@ export const signalsApi = {
   },
   get: (orgId: string, id: string) => api.get<Signal>(`/orgs/${orgId}/signals/${id}`),
   updateStatus: (orgId: string, id: string, status: string) => api.patch(`/orgs/${orgId}/signals/${id}/status`, { status }),
-  updateWorkflow: (orgId: string, id: string, data: { stage?: string; assigneeId?: string | null; nextStep?: string | null }) =>
+  updateWorkflow: (
+    orgId: string,
+    id: string,
+    data: {
+      stage?: string;
+      assigneeId?: string | null;
+      nextStep?: string | null;
+      firstResponseAt?: string | null;
+      meetingBookedAt?: string | null;
+      pipelineValueUsd?: number | null;
+      estimatedHoursSaved?: number | null;
+      outcomeNotes?: string | null;
+    },
+  ) =>
     api.patch<Signal>(`/orgs/${orgId}/signals/${id}/workflow`, data),
   addAnnotation: (orgId: string, id: string, note: string) => api.post(`/orgs/${orgId}/signals/${id}/annotations`, { note }),
   stats: (orgId: string) => api.get<any>(`/orgs/${orgId}/signals/stats`),
 };
 
 export const dashboardApi = {
-  summary: (orgId: string) => api.get<any>(`/orgs/${orgId}/dashboard/summary`),
+  summary: (orgId: string) => api.get<DashboardSummary>(`/orgs/${orgId}/dashboard/summary`),
 };
 
 export const keywordsApi = {
@@ -266,6 +279,11 @@ export interface Signal {
   fetchedAt: string; category: string | null; confidenceScore: number | null;
   whyItMatters: string | null; suggestedOutreach: string | null; status: string;
   stage: string; assigneeId?: string | null; nextStep?: string | null; closedAt?: string | null;
+  firstResponseAt?: string | null;
+  meetingBookedAt?: string | null;
+  pipelineValueUsd?: number | null;
+  estimatedHoursSaved?: number | null;
+  outcomeNotes?: string | null;
   priorityScore?: number | null;
   rankingReasons?: string[];
   freshnessLabel?: string;
@@ -411,4 +429,46 @@ export interface LandingData {
     title: string;
     status: string;
   }>;
+}
+export interface DashboardSummary {
+  stats: {
+    totalSignals: number;
+    newToday: number;
+    newThisWeek: number;
+    highConfidence: number;
+    saved: number;
+    inProgress: number;
+    outreach: number;
+    qualified: number;
+    won: number;
+    activeSources: number;
+    activeKeywords: number;
+    activeAlerts: number;
+  };
+  roi: {
+    repliesThisWeek: number;
+    meetingsThisWeek: number;
+    estimatedHoursSavedThisWeek: number;
+    activePipelineValueUsd: number;
+    wonValueThisQuarterUsd: number;
+    avgResponseHours: number | null;
+    trackedSignals: number;
+  };
+  activation: {
+    completedSteps: number;
+    totalSteps: number;
+    progressPercent: number;
+    items: Array<{
+      id: string;
+      label: string;
+      description: string;
+      href: string;
+      completed: boolean;
+    }>;
+  };
+  byCategory: Array<{ category: string; count: number }>;
+  byStage: Array<{ stage: string; count: number }>;
+  topSources: Array<{ source: { id: string; name: string; type: string }; count: number }>;
+  recentHigh: Signal[];
+  trend: Array<{ date: string; count: number }>;
 }

@@ -7,6 +7,21 @@ import { organizationsApi, signalsApi } from '@/lib/api';
 import { CATEGORY_META, SOURCE_TYPE_META, STAGE_META, getConfidenceColor, getConfidenceBg, formatDate, cn } from '@/lib/utils';
 import { ArrowLeft, ExternalLink, Check, Bookmark, EyeOff, SendHorizonal, Lightbulb, FileText, Zap, User, Workflow, UserRound, CalendarCheck, Sparkles, Flame, Reply, Clock3 } from 'lucide-react';
 
+function toLocalDateTimeInput(value?: string | null) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const tzOffsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - tzOffsetMs).toISOString().slice(0, 16);
+}
+
+function toIsoOrNull(localValue: string) {
+  if (!localValue) return null;
+  const date = new Date(localValue);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
 export default function SignalDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { currentOrgId } = useAuth();
@@ -14,6 +29,11 @@ export default function SignalDetailPage() {
   const qc = useQueryClient();
   const [note, setNote] = useState('');
   const [nextStepDraft, setNextStepDraft] = useState('');
+  const [firstResponseDraft, setFirstResponseDraft] = useState('');
+  const [meetingBookedDraft, setMeetingBookedDraft] = useState('');
+  const [pipelineValueDraft, setPipelineValueDraft] = useState('');
+  const [hoursSavedDraft, setHoursSavedDraft] = useState('');
+  const [outcomeNotesDraft, setOutcomeNotesDraft] = useState('');
   const [replyCopied, setReplyCopied] = useState(false);
 
   const { data: signal, isLoading } = useQuery({
@@ -38,7 +58,16 @@ export default function SignalDetailPage() {
   });
 
   const updateWorkflow = useMutation({
-    mutationFn: (data: { stage?: string; assigneeId?: string | null; nextStep?: string | null }) =>
+    mutationFn: (data: {
+      stage?: string;
+      assigneeId?: string | null;
+      nextStep?: string | null;
+      firstResponseAt?: string | null;
+      meetingBookedAt?: string | null;
+      pipelineValueUsd?: number | null;
+      estimatedHoursSaved?: number | null;
+      outcomeNotes?: string | null;
+    }) =>
       signalsApi.updateWorkflow(currentOrgId!, id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['signal', currentOrgId, id] });
@@ -58,6 +87,20 @@ export default function SignalDetailPage() {
   useEffect(() => {
     setNextStepDraft(signal?.nextStep || '');
   }, [signal?.nextStep]);
+
+  useEffect(() => {
+    setFirstResponseDraft(toLocalDateTimeInput(signal?.firstResponseAt));
+    setMeetingBookedDraft(toLocalDateTimeInput(signal?.meetingBookedAt));
+    setPipelineValueDraft(signal?.pipelineValueUsd === null || signal?.pipelineValueUsd === undefined ? '' : String(signal.pipelineValueUsd));
+    setHoursSavedDraft(signal?.estimatedHoursSaved === null || signal?.estimatedHoursSaved === undefined ? '' : String(signal.estimatedHoursSaved));
+    setOutcomeNotesDraft(signal?.outcomeNotes || '');
+  }, [
+    signal?.firstResponseAt,
+    signal?.meetingBookedAt,
+    signal?.pipelineValueUsd,
+    signal?.estimatedHoursSaved,
+    signal?.outcomeNotes,
+  ]);
 
   if (isLoading) return (
     <div className="page-shell max-w-4xl space-y-4 animate-pulse">
@@ -311,6 +354,127 @@ export default function SignalDetailPage() {
           />
         </div>
 
+        <div className="mt-4 rounded-xl border border-border bg-secondary/30 p-3">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground">Outcome tracking</h3>
+            <span className="text-[11px] text-muted-foreground">Use real results to measure ROI</span>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-1.5">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">First response</span>
+              <input
+                type="datetime-local"
+                value={firstResponseDraft}
+                disabled={updateWorkflow.isPending}
+                onChange={(e) => setFirstResponseDraft(e.target.value)}
+                onBlur={(e) => {
+                  const nextValue = e.target.value;
+                  const currentValue = toLocalDateTimeInput(signal.firstResponseAt);
+                  if (nextValue !== currentValue) {
+                    updateWorkflow.mutate({ firstResponseAt: toIsoOrNull(nextValue) });
+                  }
+                }}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+              />
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Meeting booked</span>
+              <input
+                type="datetime-local"
+                value={meetingBookedDraft}
+                disabled={updateWorkflow.isPending}
+                onChange={(e) => setMeetingBookedDraft(e.target.value)}
+                onBlur={(e) => {
+                  const nextValue = e.target.value;
+                  const currentValue = toLocalDateTimeInput(signal.meetingBookedAt);
+                  if (nextValue !== currentValue) {
+                    updateWorkflow.mutate({ meetingBookedAt: toIsoOrNull(nextValue) });
+                  }
+                }}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+              />
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Pipeline value (USD)</span>
+              <input
+                type="number"
+                min={0}
+                step={100}
+                value={pipelineValueDraft}
+                disabled={updateWorkflow.isPending}
+                onChange={(e) => setPipelineValueDraft(e.target.value)}
+                onBlur={(e) => {
+                  const raw = e.target.value.trim();
+                  if (!raw) {
+                    if (signal.pipelineValueUsd !== null && signal.pipelineValueUsd !== undefined) {
+                      updateWorkflow.mutate({ pipelineValueUsd: null });
+                    }
+                    return;
+                  }
+                  const parsed = Number(raw);
+                  if (!Number.isFinite(parsed)) return;
+                  const normalized = Math.max(0, Math.round(parsed));
+                  if (normalized !== (signal.pipelineValueUsd ?? null)) {
+                    updateWorkflow.mutate({ pipelineValueUsd: normalized });
+                  }
+                }}
+                placeholder="e.g. 2500"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
+              />
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Hours saved</span>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={hoursSavedDraft}
+                disabled={updateWorkflow.isPending}
+                onChange={(e) => setHoursSavedDraft(e.target.value)}
+                onBlur={(e) => {
+                  const raw = e.target.value.trim();
+                  if (!raw) {
+                    if (signal.estimatedHoursSaved !== null && signal.estimatedHoursSaved !== undefined) {
+                      updateWorkflow.mutate({ estimatedHoursSaved: null });
+                    }
+                    return;
+                  }
+                  const parsed = Number(raw);
+                  if (!Number.isFinite(parsed)) return;
+                  const normalized = Math.max(0, Math.round(parsed));
+                  if (normalized !== (signal.estimatedHoursSaved ?? null)) {
+                    updateWorkflow.mutate({ estimatedHoursSaved: normalized });
+                  }
+                }}
+                placeholder="e.g. 4"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
+              />
+            </label>
+          </div>
+
+          <div className="mt-3 space-y-1.5">
+            <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Outcome notes</label>
+            <textarea
+              value={outcomeNotesDraft}
+              disabled={updateWorkflow.isPending}
+              onChange={(e) => setOutcomeNotesDraft(e.target.value)}
+              onBlur={(e) => {
+                const value = e.target.value.trim();
+                if (value !== (signal.outcomeNotes || '')) {
+                  updateWorkflow.mutate({ outcomeNotes: value || null });
+                }
+              }}
+              rows={3}
+              placeholder="Capture what happened (reply quality, objections, next action, result)."
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
+            />
+          </div>
+        </div>
+
         <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
           {updateWorkflow.isPending ? <span>Saving workflow…</span> : null}
           <span className="inline-flex items-center gap-1">
@@ -318,8 +482,16 @@ export default function SignalDetailPage() {
             Owner: {signal.assignee?.name || signal.assignee?.email || 'None'}
           </span>
           <span className="inline-flex items-center gap-1">
+            <Clock3 className="w-3.5 h-3.5" />
+            {signal.firstResponseAt ? `First response ${formatDate(signal.firstResponseAt)}` : 'No response logged'}
+          </span>
+          <span className="inline-flex items-center gap-1">
             <CalendarCheck className="w-3.5 h-3.5" />
             {signal.closedAt ? `Closed ${formatDate(signal.closedAt)}` : 'Open opportunity'}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Zap className="w-3.5 h-3.5" />
+            Value {signal.pipelineValueUsd ? `$${signal.pipelineValueUsd.toLocaleString('en-US')}` : '—'}
           </span>
         </div>
       </div>

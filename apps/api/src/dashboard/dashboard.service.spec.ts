@@ -7,6 +7,7 @@ const mockPrisma: any = {
     count: jest.fn(),
     groupBy: jest.fn(),
     findMany: jest.fn(),
+    aggregate: jest.fn(),
   },
   source: {
     count: jest.fn(),
@@ -47,16 +48,30 @@ describe('DashboardService', () => {
       .mockResolvedValueOnce(3)
       .mockResolvedValueOnce(2)
       .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(1);
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(5);
 
     mockPrisma.signal.groupBy
       .mockResolvedValueOnce([{ category: 'BUYING_INTENT', _count: { _all: 7 } }])
       .mockResolvedValueOnce([{ stage: 'IN_PROGRESS', _count: { _all: 3 } }])
       .mockResolvedValueOnce([{ sourceId: 'src_1', _count: { _all: 5 } }]);
 
-    mockPrisma.signal.findMany.mockResolvedValue([
-      { id: 'sig_1', confidenceScore: 91, source: { name: 'r/startups', type: 'REDDIT' }, assignee: null },
-    ]);
+    mockPrisma.signal.findMany
+      .mockResolvedValueOnce([
+        { id: 'sig_1', confidenceScore: 91, source: { name: 'r/startups', type: 'REDDIT' }, assignee: null },
+      ])
+      .mockResolvedValueOnce([
+        {
+          fetchedAt: new Date('2026-04-01T08:00:00.000Z'),
+          firstResponseAt: new Date('2026-04-01T10:00:00.000Z'),
+        },
+      ]);
+    mockPrisma.signal.aggregate
+      .mockResolvedValueOnce({ _sum: { estimatedHoursSaved: 7 } })
+      .mockResolvedValueOnce({ _sum: { pipelineValueUsd: 4200 } })
+      .mockResolvedValueOnce({ _sum: { pipelineValueUsd: 1800 } });
     mockPrisma.source.count.mockResolvedValue(1);
     mockPrisma.keyword.count.mockResolvedValue(4);
     mockPrisma.source.findMany.mockResolvedValue([{ id: 'src_1', name: 'r/startups', type: 'REDDIT' }]);
@@ -74,6 +89,15 @@ describe('DashboardService', () => {
       activeSources: 1,
       activeKeywords: 4,
       activeAlerts: 2,
+    }));
+    expect(result.roi).toEqual(expect.objectContaining({
+      repliesThisWeek: 2,
+      meetingsThisWeek: 1,
+      estimatedHoursSavedThisWeek: 7,
+      activePipelineValueUsd: 4200,
+      wonValueThisQuarterUsd: 1800,
+      avgResponseHours: 2,
+      trackedSignals: 5,
     }));
     expect(result.activation).toEqual(expect.objectContaining({
       completedSteps: 5,

@@ -9,7 +9,9 @@ export class DashboardService {
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 86_400_000);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
+    const ninetyDaysAgo = new Date(now.getTime() - 90 * 86_400_000);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
+    const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
 
     const [
       totalSignals,
@@ -28,6 +30,13 @@ export class DashboardService {
       topSources,
       recentHigh,
       alertRules,
+      repliesThisWeek,
+      meetingsThisWeek,
+      hoursSavedThisWeekAgg,
+      activePipelineValueAgg,
+      wonValueThisQuarterAgg,
+      responseLatencySamples,
+      roiTrackedSignals,
     ] = await Promise.all([
       this.prisma.signal.count({ where: { organizationId: orgId } }),
       this.prisma.signal.count({ where: { organizationId: orgId, fetchedAt: { gte: oneDayAgo } } }),
@@ -79,7 +88,60 @@ export class DashboardService {
         },
       }),
       this.prisma.alertRule.count({ where: { organizationId: orgId, isActive: true } }),
+      this.prisma.signal.count({ where: { organizationId: orgId, firstResponseAt: { gte: sevenDaysAgo } } }),
+      this.prisma.signal.count({ where: { organizationId: orgId, meetingBookedAt: { gte: sevenDaysAgo } } }),
+      this.prisma.signal.aggregate({
+        where: { organizationId: orgId, firstResponseAt: { gte: sevenDaysAgo } },
+        _sum: { estimatedHoursSaved: true },
+      }),
+      this.prisma.signal.aggregate({
+        where: {
+          organizationId: orgId,
+          stage: { in: ['IN_PROGRESS', 'OUTREACH', 'QUALIFIED'] },
+        },
+        _sum: { pipelineValueUsd: true },
+      }),
+      this.prisma.signal.aggregate({
+        where: {
+          organizationId: orgId,
+          stage: 'WON',
+          closedAt: { gte: quarterStart },
+        },
+        _sum: { pipelineValueUsd: true },
+      }),
+      this.prisma.signal.findMany({
+        where: {
+          organizationId: orgId,
+          firstResponseAt: { not: null, gte: ninetyDaysAgo },
+        },
+        select: { fetchedAt: true, firstResponseAt: true },
+        orderBy: { firstResponseAt: 'desc' },
+        take: 400,
+      }),
+      this.prisma.signal.count({
+        where: {
+          organizationId: orgId,
+          OR: [
+            { firstResponseAt: { not: null } },
+            { meetingBookedAt: { not: null } },
+            { pipelineValueUsd: { not: null } },
+            { estimatedHoursSaved: { not: null } },
+          ],
+        },
+      }),
     ]);
+
+    const responseHours = responseLatencySamples
+      .map((signal) => {
+        if (!signal.firstResponseAt) return null;
+        const diffMs = signal.firstResponseAt.getTime() - signal.fetchedAt.getTime();
+        if (!Number.isFinite(diffMs) || diffMs < 0) return null;
+        return diffMs / (1000 * 60 * 60);
+      })
+      .filter((value): value is number => value !== null);
+    const avgResponseHours = responseHours.length
+      ? Number((responseHours.reduce((sum, value) => sum + value, 0) / responseHours.length).toFixed(1))
+      : null;
 
     // Resolve source names
     const sourceIds = topSources.map((s) => s.sourceId);
@@ -153,6 +215,15 @@ export class DashboardService {
         activeSources: sourceCount,
         activeKeywords: activeKeywordCount,
         activeAlerts: alertRules,
+      },
+      roi: {
+        repliesThisWeek,
+        meetingsThisWeek,
+        estimatedHoursSavedThisWeek: hoursSavedThisWeekAgg._sum.estimatedHoursSaved ?? 0,
+        activePipelineValueUsd: activePipelineValueAgg._sum.pipelineValueUsd ?? 0,
+        wonValueThisQuarterUsd: wonValueThisQuarterAgg._sum.pipelineValueUsd ?? 0,
+        avgResponseHours,
+        trackedSignals: roiTrackedSignals,
       },
       activation: {
         completedSteps: completedActivationSteps,

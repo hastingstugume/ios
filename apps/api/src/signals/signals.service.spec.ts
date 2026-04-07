@@ -114,6 +114,45 @@ describe('SignalsService', () => {
     ).rejects.toThrow(NotFoundException);
   });
 
+  it('persists outcome tracking fields through workflow updates', async () => {
+    mockPrisma.signal.findFirst.mockResolvedValue({
+      id: 'sig_3',
+      organizationId: 'org_1',
+      stage: 'OUTREACH',
+      status: 'SAVED',
+      closedAt: null,
+    });
+    mockPrisma.signal.update.mockResolvedValue({
+      id: 'sig_3',
+      stage: 'QUALIFIED',
+      status: 'SAVED',
+      pipelineValueUsd: 3500,
+      estimatedHoursSaved: 6,
+    });
+    mockPrisma.auditLog.create.mockResolvedValue({ id: 'log_2' });
+
+    await service.updateWorkflow('org_1', 'sig_3', 'user_1', {
+      stage: 'QUALIFIED',
+      firstResponseAt: '2026-04-06T10:00:00.000Z',
+      meetingBookedAt: '2026-04-07T09:30:00.000Z',
+      pipelineValueUsd: 3500,
+      estimatedHoursSaved: 6,
+      outcomeNotes: 'Reply received and discovery booked.',
+    });
+
+    expect(mockPrisma.signal.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'sig_3' },
+      data: expect.objectContaining({
+        stage: 'QUALIFIED',
+        firstResponseAt: new Date('2026-04-06T10:00:00.000Z'),
+        meetingBookedAt: new Date('2026-04-07T09:30:00.000Z'),
+        pipelineValueUsd: 3500,
+        estimatedHoursSaved: 6,
+        outcomeNotes: 'Reply received and discovery booked.',
+      }),
+    }));
+  });
+
   it('ranks fresher buying-intent signals ahead of older weaker ones', async () => {
     mockPrisma.signal.findMany.mockResolvedValue([
       {

@@ -31,6 +31,11 @@ class UpdateWorkflowDto {
   @ApiProperty({ required: false, enum: SignalStage }) @IsOptional() @IsEnum(SignalStage) stage?: SignalStage;
   @ApiProperty({ required: false, nullable: true }) @IsOptional() @IsString() assigneeId?: string;
   @ApiProperty({ required: false, nullable: true }) @IsOptional() @IsString() nextStep?: string;
+  @ApiProperty({ required: false, nullable: true }) @IsOptional() @IsDateString() firstResponseAt?: string | null;
+  @ApiProperty({ required: false, nullable: true }) @IsOptional() @IsDateString() meetingBookedAt?: string | null;
+  @ApiProperty({ required: false, nullable: true, minimum: 0 }) @IsOptional() @IsNumber() @Min(0) pipelineValueUsd?: number | null;
+  @ApiProperty({ required: false, nullable: true, minimum: 0 }) @IsOptional() @IsNumber() @Min(0) estimatedHoursSaved?: number | null;
+  @ApiProperty({ required: false, nullable: true }) @IsOptional() @IsString() outcomeNotes?: string | null;
 }
 
 class AddAnnotationDto {

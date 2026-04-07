@@ -9,7 +9,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import Link from 'next/link';
 import {
   Zap, TrendingUp, Star, Bell, ArrowUpRight,
-  Target, Clock, Bookmark, Workflow, Send, Trophy, CheckCircle2, Circle
+  Target, Clock, Bookmark, Workflow, Send, Trophy, CheckCircle2, Circle, MessageSquare, CalendarDays, Banknote, TimerReset
 } from 'lucide-react';
 
 function StatCard({ label, value, icon: Icon, sub, color = 'text-primary' }: {
@@ -59,25 +59,26 @@ export default function DashboardPage() {
     </div>
   );
 
-  const s = data?.stats || {};
+  const s = data?.stats;
+  const roi = data?.roi;
   const usage = usageQuery.data;
   const activation = data?.activation;
   const statCards = [
-    { label: 'New Today', value: s.newToday ?? 0, icon: Clock, sub: 'signals discovered', color: 'text-blue-400' },
-    { label: 'This Week', value: s.newThisWeek ?? 0, icon: TrendingUp, sub: 'total signals', color: 'text-purple-400' },
-    { label: 'High Confidence', value: s.highConfidence ?? 0, icon: Target, sub: 'score >= 80, actionable', color: 'text-green-400' },
-    { label: 'In Progress', value: s.inProgress ?? 0, icon: Workflow, sub: 'actively being worked', color: 'text-cyan-400' },
-    { label: 'Outreach', value: s.outreach ?? 0, icon: Send, sub: 'ready for contact', color: 'text-amber-400' },
-    { label: 'Qualified', value: s.qualified ?? 0, icon: Bookmark, sub: 'worth pursuing', color: 'text-violet-400' },
-    { label: 'Won', value: s.won ?? 0, icon: Trophy, sub: 'closed opportunities', color: 'text-green-400' },
-    { label: 'Active Alerts', value: s.activeAlerts ?? 0, icon: Bell, sub: 'notification rules', color: 'text-primary' },
-    { label: 'Total Signals', value: s.totalSignals ?? 0, icon: Zap, sub: 'all time', color: 'text-slate-300' },
+    { label: 'New Today', value: s?.newToday ?? 0, icon: Clock, sub: 'signals discovered', color: 'text-blue-400' },
+    { label: 'This Week', value: s?.newThisWeek ?? 0, icon: TrendingUp, sub: 'total signals', color: 'text-purple-400' },
+    { label: 'High Confidence', value: s?.highConfidence ?? 0, icon: Target, sub: 'score >= 80, actionable', color: 'text-green-400' },
+    { label: 'In Progress', value: s?.inProgress ?? 0, icon: Workflow, sub: 'actively being worked', color: 'text-cyan-400' },
+    { label: 'Outreach', value: s?.outreach ?? 0, icon: Send, sub: 'ready for contact', color: 'text-amber-400' },
+    { label: 'Qualified', value: s?.qualified ?? 0, icon: Bookmark, sub: 'worth pursuing', color: 'text-violet-400' },
+    { label: 'Won', value: s?.won ?? 0, icon: Trophy, sub: 'closed opportunities', color: 'text-green-400' },
+    { label: 'Active Alerts', value: s?.activeAlerts ?? 0, icon: Bell, sub: 'notification rules', color: 'text-primary' },
+    { label: 'Total Signals', value: s?.totalSignals ?? 0, icon: Zap, sub: 'all time', color: 'text-slate-300' },
   ];
   const visibleStatCards = showAllStats ? statCards : statCards.slice(0, 6);
   const activationItems = activation?.items || [];
   const pendingActivationItems = activationItems.filter((item: any) => !item.completed);
   const nextActions = pendingActivationItems.slice(0, 2);
-  const workflowSignals = (s.inProgress ?? 0) + (s.outreach ?? 0) + (s.qualified ?? 0) + (s.won ?? 0);
+  const workflowSignals = (s?.inProgress ?? 0) + (s?.outreach ?? 0) + (s?.qualified ?? 0) + (s?.won ?? 0);
   const outcomeTargets = currentPlan === 'starter'
     ? { sources: 3, keywords: 15, alerts: 1, workflow: 3 }
     : currentPlan === 'growth'
@@ -138,6 +139,8 @@ export default function DashboardPage() {
     : [];
   const completedOutcomeSteps = outcomeSteps.filter((step) => step.done).length;
   const outcomeProgress = outcomeSteps.length ? Math.round((completedOutcomeSteps / outcomeSteps.length) * 100) : 0;
+  const formatUsd = (value: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value || 0);
 
   return (
     <div className="page-shell animate-fade-in">
@@ -335,6 +338,26 @@ export default function DashboardPage() {
           </div>
         ) : null}
       </div>
+
+      {roi ? (
+        <div className="rounded-xl border border-border bg-card p-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">ROI Outcomes (Weekly)</h2>
+              <p className="text-xs text-muted-foreground">Track real response and revenue momentum from captured signals.</p>
+            </div>
+            <span className="text-xs text-muted-foreground">{roi.trackedSignals} signals have tracked outcomes</span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+            <StatCard label="Replies" value={roi.repliesThisWeek} icon={MessageSquare} sub="this week" color="text-blue-400" />
+            <StatCard label="Meetings" value={roi.meetingsThisWeek} icon={CalendarDays} sub="this week" color="text-violet-400" />
+            <StatCard label="Hours Saved" value={roi.estimatedHoursSavedThisWeek} icon={TimerReset} sub="this week" color="text-emerald-400" />
+            <StatCard label="Active Pipeline" value={formatUsd(roi.activePipelineValueUsd)} icon={Banknote} sub="open value" color="text-amber-400" />
+            <StatCard label="Won This Quarter" value={formatUsd(roi.wonValueThisQuarterUsd)} icon={Trophy} sub="closed value" color="text-green-400" />
+            <StatCard label="Avg Response" value={roi.avgResponseHours === null ? '—' : `${roi.avgResponseHours}h`} icon={Clock} sub="from signal to reply" color="text-cyan-400" />
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         {/* Trend chart */}

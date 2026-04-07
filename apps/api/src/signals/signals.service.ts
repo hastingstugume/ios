@@ -38,6 +38,11 @@ export interface UpdateSignalWorkflowInput {
   stage?: SignalStage;
   assigneeId?: string | null;
   nextStep?: string | null;
+  firstResponseAt?: string | null;
+  meetingBookedAt?: string | null;
+  pipelineValueUsd?: number | null;
+  estimatedHoursSaved?: number | null;
+  outcomeNotes?: string | null;
 }
 
 @Injectable()
@@ -169,6 +174,19 @@ export class SignalsService {
       ...(input.stage !== undefined ? { stage: input.stage } : {}),
       ...(input.assigneeId !== undefined ? { assigneeId: input.assigneeId || null } : {}),
       ...(input.nextStep !== undefined ? { nextStep: input.nextStep?.trim() || null } : {}),
+      ...(input.firstResponseAt !== undefined
+        ? { firstResponseAt: input.firstResponseAt ? new Date(input.firstResponseAt) : null }
+        : {}),
+      ...(input.meetingBookedAt !== undefined
+        ? { meetingBookedAt: input.meetingBookedAt ? new Date(input.meetingBookedAt) : null }
+        : {}),
+      ...(input.pipelineValueUsd !== undefined
+        ? { pipelineValueUsd: input.pipelineValueUsd === null ? null : Math.max(0, Math.round(input.pipelineValueUsd)) }
+        : {}),
+      ...(input.estimatedHoursSaved !== undefined
+        ? { estimatedHoursSaved: input.estimatedHoursSaved === null ? null : Math.max(0, Math.round(input.estimatedHoursSaved)) }
+        : {}),
+      ...(input.outcomeNotes !== undefined ? { outcomeNotes: input.outcomeNotes?.trim() || null } : {}),
       ...(nextStage === 'WON' || nextStage === 'LOST' || nextStage === 'ARCHIVED'
         ? { closedAt: signal.closedAt ?? new Date() }
         : { closedAt: null }),
@@ -196,6 +214,11 @@ export class SignalsService {
             stage: input.stage ?? undefined,
             assigneeId: input.assigneeId ?? undefined,
             nextStep: input.nextStep ?? undefined,
+            firstResponseAt: input.firstResponseAt ?? undefined,
+            meetingBookedAt: input.meetingBookedAt ?? undefined,
+            pipelineValueUsd: input.pipelineValueUsd ?? undefined,
+            estimatedHoursSaved: input.estimatedHoursSaved ?? undefined,
+            outcomeNotes: input.outcomeNotes ?? undefined,
           },
         },
       }),
