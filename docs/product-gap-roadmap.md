@@ -29,7 +29,7 @@ This document is the source of truth for two things:
 | Alerts | Create, edit, pause/resume, delete, confidence/frequency rules, category targeting, keyword targeting, and last-trigger timestamps are implemented. |
 | Settings | Real profile save, workspace save, password change, team admin, pending invites, and audit log UI are implemented. |
 | Workspace Admin | Workspace switching, member listing, invite/add teammate, role updates, member removal, and audit log browsing are implemented. |
-| Billing | Stripe Checkout self-serve upgrades are implemented for paid tiers, and webhook events sync workspace plan changes back into organization metadata. |
+| Billing | Stripe Checkout self-serve upgrades are implemented for paid tiers, webhook events sync workspace plan changes, billing portal/invoice lifecycle UX is live, and retention lifecycle nudges are automated (in-app + email triggers). |
 
 ## Promise Matrix
 
@@ -42,7 +42,8 @@ This document is the source of truth for two things:
 | Team workspaces | Organization members, invitations, membership roles, audit log, org switching exist | Sidebar switcher and settings admin UI are real | Yes | Invitation acceptance UX can be expanded further later |
 | Save and act on signals | Saved/bookmarked/ignored, pipeline stages, assignment, next steps, and close-state tracking are implemented | Feed/detail UI supports real workflow updates backed by the API | Yes | Continue hardening with tests and QA |
 | Pricing and plans | Organization has a stored plan field and Stripe checkout mapping for paid tiers | Signed-in pricing and upgrade CTAs trigger checkout session creation | Yes (with env config) | Keep plan/price mapping aligned with Stripe dashboard |
-| Self-serve billing | Stripe Checkout + webhook-driven plan sync are available | Signed-in upgrade controls route to secure checkout instead of email requests | Yes (Starter/Growth; Scale if configured) | Add billing portal and invoice history UX next |
+| Self-serve billing | Stripe Checkout + webhook-driven plan sync are available | Signed-in upgrade controls route to secure checkout; settings and pricing expose portal + invoice lifecycle UX | Yes (Starter/Growth; Scale if configured) | Keep Stripe portal/price configuration aligned with production |
+| Post-upgrade activation and retention | Lifecycle signals are tracked through audit events, usage, and pipeline activity | Dashboard outcome sprint nudges and checkout-success activation copy are live; backend sends post-upgrade, near-limit, and inactivity recovery emails | Yes (SendGrid + lifecycle flags required) | Add deliverability analytics and per-workspace campaign controls |
 
 ## Acceptance Criteria By Subsystem
 
@@ -94,9 +95,9 @@ This document is the source of truth for two things:
 
 ### Deferred
 
-- Billing portal and invoice history UX
-- Invite email delivery hardening beyond the current SendGrid integration
+- Invite email delivery hardening beyond the current SendGrid integration (bounce handling, suppression syncing, provider failover)
 - Additional workflow automation such as reminders, SLAs, or stage-change notifications
+- Lifecycle campaign analytics (open/click/convert visibility) and per-workspace notification controls
 
 ## Commit Roadmap
 
@@ -137,6 +138,14 @@ This document is the source of truth for two things:
 
 - Add customer billing portal and complete billing lifecycle UX.
 
+### Commit 10
+
+- Add post-upgrade in-app activation nudges (dashboard sprint + outcome-framed pricing success states).
+
+### Commit 11
+
+- Automate billing lifecycle retention emails (post-upgrade activation, near-limit pressure, inactivity recovery) with scheduled backend evaluation and cooldown dedupe.
+
 ## Verification Checklist
 
 - Profile update persists after refresh.
@@ -148,4 +157,6 @@ This document is the source of truth for two things:
 - Keyword and source edits persist and validate correctly.
 - Alert rules store categories and keywordIds and match against real signal data.
 - Landing page renders backend-sourced preview data and billing copy matches shipped checkout behavior.
+- Billing lifecycle statuses and invoice history reflect Stripe-backed subscription states in settings.
+- Lifecycle emails trigger only on real usage/pipeline conditions and respect cooldown dedupe windows.
 - After schema changes, `yarn db:migrate` and `yarn db:generate` are run before TypeScript verification so Prisma types stay in sync with the code.
