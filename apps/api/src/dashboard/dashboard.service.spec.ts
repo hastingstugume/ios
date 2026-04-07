@@ -67,6 +67,14 @@ describe('DashboardService', () => {
           fetchedAt: new Date('2026-04-01T08:00:00.000Z'),
           firstResponseAt: new Date('2026-04-01T10:00:00.000Z'),
         },
+      ])
+      .mockResolvedValueOnce([
+        {
+          sourceId: 'src_1',
+          firstResponseAt: new Date('2026-04-02T11:00:00.000Z'),
+          meetingBookedAt: new Date('2026-04-03T12:00:00.000Z'),
+          pipelineValueUsd: 900,
+        },
       ]);
     mockPrisma.signal.aggregate
       .mockResolvedValueOnce({ _sum: { estimatedHoursSaved: 7 } })
@@ -98,6 +106,15 @@ describe('DashboardService', () => {
       wonValueThisQuarterUsd: 1800,
       avgResponseHours: 2,
       trackedSignals: 5,
+      sourceOutcomes30d: [
+        expect.objectContaining({
+          source: { id: 'src_1', name: 'r/startups', type: 'REDDIT' },
+          replies: 1,
+          meetings: 1,
+          trackedSignals: 1,
+          pipelineValueUsd: 900,
+        }),
+      ],
     }));
     expect(result.activation).toEqual(expect.objectContaining({
       completedSteps: 5,

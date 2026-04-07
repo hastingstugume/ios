@@ -481,6 +481,13 @@ export interface DashboardSummary {
     wonValueThisQuarterUsd: number;
     avgResponseHours: number | null;
     trackedSignals: number;
+    sourceOutcomes30d: Array<{
+      source: { id: string; name: string; type: string };
+      replies: number;
+      meetings: number;
+      pipelineValueUsd: number;
+      trackedSignals: number;
+    }>;
   };
   activation: {
     completedSteps: number;

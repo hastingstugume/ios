@@ -37,6 +37,7 @@ export class DashboardService {
       wonValueThisQuarterAgg,
       responseLatencySamples,
       roiTrackedSignals,
+      sourceOutcomeSignals30d,
     ] = await Promise.all([
       this.prisma.signal.count({ where: { organizationId: orgId } }),
       this.prisma.signal.count({ where: { organizationId: orgId, fetchedAt: { gte: oneDayAgo } } }),
@@ -129,6 +130,23 @@ export class DashboardService {
           ],
         },
       }),
+      this.prisma.signal.findMany({
+        where: {
+          organizationId: orgId,
+          fetchedAt: { gte: thirtyDaysAgo },
+          OR: [
+            { firstResponseAt: { not: null } },
+            { meetingBookedAt: { not: null } },
+            { pipelineValueUsd: { not: null } },
+          ],
+        },
+        select: {
+          sourceId: true,
+          firstResponseAt: true,
+          meetingBookedAt: true,
+          pipelineValueUsd: true,
+        },
+      }),
     ]);
 
     const responseHours = responseLatencySamples
@@ -144,12 +162,38 @@ export class DashboardService {
       : null;
 
     // Resolve source names
-    const sourceIds = topSources.map((s) => s.sourceId);
+    const sourceIds = Array.from(new Set([
+      ...topSources.map((s) => s.sourceId),
+      ...sourceOutcomeSignals30d.map((signal) => signal.sourceId).filter((sourceId): sourceId is string => Boolean(sourceId)),
+    ]));
     const sources = await this.prisma.source.findMany({
       where: { id: { in: sourceIds } },
       select: { id: true, name: true, type: true },
     });
     const sourceMap = Object.fromEntries(sources.map((s) => [s.id, s]));
+    const sourceOutcomeMap = new Map<string, { replies: number; meetings: number; pipelineValueUsd: number; trackedSignals: number }>();
+    for (const signal of sourceOutcomeSignals30d) {
+      const sourceId = signal.sourceId;
+      if (!sourceId) continue;
+      const existing = sourceOutcomeMap.get(sourceId) || { replies: 0, meetings: 0, pipelineValueUsd: 0, trackedSignals: 0 };
+      existing.trackedSignals += 1;
+      if (signal.firstResponseAt) existing.replies += 1;
+      if (signal.meetingBookedAt) existing.meetings += 1;
+      if (signal.pipelineValueUsd) existing.pipelineValueUsd += signal.pipelineValueUsd;
+      sourceOutcomeMap.set(sourceId, existing);
+    }
+    const sourceOutcomeRows = [...sourceOutcomeMap.entries()]
+      .map(([sourceId, stats]) => ({
+        source: sourceMap[sourceId] || { id: sourceId, name: 'Unknown source', type: 'UNKNOWN' },
+        ...stats,
+      }))
+      .sort((left, right) =>
+        (right.meetings - left.meetings)
+        || (right.replies - left.replies)
+        || (right.pipelineValueUsd - left.pipelineValueUsd)
+        || (right.trackedSignals - left.trackedSignals),
+      )
+      .slice(0, 6);
 
     // 30-day daily trend
     const trend = await this.prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
@@ -224,6 +268,7 @@ export class DashboardService {
         wonValueThisQuarterUsd: wonValueThisQuarterAgg._sum.pipelineValueUsd ?? 0,
         avgResponseHours,
         trackedSignals: roiTrackedSignals,
+        sourceOutcomes30d: sourceOutcomeRows,
       },
       activation: {
         completedSteps: completedActivationSteps,

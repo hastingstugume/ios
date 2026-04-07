@@ -356,6 +356,32 @@ export default function DashboardPage() {
             <StatCard label="Won This Quarter" value={formatUsd(roi.wonValueThisQuarterUsd)} icon={Trophy} sub="closed value" color="text-green-400" />
             <StatCard label="Avg Response" value={roi.avgResponseHours === null ? '—' : `${roi.avgResponseHours}h`} icon={Clock} sub="from signal to reply" color="text-cyan-400" />
           </div>
+
+          <div className="mt-4 rounded-lg border border-border bg-secondary/20 p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Outcome by Source (30d)</p>
+              <p className="text-xs text-muted-foreground">Replies / meetings / value</p>
+            </div>
+            {roi.sourceOutcomes30d?.length ? (
+              <div className="mt-2 space-y-2">
+                {roi.sourceOutcomes30d.map((row) => (
+                  <div key={row.source.id} className="flex flex-col gap-1 rounded-md border border-border/70 bg-card/60 px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">{row.source.name}</p>
+                      <p className="text-xs text-muted-foreground">{row.source.type} · {row.trackedSignals} tracked</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <span className="rounded-md bg-secondary px-2 py-1 text-foreground">{row.replies} replies</span>
+                      <span className="rounded-md bg-secondary px-2 py-1 text-foreground">{row.meetings} meetings</span>
+                      <span className="rounded-md bg-secondary px-2 py-1 text-foreground">{formatUsd(row.pipelineValueUsd)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">No source-level outcomes yet. Track replies, meetings, or pipeline value on signals to populate this view.</p>
+            )}
+          </div>
         </div>
       ) : null}
 
