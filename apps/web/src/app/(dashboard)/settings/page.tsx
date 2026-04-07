@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useUpgradeCheckout } from '@/hooks/useUpgradeCheckout';
 import { useBillingPortal } from '@/hooks/useBillingPortal';
-import { authApi, billingApi, keywordsApi, organizationsApi, type AuditLog, type AuthSession, type Invitation, type OrganizationMember } from '@/lib/api';
+import { authApi, billingApi, keywordsApi, organizationsApi, type AuditLog, type AuthSession, type BillingOverview, type Invitation, type OrganizationMember } from '@/lib/api';
 import { getPlanLimitUpgradeHint } from '@/lib/planLimitErrors';
 import { getNextPlan, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
 import { useTheme, type ThemeMode } from '@/components/theme-provider';
@@ -66,6 +66,75 @@ function normalizePaidPlanForBreakdown(value: unknown): BillingBreakdownPlan | n
   if (normalized === 'growth' || normalized === 'pro' || normalized === 'team') return 'growth';
   if (normalized === 'scale' || normalized === 'enterprise') return 'scale';
   return null;
+}
+
+function formatBillingDate(value: string) {
+  return new Date(value).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function getBillingStatusMeta(status?: string | null) {
+  const normalized = status?.toLowerCase() || 'unknown';
+  switch (normalized) {
+    case 'active':
+      return {
+        label: 'Active',
+        description: 'Subscription is healthy and auto-renewing.',
+        badgeClass: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+      };
+    case 'trialing':
+      return {
+        label: 'Trialing',
+        description: 'Trial is running; billing begins when the trial ends.',
+        badgeClass: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+      };
+    case 'past_due':
+      return {
+        label: 'Past due',
+        description: 'A recent payment failed; update billing details soon.',
+        badgeClass: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+      };
+    case 'canceled':
+    case 'unpaid':
+    case 'incomplete_expired':
+      return {
+        label: 'Inactive',
+        description: 'Subscription is no longer active for future renewals.',
+        badgeClass: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
+      };
+    default:
+      return {
+        label: 'Unknown',
+        description: 'Status is syncing from billing provider.',
+        badgeClass: 'border-border bg-secondary text-muted-foreground',
+      };
+  }
+}
+
+function getBillingLifecycleMessage(subscription: BillingOverview['subscription']) {
+  if (!subscription) return 'No active subscription lifecycle data available.';
+
+  if (subscription.cancelAtPeriodEnd && subscription.currentPeriodEnd) {
+    return `Cancels on ${formatBillingDate(subscription.currentPeriodEnd)}`;
+  }
+
+  const normalized = subscription.status?.toLowerCase();
+  if ((normalized === 'active' || normalized === 'trialing') && subscription.currentPeriodEnd) {
+    return `Renews on ${formatBillingDate(subscription.currentPeriodEnd)}`;
+  }
+
+  if ((normalized === 'canceled' || normalized === 'unpaid' || normalized === 'incomplete_expired') && subscription.currentPeriodEnd) {
+    return `Access ended ${formatBillingDate(subscription.currentPeriodEnd)}`;
+  }
+
+  if (subscription.currentPeriodEnd) {
+    return `Current period ends ${formatBillingDate(subscription.currentPeriodEnd)}`;
+  }
+
+  return 'No upcoming renewal date available.';
 }
 
 function formatExperimentVariantLabel(variant: string) {
@@ -806,6 +875,13 @@ export default function SettingsPage() {
   const trackedKeywordCount = keywordsQuery.data?.length || 0;
   const workspaceUsage = usageQuery.data;
   const billingOverview = billingOverviewQuery.data;
+  const billingSubscription = billingOverview?.subscription ?? null;
+  const billingStatusMeta = getBillingStatusMeta(billingSubscription?.status);
+  const billingLifecycleMessage = getBillingLifecycleMessage(billingSubscription);
+  const recentInvoices = billingOverview?.invoices || [];
+  const hasOutstandingInvoice = recentInvoices.some(
+    (invoice) => invoice.status && !['paid', 'void'].includes(invoice.status.toLowerCase()),
+  );
   const normalizedPlan = normalizeWorkspacePlan(currentOrg?.plan);
   const currentPlanMeta = WORKSPACE_PLAN_MAP[normalizedPlan];
   const nextPlan = getNextPlan(normalizedPlan);
@@ -1094,10 +1170,10 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={() => startBillingPortal({ returnPath: '/settings#plan-limits' })}
-                  disabled={redirectingToPortal}
+                  disabled={!canManageWorkspace || redirectingToPortal}
                   className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {redirectingToPortal ? 'Redirecting...' : 'Manage billing'}
+                  {!canManageWorkspace ? 'Admins manage billing' : redirectingToPortal ? 'Redirecting...' : 'Manage subscription'}
                 </button>
                 <Link
                   href="/pricing"
@@ -1109,10 +1185,14 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={() => startUpgradeCheckout(nextPlan, { sourceContext: 'settings_plan_limits' })}
-                    disabled={!!redirectingPlan}
+                    disabled={!canManageWorkspace || !!redirectingPlan}
                     className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
                   >
-                    {redirectingPlan === nextPlan ? 'Redirecting…' : `Upgrade to ${WORKSPACE_PLAN_MAP[nextPlan].label}`}
+                    {!canManageWorkspace
+                      ? 'Admins can upgrade'
+                      : redirectingPlan === nextPlan
+                        ? 'Redirecting…'
+                        : `Upgrade to ${WORKSPACE_PLAN_MAP[nextPlan].label}`}
                   </button>
                 ) : null}
               </div>
@@ -1239,89 +1319,130 @@ export default function SettingsPage() {
                 </div>
               </div>
             </details>
-            <details className="mt-4 rounded-lg border border-border bg-background">
-              <summary className="cursor-pointer list-none px-3 py-2 text-sm text-foreground">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-medium">Billing overview and invoices</span>
-                  <span className="text-xs text-muted-foreground">
-                    {billingOverview?.hasBillingProfile ? `${billingOverview.invoices.length} recent invoices` : 'No billing history yet'}
-                  </span>
+            <div className="mt-4 rounded-lg border border-border bg-background">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Billing lifecycle and invoice history</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Track your subscription health, renewal timing, and downloadable invoices.</p>
                 </div>
-              </summary>
-              <div className="space-y-3 border-t border-border px-3 py-3">
+                <button
+                  type="button"
+                  onClick={() => startBillingPortal({ returnPath: '/settings#plan-limits' })}
+                  disabled={!canManageWorkspace || redirectingToPortal}
+                  className="inline-flex items-center justify-center rounded-md border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {!canManageWorkspace ? 'Admins only' : redirectingToPortal ? 'Redirecting...' : 'Open billing portal'}
+                </button>
+              </div>
+              <div className="space-y-3 px-3 py-3">
                 {billingOverviewQuery.isLoading ? (
                   <p className="text-sm text-muted-foreground">Loading billing details...</p>
+                ) : billingOverviewQuery.error ? (
+                  <p className="text-sm text-destructive">{(billingOverviewQuery.error as Error).message}</p>
                 ) : !billingOverview?.hasBillingProfile ? (
-                  <p className="text-sm text-muted-foreground">
-                    No billing profile yet. Start with an upgrade checkout to generate subscriptions and invoices.
-                  </p>
+                  <div className="rounded-lg border border-border bg-secondary px-3 py-3 text-sm text-muted-foreground">
+                    No billing profile yet. Start an upgrade checkout to create subscription and invoice history for this workspace.
+                  </div>
                 ) : (
                   <>
-                    <div className="rounded-lg border border-border bg-secondary px-3 py-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs text-muted-foreground">Subscription status</span>
-                        <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                          {billingOverview.subscription?.status || 'Unknown'}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-sm text-foreground">
-                        {formatCurrencyCents(
-                          billingOverview.subscription?.amount ?? null,
-                          billingOverview.subscription?.currency || 'USD',
-                        )}
-                        {billingOverview.subscription?.interval ? ` / ${billingOverview.subscription.interval}` : ''}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {billingOverview.subscription?.currentPeriodEnd
-                          ? `Current period ends ${formatDate(billingOverview.subscription.currentPeriodEnd)}`
-                          : 'No active renewal date'}
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      {billingOverview.invoices.slice(0, 5).map((invoice) => (
-                        <div
-                          key={invoice.id}
-                          className="flex flex-col gap-2 rounded-lg border border-border px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
-                        >
-                          <div>
-                            <p className="font-medium text-foreground">
-                              {formatCurrencyCents(invoice.amountPaid, invoice.currency)}
-                              <span className="ml-2 text-xs text-muted-foreground uppercase">{invoice.status || 'unknown'}</span>
-                            </p>
-                            <p className="text-xs text-muted-foreground">{formatDate(invoice.createdAt)}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {invoice.hostedInvoiceUrl ? (
-                              <a
-                                href={invoice.hostedInvoiceUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="rounded-md border border-border px-2 py-1 text-xs text-foreground transition-colors hover:bg-accent"
-                              >
-                                View invoice
-                              </a>
-                            ) : null}
-                            {invoice.invoicePdf ? (
-                              <a
-                                href={invoice.invoicePdf}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                              >
-                                PDF
-                              </a>
-                            ) : null}
-                          </div>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <div className="rounded-lg border border-border bg-secondary px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Subscription status</p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${billingStatusMeta.badgeClass}`}>
+                            {billingStatusMeta.label}
+                          </span>
                         </div>
-                      ))}
-                      {!billingOverview.invoices.length ? (
-                        <p className="text-xs text-muted-foreground">No invoices found yet for this workspace.</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">{billingStatusMeta.description}</p>
+                      </div>
+                      <div className="rounded-lg border border-border bg-secondary px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Current charge</p>
+                        <p className="mt-1 text-sm font-medium text-foreground">
+                          {formatCurrencyCents(
+                            billingSubscription?.amount ?? null,
+                            billingSubscription?.currency || 'USD',
+                          )}
+                          {billingSubscription?.interval ? ` / ${billingSubscription.interval}` : ''}
+                        </p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Workspace plan: {formatPlanName(billingOverview.workspacePlan)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-border bg-secondary px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Lifecycle timing</p>
+                        <p className="mt-1 text-sm font-medium text-foreground">{billingLifecycleMessage}</p>
+                        {hasOutstandingInvoice ? (
+                          <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">There is at least one invoice requiring attention.</p>
+                        ) : (
+                          <p className="mt-1 text-[11px] text-muted-foreground">No overdue invoice flags in recent history.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="overflow-hidden rounded-lg border border-border">
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-xs">
+                          <thead className="bg-secondary">
+                            <tr className="text-left text-muted-foreground">
+                              <th className="px-3 py-2 font-medium">Invoice</th>
+                              <th className="px-3 py-2 font-medium">Date</th>
+                              <th className="px-3 py-2 font-medium">Status</th>
+                              <th className="px-3 py-2 font-medium">Amount</th>
+                              <th className="px-3 py-2 text-right font-medium">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {recentInvoices.slice(0, 8).map((invoice) => (
+                              <tr key={invoice.id} className="border-t border-border">
+                                <td className="px-3 py-2 font-medium text-foreground">
+                                  {invoice.number || invoice.id}
+                                </td>
+                                <td className="px-3 py-2 text-muted-foreground">{formatDate(invoice.createdAt)}</td>
+                                <td className="px-3 py-2">
+                                  <span className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                                    {invoice.status || 'unknown'}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-foreground">
+                                  {formatCurrencyCents(invoice.amountPaid || invoice.amountDue, invoice.currency)}
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center justify-end gap-2">
+                                    {invoice.hostedInvoiceUrl ? (
+                                      <a
+                                        href={invoice.hostedInvoiceUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="rounded-md border border-border px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-accent"
+                                      >
+                                        View
+                                      </a>
+                                    ) : null}
+                                    {invoice.invoicePdf ? (
+                                      <a
+                                        href={invoice.invoicePdf}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                                      >
+                                        PDF
+                                      </a>
+                                    ) : null}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {!recentInvoices.length ? (
+                        <p className="px-3 py-3 text-xs text-muted-foreground">No invoices found yet for this workspace.</p>
                       ) : null}
                     </div>
                   </>
                 )}
               </div>
-            </details>
+            </div>
           </div>
           {!canManageWorkspace && <p className="text-sm text-muted-foreground">Only workspace admins can update workspace settings.</p>}
           {orgMutation.error && <p className="text-sm text-destructive">{(orgMutation.error as Error).message}</p>}
