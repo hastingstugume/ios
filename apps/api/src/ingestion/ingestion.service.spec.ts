@@ -275,6 +275,85 @@ describe('IngestionService', () => {
     global.fetch = originalFetch;
   });
 
+  it('retries SAM.gov network failures before succeeding on a fallback endpoint', async () => {
+    const config = {
+      get: jest.fn((key: string, defaultValue?: any) => {
+        if (key === 'SAM_GOV_API_KEY') return 'sam_test_key';
+        if (key === 'SAM_GOV_API_BASE_URL') return 'https://api.sam.gov';
+        return defaultValue ?? '';
+      }),
+    };
+    const isolated = new IngestionService(
+      {} as any,
+      { normalize: jest.fn((text: string) => text), classify: jest.fn() } as any,
+      config as any,
+      {} as any,
+    );
+    jest.spyOn(isolated as any, 'delay').mockResolvedValue(undefined);
+
+    const originalFetch = global.fetch;
+    const fetchMock = jest.fn()
+      .mockRejectedValueOnce(new Error('fetch failed'))
+      .mockRejectedValueOnce(new Error('fetch failed'))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          opportunitiesData: [
+            {
+              noticeId: 'notice-net-1',
+              title: 'Implementation support services',
+              description: 'Need systems integration help',
+              uiLink: 'https://sam.gov/opp/notice-net-1/view',
+              postedDate: '2026-04-01 10:00:00',
+            },
+          ],
+        }),
+      });
+    global.fetch = fetchMock as any;
+
+    const results = await (isolated as any).fetchSamGov({
+      query: 'implementation support',
+      postedWithinDays: 7,
+      limit: 10,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(results).toHaveLength(1);
+
+    global.fetch = originalFetch;
+  });
+
+  it('surfaces a clearer SAM.gov network error when no endpoint responds', async () => {
+    const config = {
+      get: jest.fn((key: string, defaultValue?: any) => {
+        if (key === 'SAM_GOV_API_KEY') return 'sam_test_key';
+        if (key === 'SAM_GOV_API_BASE_URL') return 'https://api.sam.gov';
+        return defaultValue ?? '';
+      }),
+    };
+    const isolated = new IngestionService(
+      {} as any,
+      { normalize: jest.fn((text: string) => text), classify: jest.fn() } as any,
+      config as any,
+      {} as any,
+    );
+    jest.spyOn(isolated as any, 'delay').mockResolvedValue(undefined);
+
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockRejectedValue(new Error('fetch failed')) as any;
+
+    await expect(
+      (isolated as any).fetchSamGov({
+        query: 'implementation support',
+        postedWithinDays: 7,
+        limit: 10,
+      }),
+    ).rejects.toThrow('SAM.gov fetch failed: network request failed');
+
+    global.fetch = originalFetch;
+  });
+
   it('filters discourse latest topics using query and tags', async () => {
     const originalFetch = global.fetch;
     global.fetch = jest.fn().mockResolvedValue({
@@ -563,6 +642,7 @@ describe('IngestionService', () => {
       keyword: { findMany: jest.fn().mockResolvedValue([]) },
       organization: { findUnique: jest.fn().mockResolvedValue({ negativeKeywords: [] }) },
       signal: {
+        count: jest.fn().mockResolvedValue(0),
         findUnique: jest.fn().mockResolvedValue(null),
         findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
@@ -613,5 +693,113 @@ describe('IngestionService', () => {
       signalId: 'sig_1',
       category: 'BUYING_INTENT',
     }));
+  });
+
+  it('bootstraps a zero-signal workspace from configured-intent web search matches', async () => {
+    const prisma = {
+      keyword: { findMany: jest.fn().mockResolvedValue([]) },
+      organization: { findUnique: jest.fn().mockResolvedValue({ negativeKeywords: [] }) },
+      signal: {
+        count: jest.fn().mockResolvedValue(0),
+        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn().mockResolvedValue({ id: 'sig_bootstrap_1' }),
+      },
+      signalKeyword: { create: jest.fn() },
+    };
+    const classify = jest.fn().mockResolvedValue({
+      isOpportunity: false,
+      category: 'OTHER',
+      confidenceScore: 41,
+      whyItMatters: '',
+      suggestedOutreach: null,
+      suggestedReply: null,
+      painPoint: null,
+      urgency: 'MEDIUM',
+      sentiment: 'NEUTRAL',
+      conversationType: 'OTHER',
+    });
+    const queue = { add: jest.fn() };
+    const isolated = new IngestionService(
+      prisma as any,
+      { normalize: jest.fn((text: string) => text), classify } as any,
+      { get: jest.fn((_key: string, defaultValue?: any) => defaultValue ?? '') } as any,
+      queue as any,
+    );
+
+    await (isolated as any).processItems(
+      'source-1',
+      'org-1',
+      'WEB_SEARCH',
+      { query: '"need local seo agency" OR "google maps not ranking"' },
+      [{
+        externalId: 'bootstrap-ext-1',
+        title: 'Need local SEO agency for our plumbing company',
+        text: 'Our Google Maps ranking dropped and we are not getting calls anymore.',
+        url: 'https://example.com/plumber-help',
+      }],
+    );
+
+    expect(prisma.signal.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        category: 'BUYING_INTENT',
+        confidenceScore: expect.any(Number),
+      }),
+    }));
+    expect(queue.add).toHaveBeenCalledWith('check-alerts', expect.objectContaining({
+      signalId: 'sig_bootstrap_1',
+      category: 'BUYING_INTENT',
+    }));
+  });
+
+  it('does not bootstrap broad web matches once the workspace already has signals', async () => {
+    const prisma = {
+      keyword: { findMany: jest.fn().mockResolvedValue([]) },
+      organization: { findUnique: jest.fn().mockResolvedValue({ negativeKeywords: [] }) },
+      signal: {
+        count: jest.fn().mockResolvedValue(3),
+        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn(),
+      },
+      signalKeyword: { create: jest.fn() },
+    };
+    const classify = jest.fn().mockResolvedValue({
+      isOpportunity: false,
+      category: 'OTHER',
+      confidenceScore: 41,
+      whyItMatters: '',
+      suggestedOutreach: null,
+      suggestedReply: null,
+      painPoint: null,
+      urgency: 'MEDIUM',
+      sentiment: 'NEUTRAL',
+      conversationType: 'OTHER',
+    });
+    const queue = { add: jest.fn() };
+    const isolated = new IngestionService(
+      prisma as any,
+      { normalize: jest.fn((text: string) => text), classify } as any,
+      { get: jest.fn((_key: string, defaultValue?: any) => defaultValue ?? '') } as any,
+      queue as any,
+    );
+
+    await (isolated as any).processItems(
+      'source-1',
+      'org-1',
+      'WEB_SEARCH',
+      { query: '"need local seo agency" OR "google maps not ranking"' },
+      [{
+        externalId: 'bootstrap-ext-2',
+        title: 'Need local SEO agency for our plumbing company',
+        text: 'Our Google Maps ranking dropped and we are not getting calls anymore.',
+        url: 'https://example.com/plumber-help-2',
+      }],
+    );
+
+    expect(prisma.signal.create).not.toHaveBeenCalled();
+    expect(queue.add).not.toHaveBeenCalled();
   });
 });

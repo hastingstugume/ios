@@ -621,20 +621,42 @@ export class IngestionService {
       const candidatePaths = ['/opportunities/v2/search', '/prod/opportunities/v2/search'];
       const triedUrls: string[] = [];
       let response: Response | null = null;
+      let lastNetworkError: Error | null = null;
 
       for (const path of candidatePaths) {
         const baseWithoutSamPath = apiBaseUrl.replace(/\/(?:prod\/)?opportunities\/v2\/search$/i, '');
         const url = `${baseWithoutSamPath}${path}?${qs.toString()}`;
         triedUrls.push(url);
-        response = await fetch(url, {
-          headers: {
-            Accept: 'application/json',
-            'User-Agent': 'InternetOpportunityScanner/0.1',
-          },
-        });
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+          try {
+            response = await this.fetchWithTimeout(url, {
+              headers: {
+                Accept: 'application/json',
+                'User-Agent': 'InternetOpportunityScanner/0.1',
+              },
+            }, 12000);
+            lastNetworkError = null;
+            break;
+          } catch (error: any) {
+            lastNetworkError = error instanceof Error ? error : new Error(String(error));
+            if (!this.isRetryableNetworkError(lastNetworkError) || attempt === 2) {
+              response = null;
+              break;
+            }
+            await this.delay(1000 * attempt);
+          }
+        }
+        if (lastNetworkError && !response) {
+          continue;
+        }
         if (response.ok || response.status !== 404) {
           break;
         }
+      }
+
+      if (!response && lastNetworkError) {
+        const attempted = triedUrls.join(' | ');
+        throw new Error(`${this.describeFetchError(lastNetworkError)} (attempted: ${attempted})`);
       }
 
       if (response?.status === 404) {
@@ -716,13 +738,17 @@ export class IngestionService {
     sourceConfig: Record<string, any>,
     items: IngestionItem[],
   ) {
-    const [keywords, workspaceNegativeKeywords] = await Promise.all([
+    const [keywords, workspaceNegativeKeywords, existingSignalCount] = await Promise.all([
       this.prisma.keyword.findMany({
         where: { organizationId: orgId, isActive: true },
       }),
       this.getWorkspaceNegativeKeywords(orgId),
+      this.prisma.signal.count({
+        where: { organizationId: orgId },
+      }),
     ]);
     const kwPhrases = keywords.map((k) => k.phrase);
+    const bootstrapMode = existingSignalCount === 0;
 
     for (const item of items) {
       const content = `${item.title || ''} ${item.text}`.toLowerCase();
@@ -730,8 +756,12 @@ export class IngestionService {
       const matchedConfiguredIntent = this.matchesConfiguredIntent(content, sourceType, sourceConfig);
       if (this.shouldExcludeByWorkspace(content, workspaceNegativeKeywords)) continue;
       if (this.shouldExcludeItem(content, sourceConfig)) continue;
-      if (this.shouldExcludeAsLowSignal(sourceType, item.title || '', item.text, matchedKeywords.length)) continue;
-      const bypassKeywordGate = sourceType === SourceType.SAM_GOV;
+      const lowSignalExcluded = this.shouldExcludeAsLowSignal(sourceType, item.title || '', item.text, matchedKeywords.length);
+      const bootstrapEligible = bootstrapMode
+        && this.isBootstrapEligibleSource(sourceType)
+        && matchedConfiguredIntent;
+      if (lowSignalExcluded && !bootstrapEligible) continue;
+      const bypassKeywordGate = sourceType === SourceType.SAM_GOV || bootstrapEligible;
       if (!bypassKeywordGate && matchedKeywords.length === 0 && !matchedConfiguredIntent) continue;
 
       const canonicalUrl = this.canonicalizeUrl(item.url);
@@ -759,6 +789,7 @@ export class IngestionService {
         classification,
         sourceType,
         matchedConfiguredIntent,
+        bootstrapEligible,
         item.title || '',
         item.text,
       );
@@ -815,10 +846,11 @@ export class IngestionService {
     },
     sourceType: SourceType,
     matchedConfiguredIntent: boolean,
+    bootstrapEligible: boolean,
     title: string,
     text: string,
   ) {
-    if (sourceType !== SourceType.SAM_GOV) return classification;
+    if (sourceType !== SourceType.SAM_GOV && !bootstrapEligible) return classification;
     if (classification.isOpportunity) return classification;
 
     const content = `${title} ${text}`.toLowerCase();
@@ -826,17 +858,37 @@ export class IngestionService {
       matchedConfiguredIntent ||
       /\b(solicitation|request for proposal|rfp|statement of work|scope of work|contract support|award notice)\b/i.test(content);
 
-    if (!procurementSignal) return classification;
+    if (sourceType === SourceType.SAM_GOV) {
+      if (!procurementSignal) return classification;
+
+      return {
+        ...classification,
+        isOpportunity: true,
+        category: SignalCategory.BUYING_INTENT,
+        confidenceScore: Math.max(classification.confidenceScore, 60),
+        whyItMatters: classification.whyItMatters || 'Public procurement opportunity with clear service demand.',
+        suggestedOutreach:
+          classification.suggestedOutreach ||
+          'Prioritize this notice for bid/no-bid review and align capability statement to the scope and response timeline.',
+      };
+    }
+
+    const bootstrapIntentSignal =
+      matchedConfiguredIntent &&
+      /\b(looking for|need help|need support|recommend|hire|agency|consultant|expert|specialist|vendor|partner|migration|implementation|integration|setup|fix|support|rescue|audit|not getting leads|not getting calls|maps ranking|google business profile|local seo)\b/i.test(content);
+
+    if (!bootstrapIntentSignal) return classification;
 
     return {
       ...classification,
       isOpportunity: true,
       category: SignalCategory.BUYING_INTENT,
-      confidenceScore: Math.max(classification.confidenceScore, 60),
-      whyItMatters: classification.whyItMatters || 'Public procurement opportunity with clear service demand.',
+      confidenceScore: Math.max(classification.confidenceScore, 58),
+      whyItMatters:
+        classification.whyItMatters || 'Search-matched demand with explicit service intent worth reviewing in the feed.',
       suggestedOutreach:
         classification.suggestedOutreach ||
-        'Prioritize this notice for bid/no-bid review and align capability statement to the scope and response timeline.',
+        'Lead with a short diagnostic and one concrete next step tied to the problem described.',
     };
   }
 
@@ -924,15 +976,19 @@ export class IngestionService {
     sourceType: SourceType,
     sourceConfig: Record<string, any>,
   ) {
-    const [items, keywords, workspaceNegativeKeywords] = await Promise.all([
+    const [items, keywords, workspaceNegativeKeywords, existingSignalCount] = await Promise.all([
       this.fetchItemsForSource(sourceType, sourceConfig),
       this.prisma.keyword.findMany({
         where: { organizationId: orgId, isActive: true },
       }),
       this.getWorkspaceNegativeKeywords(orgId),
+      this.prisma.signal.count({
+        where: { organizationId: orgId },
+      }),
     ]);
 
     const kwPhrases = keywords.map((keyword) => keyword.phrase);
+    const bootstrapMode = existingSignalCount === 0;
     const previewItems = await Promise.all(items.slice(0, 8).map(async (item) => {
       const content = `${item.title || ''} ${item.text}`.toLowerCase();
       const matchedKeywords = keywords
@@ -941,13 +997,17 @@ export class IngestionService {
       const matchedConfiguredIntent = this.matchesConfiguredIntent(content, sourceType, sourceConfig);
       const excludedByWorkspace = this.shouldExcludeByWorkspace(content, workspaceNegativeKeywords);
       const excludedBySource = this.shouldExcludeItem(content, sourceConfig);
-      const excludedByLowSignal = this.shouldExcludeAsLowSignal(
+      const rawExcludedByLowSignal = this.shouldExcludeAsLowSignal(
         sourceType,
         item.title || '',
         item.text,
         matchedKeywords.length,
       );
-      const passesDiscovery = (matchedKeywords.length > 0 || matchedConfiguredIntent) && !excludedByWorkspace && !excludedBySource && !excludedByLowSignal;
+      const bootstrapEligible = bootstrapMode
+        && this.isBootstrapEligibleSource(sourceType)
+        && matchedConfiguredIntent;
+      const excludedByLowSignal = rawExcludedByLowSignal && !bootstrapEligible;
+      const passesDiscovery = (matchedKeywords.length > 0 || matchedConfiguredIntent || bootstrapEligible) && !excludedByWorkspace && !excludedBySource && !excludedByLowSignal;
       const classification = passesDiscovery
         ? this.applySourceWeighting(
             await this.classification.classify(item.title || null, item.text, kwPhrases),
@@ -955,7 +1015,17 @@ export class IngestionService {
             sourceConfig,
           )
         : null;
-      const excludedByQualification = passesDiscovery && classification ? !classification.isOpportunity : false;
+      const classificationWithFallback = passesDiscovery && classification
+        ? this.applySourceFallbackClassification(
+            classification,
+            sourceType,
+            matchedConfiguredIntent,
+            bootstrapEligible,
+            item.title || '',
+            item.text,
+          )
+        : null;
+      const excludedByQualification = passesDiscovery && classificationWithFallback ? !classificationWithFallback.isOpportunity : false;
       const passesFilters = passesDiscovery && !excludedByQualification;
 
       return {
@@ -972,15 +1042,15 @@ export class IngestionService {
         excludedByLowSignal,
         excludedByQualification,
         passesFilters,
-        category: classification?.category || null,
-        confidenceScore: classification?.confidenceScore || null,
-        painPoint: classification?.painPoint || null,
-        urgency: classification?.urgency || null,
-        sentiment: classification?.sentiment || null,
-        conversationType: classification?.conversationType || null,
-        whyItMatters: classification?.whyItMatters || null,
-        suggestedReply: classification?.suggestedReply || null,
-        suggestedOutreach: classification?.suggestedOutreach || null,
+        category: classificationWithFallback?.category || null,
+        confidenceScore: classificationWithFallback?.confidenceScore || null,
+        painPoint: classificationWithFallback?.painPoint || null,
+        urgency: classificationWithFallback?.urgency || null,
+        sentiment: classificationWithFallback?.sentiment || null,
+        conversationType: classificationWithFallback?.conversationType || null,
+        whyItMatters: classificationWithFallback?.whyItMatters || null,
+        suggestedReply: classificationWithFallback?.suggestedReply || null,
+        suggestedOutreach: classificationWithFallback?.suggestedOutreach || null,
         sourceProfile: getSourceProfile(sourceType),
       };
     }));
@@ -1065,6 +1135,14 @@ export class IngestionService {
       return 'Web search provider rate limit reached (SerpApi 429). Retry later or lower fetch frequency.';
     }
 
+    if (message.includes('SAM.gov fetch failed: timeout')) {
+      return 'SAM.gov request timed out. This is usually temporary; retry shortly.';
+    }
+
+    if (message.includes('SAM.gov fetch failed: network request failed')) {
+      return 'SAM.gov network request failed before a response came back. Check internet access or retry shortly.';
+    }
+
     return message;
   }
 
@@ -1074,6 +1152,36 @@ export class IngestionService {
 
   private async delay(ms: number) {
     await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      return await fetch(url, {
+        ...init,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private isRetryableNetworkError(error: Error) {
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes('fetch failed') || message.includes('timeout') || message.includes('aborted');
+  }
+
+  private describeFetchError(error: Error) {
+    const message = String(error?.message || '').toLowerCase();
+    if (message.includes('aborted')) {
+      return 'timeout';
+    }
+    if (message.includes('fetch failed')) {
+      return 'network request failed';
+    }
+    return error.message || 'fetch failed';
   }
 
   private async getRedditAuthHeaders(label: string) {
@@ -1350,6 +1458,21 @@ export class IngestionService {
 
     if (!clauses.length) return true;
     return clauses.some((clause) => text.includes(clause));
+  }
+
+  private isBootstrapEligibleSource(sourceType: SourceType) {
+    return new Set<string>([
+      SourceType.REDDIT_SEARCH,
+      SourceType.HN_SEARCH,
+      SourceType.GITHUB_SEARCH,
+      SourceType.STACKOVERFLOW_SEARCH,
+      SourceType.SAM_GOV,
+      SourceType.WEB_SEARCH,
+      SourceType.DISCOURSE,
+      'DEVTO_SEARCH',
+      'GITLAB_SEARCH',
+      'YOUTUBE_SEARCH',
+    ]).has(String(sourceType));
   }
 
   private applySourceWeighting(
