@@ -226,6 +226,16 @@ describe('IngestionService', () => {
     expect(excluded).toBe(false);
   });
 
+  it('keeps local-visibility pain content as a high-signal opportunity pattern', () => {
+    const excluded = (service as any).shouldExcludeAsLowSignal(
+      'WEB_SEARCH',
+      'HVAC owner not getting calls after GBP suspension',
+      'Our map ranking dropped and we need local SEO help now to recover bookings.',
+      1,
+    );
+    expect(excluded).toBe(false);
+  });
+
   it('matches configured search intent even without an exact tracked keyword hit', () => {
     const matched = (service as any).matchesConfiguredIntent(
       'need help migrating our shopify storefront and fixing merchant center tracking',

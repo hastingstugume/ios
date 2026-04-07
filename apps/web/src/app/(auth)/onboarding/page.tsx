@@ -5,16 +5,28 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { authApi } from '@/lib/api';
 import { getOnboardingWorkspaceSeed } from '@/lib/auth-page-helpers';
 import { useAuth } from '@/hooks/useAuth';
-import { Briefcase, UserRound, ArrowRight, Sparkles, Search, ShoppingBag, Code2 } from 'lucide-react';
+import { Briefcase, UserRound, ArrowRight, Sparkles, Search, ShoppingBag, Code2, Wrench } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { AuthShell } from '@/components/auth/AuthShell';
 
+type OnboardingAccountType = 'FREELANCER' | 'BUSINESS';
+
 const STARTER_PACK_OPTIONS = [
+  {
+    id: 'single-home-services-visibility-rescue',
+    label: 'Home Services Visibility',
+    description: 'Capture urgent local-visibility pain: dropped map rankings, weak calls, and GBP issues.',
+    outcome: 'Find local-business owners already looking for help now.',
+    icon: Wrench,
+    accountTypes: ['BUSINESS'],
+  },
   {
     id: 'single-freelancer-radar',
     label: 'Freelancer Radar',
     description: 'Track direct "need a freelancer/consultant" asks from operator communities.',
     outcome: 'Fastest path to your first qualified lead signal.',
     icon: Sparkles,
+    accountTypes: ['FREELANCER', 'BUSINESS'],
   },
   {
     id: 'single-web-buyer-intent',
@@ -22,6 +34,7 @@ const STARTER_PACK_OPTIONS = [
     description: 'Monitor broad buyer-intent phrases across trusted web communities.',
     outcome: 'Broader deal coverage with one source to start.',
     icon: Search,
+    accountTypes: ['BUSINESS', 'FREELANCER'],
   },
   {
     id: 'single-shopify-migration-watch',
@@ -29,6 +42,7 @@ const STARTER_PACK_OPTIONS = [
     description: 'Capture stores actively asking for replatform and migration help.',
     outcome: 'High-intent ecommerce implementation opportunities.',
     icon: ShoppingBag,
+    accountTypes: ['BUSINESS', 'FREELANCER'],
   },
   {
     id: 'single-stackoverflow-urgent',
@@ -36,16 +50,31 @@ const STARTER_PACK_OPTIONS = [
     description: 'Find urgent "blocked / need support" implementation threads.',
     outcome: 'Surface pain-led leads that need help now.',
     icon: Code2,
+    accountTypes: ['FREELANCER', 'BUSINESS'],
   },
-] as const;
+] as const satisfies ReadonlyArray<{
+  id: string;
+  label: string;
+  description: string;
+  outcome: string;
+  icon: LucideIcon;
+  accountTypes: ReadonlyArray<OnboardingAccountType>;
+}>;
+
+const DEFAULT_PACK_BY_ACCOUNT_TYPE = {
+  BUSINESS: 'single-home-services-visibility-rescue',
+  FREELANCER: 'single-freelancer-radar',
+} as const;
 
 export default function OnboardingPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const { isLoading, isAuthenticated, emailVerified, onboardingCompleted, currentOrg, user } = useAuth();
-  const [accountType, setAccountType] = useState<'FREELANCER' | 'BUSINESS'>('BUSINESS');
+  const [accountType, setAccountType] = useState<OnboardingAccountType>('BUSINESS');
   const [workspaceName, setWorkspaceName] = useState('');
-  const [starterPackId, setStarterPackId] = useState<(typeof STARTER_PACK_OPTIONS)[number]['id']>('single-freelancer-radar');
+  const [starterPackId, setStarterPackId] = useState<(typeof STARTER_PACK_OPTIONS)[number]['id']>(
+    DEFAULT_PACK_BY_ACCOUNT_TYPE.BUSINESS,
+  );
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.replace('/');
@@ -65,6 +94,17 @@ export default function OnboardingPage() {
       setWorkspaceName(nextValue);
     }
   }, [accountType, currentOrg?.name, user?.name, workspaceName]);
+
+  const visibleStarterPacks = STARTER_PACK_OPTIONS.filter((pack) =>
+    pack.accountTypes.some((type) => type === accountType),
+  );
+
+  useEffect(() => {
+    const defaultPack = DEFAULT_PACK_BY_ACCOUNT_TYPE[accountType];
+    if (!visibleStarterPacks.some((pack) => pack.id === starterPackId)) {
+      setStarterPackId(defaultPack);
+    }
+  }, [accountType, starterPackId, visibleStarterPacks]);
 
   const complete = useMutation({
     mutationFn: () => authApi.completeOnboarding({ accountType, workspaceName, starterPackId }),
@@ -151,9 +191,10 @@ export default function OnboardingPage() {
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">Choose your first demand lane</p>
             <div className="grid gap-2 sm:grid-cols-2">
-              {STARTER_PACK_OPTIONS.map((pack) => {
+              {visibleStarterPacks.map((pack) => {
                 const Icon = pack.icon;
                 const selected = starterPackId === pack.id;
+                const recommendedPack = DEFAULT_PACK_BY_ACCOUNT_TYPE[accountType] === pack.id;
                 return (
                   <button
                     key={pack.id}
@@ -165,9 +206,16 @@ export default function OnboardingPage() {
                         : 'border-border bg-secondary/40 hover:border-primary/30'
                     }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <Icon className="h-4 w-4 text-primary" />
-                      <p className="text-sm font-medium text-foreground">{pack.label}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Icon className="h-4 w-4 text-primary" />
+                        <p className="text-sm font-medium text-foreground">{pack.label}</p>
+                      </div>
+                      {recommendedPack ? (
+                        <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+                          Recommended
+                        </span>
+                      ) : null}
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">{pack.description}</p>
                     <p className="mt-1 text-xs text-primary">{pack.outcome}</p>
@@ -179,6 +227,11 @@ export default function OnboardingPage() {
               We'll pre-load one starter source and keywords so you can reach your first signal faster.
             </p>
           </div>
+          {accountType === 'BUSINESS' ? (
+            <p className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary">
+              Tip: Home-services visibility is selected by default because it typically drives the fastest local-agency wins.
+            </p>
+          ) : null}
 
           {complete.error ? (
             <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">

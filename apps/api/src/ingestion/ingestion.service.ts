@@ -1121,6 +1121,8 @@ export class IngestionService {
       /\b(migration|integration|implementation|automation|revops|crm|devops|rescue)\b/i,
       /\b(urgent|blocked|stuck|breaking|outage|incident|failing|broken)\b/i,
       /\b(hire|hiring|who should we hire|partner)\b/i,
+      /\b(google business profile|gbp|maps ranking|local seo|reviews? dropped|suspended listing|not getting calls|not getting leads)\b/i,
+      /\b(plumber|hvac|electrician|roofer|cleaning service|pest control)\b.*\b(need|recommend|quote|book|hire|calls?)\b/i,
     ];
 
     const lowSignalPatterns = [

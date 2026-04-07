@@ -604,4 +604,41 @@ describe('AuthService', () => {
     }));
     expect(mockPrisma.keyword.create).toHaveBeenCalled();
   });
+
+  it('seeds the home-services starter pack with web search configuration', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      emailVerified: true,
+      memberships: [],
+    });
+    mockPrisma.organization.create.mockResolvedValue({ id: 'org_1', name: 'Acme' });
+    mockPrisma.organizationMember.create.mockResolvedValue({ id: 'mem_1' });
+    mockPrisma.user.update.mockResolvedValue({ id: 'u1' });
+    mockPrisma.source.count.mockResolvedValue(0);
+    mockPrisma.keyword.count.mockResolvedValue(0);
+    mockPrisma.organization.findUnique.mockResolvedValue({
+      businessFocus: null,
+      targetAudience: null,
+    });
+    mockPrisma.organization.update.mockResolvedValue({ id: 'org_1' });
+    mockPrisma.source.create.mockResolvedValue({ id: 'src_1' });
+    mockPrisma.keyword.create.mockResolvedValue({ id: 'kw_1' });
+    mockPrisma.auditLog.create.mockResolvedValue({ id: 'log_1' });
+
+    await expect(
+      service.completeOnboarding('u1', 'BUSINESS' as any, 'Acme', 'single-home-services-visibility-rescue'),
+    ).resolves.toEqual(expect.objectContaining({ success: true, organizationId: 'org_1' }));
+
+    expect(mockPrisma.source.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        organizationId: 'org_1',
+        type: 'WEB_SEARCH',
+      }),
+    }));
+    expect(mockPrisma.organization.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        businessFocus: 'Home Services Visibility Rescue',
+      }),
+    }));
+  });
 });

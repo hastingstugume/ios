@@ -64,6 +64,22 @@ type OnboardingStarterPack = {
 };
 
 const ONBOARDING_STARTER_PACKS: Record<string, OnboardingStarterPack> = {
+  'single-home-services-visibility-rescue': {
+    id: 'single-home-services-visibility-rescue',
+    name: 'Home Services Visibility Rescue',
+    audience: 'Local SEO and reputation agencies serving plumbers, HVAC, electricians, roofers, and cleaners',
+    recommendedKeywords: ['google business profile', 'maps ranking dropped', 'not getting local leads', 'review management'],
+    source: {
+      name: 'Home services visibility pain',
+      type: SourceType.WEB_SEARCH,
+      config: {
+        query: '"google business profile suspended" OR "maps ranking dropped" OR "plumber not getting calls" OR "hvac not getting leads" OR "need local seo help"',
+        domains: ['reddit.com', 'news.ycombinator.com', 'community.hubspot.com', 'community.shopify.com'],
+        excludeTerms: ['job opening', 'course', 'newsletter', 'side project'],
+        sourceWeight: 1.08,
+      },
+    },
+  },
   'single-freelancer-radar': {
     id: 'single-freelancer-radar',
     name: 'Freelancer Radar',

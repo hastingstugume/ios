@@ -301,15 +301,72 @@ ${sourceLines || '- no sources configured'}`;
 
   private fallbackClassify(title: string | null, text: string, keywords: string[]): ClassificationResult {
     const content = `${title || ''} ${text}`.toLowerCase();
-    const buyingWords = ['looking for', 'need a', 'hire', 'budget', 'consultant', 'agency', 'vendor', 'implement'];
-    const matchCount = buyingWords.filter((w) => content.includes(w)).length;
-    const kwMatches = keywords.filter((k) => content.includes(k.toLowerCase())).length;
-    const score = Math.min(95, (matchCount * 12) + (kwMatches * 8) + 20);
+    const buyingWords = [
+      'looking for',
+      'need a',
+      'need help',
+      'need support',
+      'hire',
+      'budget',
+      'consultant',
+      'agency',
+      'vendor',
+      'implementation partner',
+      'not getting leads',
+      'maps ranking',
+      'google business profile',
+      'review management',
+      'booked jobs',
+      'quote requests',
+    ];
+    const noiseWords = [
+      'job opening',
+      'we are hiring',
+      'hiring engineer',
+      'tutorial',
+      'course',
+      'newsletter',
+      'show hn',
+      'side project',
+      'release notes',
+      'free template',
+    ];
+    const localPainPattern = /\b(google business profile|gbp|maps ranking|not getting calls|not getting leads|reviews? dropped|local seo|map pack|suspended listing|profile suspended)\b/i;
+    const ownerIntentPattern = /\b(plumber|hvac|electrician|roofer|cleaning service|contractor|home services?)\b/i;
     const urgency = this.inferUrgency(content);
-    const category = content.includes('recommend') ? SignalCategory.RECOMMENDATION_REQUEST
-      : content.includes('hire') || content.includes('hiring') ? SignalCategory.HIRING_SIGNAL
-      : content.includes('pain') || content.includes('problem') || content.includes('stuck') ? SignalCategory.PAIN_COMPLAINT
-      : SignalCategory.BUYING_INTENT;
+    const urgencyBoost = urgency === 'HIGH' ? 8 : urgency === 'MEDIUM' ? 3 : 0;
+    const localIntentBoost = localPainPattern.test(content) ? 10 : 0;
+    const ownerDemandBoost = ownerIntentPattern.test(content) && /\b(need|looking for|recommend|hire|quotes?|bookings?|calls?)\b/i.test(content) ? 8 : 0;
+    const matchCount = buyingWords.filter((word) => content.includes(word)).length;
+    const noiseCount = noiseWords.filter((word) => content.includes(word)).length;
+    const kwMatches = keywords.filter((k) => content.includes(k.toLowerCase())).length;
+    const category = this.detectFallbackCategory(content);
+    const score = Math.min(
+      95,
+      Math.max(
+        0,
+        18
+          + (matchCount * 10)
+          + (kwMatches * 8)
+          + urgencyBoost
+          + localIntentBoost
+          + ownerDemandBoost
+          - (noiseCount * 12),
+      ),
+    );
+    const whyItMattersParts = [
+      `Detected ${matchCount} intent signal${matchCount === 1 ? '' : 's'}`,
+      kwMatches > 0 ? `matched ${kwMatches} tracked keyword${kwMatches === 1 ? '' : 's'}` : null,
+      localIntentBoost > 0 ? 'found local visibility/reputation pain' : null,
+      ownerDemandBoost > 0 ? 'found owner/operator demand context' : null,
+      noiseCount > 0 ? `filtered ${noiseCount} noise marker${noiseCount === 1 ? '' : 's'}` : null,
+      `urgency is ${urgency.toLowerCase()}`,
+    ].filter(Boolean).join(', ');
+    const suggestedOutreach = score > 60
+      ? localIntentBoost > 0
+        ? 'Lead with a quick visibility-and-reviews diagnostic, quantify likely missed calls, and propose one concrete 7-day fix.'
+        : 'Lead with a specific point of view on the problem they described and offer a low-friction next step.'
+      : null;
 
     return {
       isOpportunity: score > 50,
@@ -319,8 +376,8 @@ ${sourceLines || '- no sources configured'}`;
       urgency,
       sentiment: this.inferSentiment(content),
       conversationType: this.inferConversationType(category),
-      whyItMatters: `Contains ${matchCount} buying intent signals, matches ${kwMatches} monitored keywords, and reflects ${urgency.toLowerCase()} urgency.`,
-      suggestedOutreach: score > 60 ? 'Lead with a specific point of view on the problem they described and offer a low-friction next step.' : null,
+      whyItMatters: whyItMattersParts,
+      suggestedOutreach,
       suggestedReply: score > 60 ? this.buildSuggestedReply(title, text, category) : null,
     };
   }
@@ -374,6 +431,22 @@ ${sourceLines || '- no sources configured'}`;
     if (category === SignalCategory.PARTNERSHIP_INQUIRY) return 'PARTNERSHIP';
     if (category === SignalCategory.MARKET_TREND) return 'TREND';
     return 'OTHER';
+  }
+
+  private detectFallbackCategory(content: string): SignalCategory {
+    if (/\b(recommend|recommendation|who should we hire|any agency suggestions?)\b/i.test(content)) {
+      return SignalCategory.RECOMMENDATION_REQUEST;
+    }
+    if (/\b(hiring|job opening|role open|career)\b/i.test(content) && !/\b(need help|looking for|recommend|consultant|agency)\b/i.test(content)) {
+      return SignalCategory.HIRING_SIGNAL;
+    }
+    if (/\b(not getting leads|not getting calls|dropped|suspended|problem|issue|stuck|broken|failing|reviews? dropped)\b/i.test(content)) {
+      return SignalCategory.PAIN_COMPLAINT;
+    }
+    if (/\b(looking for|need help|need support|consultant|agency|vendor|partner|quote|bookings?)\b/i.test(content)) {
+      return SignalCategory.BUYING_INTENT;
+    }
+    return SignalCategory.OTHER;
   }
 
   private buildPainPoint(title: string | null, text: string) {

@@ -26,6 +26,28 @@ describe('ClassificationService (fallback)', () => {
     expect(result.whyItMatters).toBeTruthy();
   });
 
+  it('treats local visibility pain as an opportunity in fallback mode', async () => {
+    const result = await service.classify(
+      'HVAC company not getting calls after GBP suspension',
+      'Our Google Business Profile was suspended and map ranking dropped. Need local SEO help this week.',
+      ['google business profile', 'local seo help'],
+    );
+    expect(result.isOpportunity).toBe(true);
+    expect(result.confidenceScore).toBeGreaterThanOrEqual(60);
+    expect([SignalCategory.PAIN_COMPLAINT, SignalCategory.BUYING_INTENT]).toContain(result.category);
+    expect(result.suggestedOutreach).toBeTruthy();
+  });
+
+  it('down-scores obvious noise in fallback mode', async () => {
+    const result = await service.classify(
+      'Weekly roundup: 15 free templates for side projects',
+      'Our newsletter includes a tutorial and free template links for hobby builders.',
+      ['consultant'],
+    );
+    expect(result.isOpportunity).toBe(false);
+    expect(result.confidenceScore).toBeLessThan(50);
+  });
+
   it('should normalize text', () => {
     const messy = 'Check out https://example.com   for more    info!';
     const result = service.normalize(messy);
