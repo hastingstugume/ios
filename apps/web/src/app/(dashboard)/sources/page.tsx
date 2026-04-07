@@ -478,6 +478,13 @@ function getFreeFetchCooldown(
   };
 }
 
+function getMinutesSince(lastFetchedAt: string | null | undefined, nowMs: number) {
+  if (!lastFetchedAt) return null;
+  const fetchedAtMs = new Date(lastFetchedAt).getTime();
+  if (Number.isNaN(fetchedAtMs)) return null;
+  return Math.max(0, Math.floor((nowMs - fetchedAtMs) / (60 * 1000)));
+}
+
 export default function SourcesPage() {
   const { currentOrgId, currentOrg } = useAuth();
   const router = useRouter();
@@ -1815,6 +1822,12 @@ export default function SourcesPage() {
               normalizedPlan === 'free'
                 ? getFreeFetchCooldown(src.lastFetchedAt, nowMs)
                 : null;
+            const minutesSinceLastFetch = getMinutesSince(src.lastFetchedAt, nowMs);
+            const isRecentFetch = minutesSinceLastFetch !== null && minutesSinceLastFetch <= 45;
+            const isSamNoDataState =
+              src.type === 'SAM_GOV' &&
+              (src._count?.signals ?? 0) === 0 &&
+              Boolean(src.lastFetchedAt);
             const fetchOnCooldown = !!freeFetchCooldown?.isCoolingDown;
             const fetchDisabled =
               fetchNow.isPending || src.status === 'PAUSED' || fetchOnCooldown;
@@ -2101,7 +2114,17 @@ export default function SourcesPage() {
                             Paused
                           </span>
                         )}
+                        {isSamNoDataState ? (
+                          <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1.5 text-xs text-amber-300">
+                            {isRecentFetch ? 'No opportunities matched from recent fetch' : 'No opportunities matched yet'}
+                          </span>
+                        ) : null}
                       </div>
+                      {isSamNoDataState ? (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Try a broader query, 90-day window, and remove strict agency/NAICS filters.
+                        </p>
+                      ) : null}
                     </div>
                     {isExpanded ? (
                       <div className="space-y-3">

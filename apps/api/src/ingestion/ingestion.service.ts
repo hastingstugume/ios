@@ -5,7 +5,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { ClassificationService } from '../classification/classification.service';
 import { ConfigService } from '@nestjs/config';
-import { SourceType } from '@prisma/client';
+import { SignalCategory, SourceType } from '@prisma/client';
 import { getSourceProfile } from '../sources/source-profiles';
 
 type IngestionItem = {
@@ -383,16 +383,31 @@ export class IngestionService {
         num: String(Math.min(limit, 20)),
       }).toString();
 
-      const response = await fetch(`https://serpapi.com/search.json?${qs}`, {
-        headers: {
-          'User-Agent': 'InternetOpportunityScanner/0.1',
-        },
-      });
-      if (!response.ok) {
+      const maxAttempts = 2;
+      let data: any = null;
+      let lastStatus: number | null = null;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        const response = await fetch(`https://serpapi.com/search.json?${qs}`, {
+          headers: {
+            'User-Agent': 'InternetOpportunityScanner/0.1',
+          },
+        });
+        if (response.ok) {
+          data = await response.json() as any;
+          break;
+        }
+
+        lastStatus = response.status;
+        if (this.isTransientSerpApiStatus(response.status) && attempt < maxAttempts) {
+          await this.delay(1200 * attempt);
+          continue;
+        }
         throw new Error(`SerpApi returned ${response.status}`);
       }
 
-      const data = await response.json() as any;
+      if (!data) {
+        throw new Error(`SerpApi returned ${lastStatus || 'unknown status'}`);
+      }
       return (data.organic_results || []).slice(0, limit).map((item: any, index: number) => ({
         externalId: `serpapi-${Buffer.from(item.link || item.title || String(index)).toString('base64').slice(0, 32)}-${index}`,
         title: item.title || query,
@@ -716,7 +731,8 @@ export class IngestionService {
       if (this.shouldExcludeByWorkspace(content, workspaceNegativeKeywords)) continue;
       if (this.shouldExcludeItem(content, sourceConfig)) continue;
       if (this.shouldExcludeAsLowSignal(sourceType, item.title || '', item.text, matchedKeywords.length)) continue;
-      if (matchedKeywords.length === 0 && !matchedConfiguredIntent) continue;
+      const bypassKeywordGate = sourceType === SourceType.SAM_GOV;
+      if (!bypassKeywordGate && matchedKeywords.length === 0 && !matchedConfiguredIntent) continue;
 
       const canonicalUrl = this.canonicalizeUrl(item.url);
       const normalizedText = this.classification.normalize(item.text);
@@ -739,7 +755,14 @@ export class IngestionService {
         sourceType,
         sourceConfig,
       );
-      if (!classification.isOpportunity) continue;
+      const classificationWithFallback = this.applySourceFallbackClassification(
+        classification,
+        sourceType,
+        matchedConfiguredIntent,
+        item.title || '',
+        item.text,
+      );
+      if (!classificationWithFallback.isOpportunity) continue;
 
       const signal = await this.prisma.signal.create({
         data: {
@@ -752,13 +775,13 @@ export class IngestionService {
           originalText: item.text.slice(0, 10000),
           normalizedText,
           publishedAt: item.publishedAt,
-          category: classification.category,
-          confidenceScore: classification.confidenceScore,
-          whyItMatters: classification.whyItMatters,
-          suggestedOutreach: classification.suggestedOutreach,
+          category: classificationWithFallback.category,
+          confidenceScore: classificationWithFallback.confidenceScore,
+          whyItMatters: classificationWithFallback.whyItMatters,
+          suggestedOutreach: classificationWithFallback.suggestedOutreach,
           classifiedAt: new Date(),
           classificationRaw: {
-            ...classification,
+            ...classificationWithFallback,
             canonicalUrl,
             discoverySourceType: sourceType,
           } as any,
@@ -771,10 +794,50 @@ export class IngestionService {
       await this.ingestionQueue.add('check-alerts', {
         orgId,
         signalId: signal.id,
-        confidenceScore: classification.confidenceScore,
-        category: classification.category,
+        confidenceScore: classificationWithFallback.confidenceScore,
+        category: classificationWithFallback.category,
       });
     }
+  }
+
+  private applySourceFallbackClassification(
+    classification: {
+      isOpportunity: boolean;
+      category: any;
+      confidenceScore: number;
+      whyItMatters: string;
+      suggestedOutreach: string | null;
+      suggestedReply: string | null;
+      painPoint: string | null;
+      urgency: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+      sentiment: 'NEGATIVE' | 'NEUTRAL' | 'POSITIVE' | 'MIXED';
+      conversationType: 'BUYER_REQUEST' | 'RECOMMENDATION' | 'PAIN_REPORT' | 'HIRING' | 'PARTNERSHIP' | 'TREND' | 'OTHER';
+    },
+    sourceType: SourceType,
+    matchedConfiguredIntent: boolean,
+    title: string,
+    text: string,
+  ) {
+    if (sourceType !== SourceType.SAM_GOV) return classification;
+    if (classification.isOpportunity) return classification;
+
+    const content = `${title} ${text}`.toLowerCase();
+    const procurementSignal =
+      matchedConfiguredIntent ||
+      /\b(solicitation|request for proposal|rfp|statement of work|scope of work|contract support|award notice)\b/i.test(content);
+
+    if (!procurementSignal) return classification;
+
+    return {
+      ...classification,
+      isOpportunity: true,
+      category: SignalCategory.BUYING_INTENT,
+      confidenceScore: Math.max(classification.confidenceScore, 60),
+      whyItMatters: classification.whyItMatters || 'Public procurement opportunity with clear service demand.',
+      suggestedOutreach:
+        classification.suggestedOutreach ||
+        'Prioritize this notice for bid/no-bid review and align capability statement to the scope and response timeline.',
+    };
   }
 
   private async attachMatchedKeywords(signalId: string, matchedKeywords: Array<{ id: string }>) {
@@ -994,7 +1057,23 @@ export class IngestionService {
       return 'Workspace filters could not be loaded';
     }
 
+    if (message.includes('SerpApi returned 522')) {
+      return 'Web search provider timed out (SerpApi 522). This is usually temporary; retry shortly or simplify the query.';
+    }
+
+    if (message.includes('SerpApi returned 429')) {
+      return 'Web search provider rate limit reached (SerpApi 429). Retry later or lower fetch frequency.';
+    }
+
     return message;
+  }
+
+  private isTransientSerpApiStatus(status: number) {
+    return status === 429 || status === 503 || status === 504 || status === 522;
+  }
+
+  private async delay(ms: number) {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private async getRedditAuthHeaders(label: string) {

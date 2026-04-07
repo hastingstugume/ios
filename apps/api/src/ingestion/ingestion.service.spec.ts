@@ -70,6 +70,47 @@ describe('IngestionService', () => {
     ).rejects.toThrow('SerpApi is selected for web search, but SERPAPI_API_KEY is not configured');
   });
 
+  it('retries transient SerpApi 522 responses before succeeding', async () => {
+    const config = {
+      get: jest.fn((key: string, defaultValue?: any) => {
+        if (key === 'SERPAPI_API_KEY') return 'serp_key';
+        return defaultValue ?? '';
+      }),
+    };
+    const isolated = new IngestionService(
+      {} as any,
+      { normalize: jest.fn((text: string) => text), classify: jest.fn() } as any,
+      config as any,
+      {} as any,
+    );
+    jest.spyOn(isolated as any, 'delay').mockResolvedValue(undefined);
+
+    const originalFetch = global.fetch;
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce({ ok: false, status: 522 })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          organic_results: [
+            { title: 'Consulting help needed', snippet: 'Need implementation support', link: 'https://example.com/opportunity' },
+          ],
+        }),
+      });
+    global.fetch = fetchMock as any;
+
+    const results = await (isolated as any).fetchSerpApiSearch({
+      query: 'implementation support',
+      domains: ['example.com'],
+      limit: 10,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(results).toHaveLength(1);
+
+    global.fetch = originalFetch;
+  });
+
   it('fails clearly when SAM.gov is selected without credentials', async () => {
     configGet.mockImplementation((key: string, defaultValue?: any) => {
       if (key === 'SAM_GOV_API_KEY') return '';
@@ -515,5 +556,62 @@ describe('IngestionService', () => {
     expect(classify).toHaveBeenCalled();
     expect(prisma.signal.create).not.toHaveBeenCalled();
     expect(queue.add).not.toHaveBeenCalledWith('check-alerts', expect.anything());
+  });
+
+  it('persists SAM.gov notices when procurement intent is present even if classifier is conservative', async () => {
+    const prisma = {
+      keyword: { findMany: jest.fn().mockResolvedValue([]) },
+      organization: { findUnique: jest.fn().mockResolvedValue({ negativeKeywords: [] }) },
+      signal: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn().mockResolvedValue({ id: 'sig_1' }),
+      },
+      signalKeyword: { create: jest.fn() },
+    };
+    const classify = jest.fn().mockResolvedValue({
+      isOpportunity: false,
+      category: 'OTHER',
+      confidenceScore: 38,
+      whyItMatters: '',
+      suggestedOutreach: null,
+      suggestedReply: null,
+      painPoint: null,
+      urgency: 'LOW',
+      sentiment: 'NEUTRAL',
+      conversationType: 'OTHER',
+    });
+    const queue = { add: jest.fn() };
+    const isolated = new IngestionService(
+      prisma as any,
+      { normalize: jest.fn((text: string) => text), classify } as any,
+      { get: jest.fn((_key: string, defaultValue?: any) => defaultValue ?? '') } as any,
+      queue as any,
+    );
+
+    await (isolated as any).processItems(
+      'source-1',
+      'org-1',
+      'SAM_GOV',
+      { query: '"technical consulting"' },
+      [{
+        externalId: 'sam-ext-1',
+        title: 'Solicitation for technical consulting support',
+        text: 'Request for proposal for systems integration and contract support.',
+        url: 'https://sam.gov/opp/example/view',
+      }],
+    );
+
+    expect(prisma.signal.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        category: 'BUYING_INTENT',
+        confidenceScore: expect.any(Number),
+      }),
+    }));
+    expect(queue.add).toHaveBeenCalledWith('check-alerts', expect.objectContaining({
+      signalId: 'sig_1',
+      category: 'BUYING_INTENT',
+    }));
   });
 });
