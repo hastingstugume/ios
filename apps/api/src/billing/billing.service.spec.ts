@@ -2,10 +2,16 @@ import { BadRequestException } from '@nestjs/common';
 import { BillingService } from './billing.service';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const mockPrisma: any = {
-  organization: { findUnique: jest.fn() },
+  organization: { findUnique: jest.fn(), update: jest.fn() },
+  organizationMember: { findMany: jest.fn() },
   auditLog: { create: jest.fn().mockResolvedValue({ id: 'log_1' }) },
+};
+
+const mockNotifications: Partial<NotificationsService> = {
+  sendPlanUpgradeActivationEmail: jest.fn(),
 };
 
 const mockConfig: Partial<ConfigService> = {
@@ -22,7 +28,11 @@ describe('BillingService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new BillingService(mockPrisma as PrismaService, mockConfig as ConfigService);
+    service = new BillingService(
+      mockPrisma as PrismaService,
+      mockConfig as ConfigService,
+      mockNotifications as NotificationsService,
+    );
 
     stripeMock = {
       billingPortal: {
@@ -194,5 +204,30 @@ describe('BillingService', () => {
       subscription: null,
       invoices: [],
     });
+  });
+
+  it('sends a post-upgrade activation email when the plan increases', async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({
+      id: 'org_1',
+      name: 'Acme Growth',
+      plan: 'free',
+    });
+    mockPrisma.organization.update.mockResolvedValue({
+      id: 'org_1',
+      plan: 'starter',
+    });
+    mockPrisma.organizationMember.findMany.mockResolvedValue([
+      { user: { email: 'owner@example.com' } },
+      { user: { email: 'admin@example.com' } },
+    ]);
+
+    await (service as any).syncOrganizationPlan('org_1', 'starter', 'evt_123', 'checkout_completed');
+
+    expect(mockNotifications.sendPlanUpgradeActivationEmail).toHaveBeenCalledWith(
+      ['owner@example.com', 'admin@example.com'],
+      'Acme Growth',
+      'Free',
+      'Starter',
+    );
   });
 });

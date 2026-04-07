@@ -8,6 +8,13 @@ type EmailPayload = {
   html: string;
 };
 
+type NearLimitResource = {
+  label: string;
+  used: number;
+  limit: number;
+  percentUsed: number;
+};
+
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
@@ -154,6 +161,124 @@ export class NotificationsService {
     await this.sendEmail({
       to: email,
       subject: `You now have access to ${workspaceName}`,
+      html,
+    });
+  }
+
+  async sendPlanUpgradeActivationEmail(
+    recipients: string[],
+    workspaceName: string,
+    previousPlan: string,
+    updatedPlan: string,
+  ) {
+    const dashboardUrl = this.appUrl('/dashboard');
+    const sourcesUrl = this.appUrl('/sources');
+    const keywordsUrl = this.appUrl('/keywords');
+
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 640px; margin: 0 auto;">
+        <div style="background: #0f172a; padding: 28px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: #f8fafc; margin: 0; font-size: 22px;">Your upgrade is live</h1>
+          <p style="color: #94a3b8; margin: 10px 0 0; font-size: 14px; line-height: 1.6;">
+            ${workspaceName} moved from <strong>${previousPlan}</strong> to <strong>${updatedPlan}</strong>.
+            Use the next 10 minutes to turn extra capacity into real pipeline.
+          </p>
+        </div>
+        <div style="background: #111827; padding: 28px; border-radius: 0 0 12px 12px;">
+          <ol style="margin: 0 0 16px; padding-left: 18px; color: #cbd5e1; font-size: 13px; line-height: 1.8;">
+            <li>Add at least one more source to widen demand capture.</li>
+            <li>Tighten keywords so high-intent opportunities rise to the top.</li>
+            <li>Review the feed and move opportunities into active pipeline.</li>
+          </ol>
+          <a href="${dashboardUrl}" style="display: inline-block; background: linear-gradient(135deg,#0ea5e9,#22d3ee); color: white; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 15px; font-weight: 600; margin-right: 8px;">Open dashboard sprint</a>
+          <a href="${sourcesUrl}" style="display: inline-block; background: #1f2937; color: #e2e8f0; padding: 12px 18px; border-radius: 8px; text-decoration: none; font-size: 14px; margin-right: 8px;">Add sources</a>
+          <a href="${keywordsUrl}" style="display: inline-block; background: #1f2937; color: #e2e8f0; padding: 12px 18px; border-radius: 8px; text-decoration: none; font-size: 14px;">Refine keywords</a>
+        </div>
+      </div>
+    `;
+
+    await this.sendEmail({
+      to: recipients,
+      subject: `${workspaceName} is now on ${updatedPlan} — activate it today`,
+      html,
+    });
+  }
+
+  async sendNearLimitUpgradeEmail(
+    recipients: string[],
+    workspaceName: string,
+    planLabel: string,
+    constrainedResources: NearLimitResource[],
+  ) {
+    const pricingUrl = this.appUrl('/pricing');
+    const settingsUrl = this.appUrl('/settings#plan-limits');
+    const resourcesHtml = constrainedResources
+      .slice(0, 4)
+      .map((resource) => (
+        `<li style="margin-bottom: 6px;"><strong>${resource.label}:</strong> ${resource.used}/${resource.limit} (${resource.percentUsed}%)</li>`
+      ))
+      .join('');
+
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 640px; margin: 0 auto;">
+        <div style="background: #0f172a; padding: 28px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: #f8fafc; margin: 0; font-size: 22px;">You are close to plan limits</h1>
+          <p style="color: #94a3b8; margin: 10px 0 0; font-size: 14px; line-height: 1.6;">
+            ${workspaceName} is on ${planLabel}. Capacity is getting tight and this can slow down pipeline growth.
+          </p>
+        </div>
+        <div style="background: #111827; padding: 28px; border-radius: 0 0 12px 12px;">
+          <ul style="margin: 0 0 16px; padding-left: 18px; color: #cbd5e1; font-size: 13px; line-height: 1.8;">
+            ${resourcesHtml}
+          </ul>
+          <a href="${pricingUrl}" style="display: inline-block; background: linear-gradient(135deg,#0ea5e9,#22d3ee); color: white; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 15px; font-weight: 600; margin-right: 8px;">Compare upgrade options</a>
+          <a href="${settingsUrl}" style="display: inline-block; background: #1f2937; color: #e2e8f0; padding: 12px 18px; border-radius: 8px; text-decoration: none; font-size: 14px;">View plan limits</a>
+        </div>
+      </div>
+    `;
+
+    await this.sendEmail({
+      to: recipients,
+      subject: `${workspaceName} is approaching limits on ${planLabel}`,
+      html,
+    });
+  }
+
+  async sendInactivityRecoveryEmail(
+    recipients: string[],
+    workspaceName: string,
+    planLabel: string,
+    inactiveDays: number,
+  ) {
+    const dashboardUrl = this.appUrl('/dashboard');
+    const feedUrl = this.appUrl('/feed');
+    const alertsUrl = this.appUrl('/alerts');
+
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 640px; margin: 0 auto;">
+        <div style="background: #0f172a; padding: 28px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: #f8fafc; margin: 0; font-size: 22px;">Pipeline activity looks quiet</h1>
+          <p style="color: #94a3b8; margin: 10px 0 0; font-size: 14px; line-height: 1.6;">
+            ${workspaceName} (${planLabel}) has had low pipeline movement for about ${inactiveDays} days.
+            A quick reset this week can recover momentum.
+          </p>
+        </div>
+        <div style="background: #111827; padding: 28px; border-radius: 0 0 12px 12px;">
+          <ol style="margin: 0 0 16px; padding-left: 18px; color: #cbd5e1; font-size: 13px; line-height: 1.8;">
+            <li>Review new high-confidence signals in the feed.</li>
+            <li>Move the best candidates into <strong>In Progress</strong> or <strong>Outreach</strong>.</li>
+            <li>Enable or tune at least one alert rule to reduce response lag.</li>
+          </ol>
+          <a href="${feedUrl}" style="display: inline-block; background: linear-gradient(135deg,#0ea5e9,#22d3ee); color: white; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 15px; font-weight: 600; margin-right: 8px;">Open feed</a>
+          <a href="${dashboardUrl}" style="display: inline-block; background: #1f2937; color: #e2e8f0; padding: 12px 18px; border-radius: 8px; text-decoration: none; font-size: 14px; margin-right: 8px;">Open dashboard</a>
+          <a href="${alertsUrl}" style="display: inline-block; background: #1f2937; color: #e2e8f0; padding: 12px 18px; border-radius: 8px; text-decoration: none; font-size: 14px;">Tune alerts</a>
+        </div>
+      </div>
+    `;
+
+    await this.sendEmail({
+      to: recipients,
+      subject: `${workspaceName}: recover pipeline momentum this week`,
       html,
     });
   }

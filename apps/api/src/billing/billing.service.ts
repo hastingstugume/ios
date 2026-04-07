@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, InternalServerErro
 import { ConfigService } from '@nestjs/config';
 import { AuditAction, Prisma, UserRole } from '@prisma/client';
 import Stripe from 'stripe';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 type WorkspacePlan = 'free' | 'starter' | 'growth' | 'scale';
@@ -24,6 +25,10 @@ const STRIPE_PRICE_ENV_MAP: Record<PaidWorkspacePlan, string> = {
   growth: 'STRIPE_PRICE_GROWTH_MONTHLY',
   scale: 'STRIPE_PRICE_SCALE_MONTHLY',
 };
+
+function planRank(plan: WorkspacePlan) {
+  return WORKSPACE_PLAN_ORDER.indexOf(plan);
+}
 
 interface CreateCheckoutSessionInput {
   orgId: string;
@@ -59,6 +64,7 @@ export class BillingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async createCheckoutSession(input: CreateCheckoutSessionInput) {
@@ -490,7 +496,7 @@ export class BillingService {
   ) {
     const organization = await this.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { id: true, plan: true },
+      select: { id: true, name: true, plan: true },
     });
     if (!organization) {
       this.logger.warn(`Stripe event ${stripeEventId} referenced unknown org ${organizationId}`);
@@ -517,6 +523,10 @@ export class BillingService {
         ...(attribution?.experimentVariant ? { experimentVariant: attribution.experimentVariant } : {}),
       },
     });
+
+    if (planRank(plan) > planRank(currentPlan)) {
+      await this.sendPostUpgradeActivationEmail(organization.id, organization.name, currentPlan, plan);
+    }
 
     this.logger.log(
       `Updated org ${organizationId} plan ${currentPlan} -> ${plan} via Stripe event ${stripeEventId} (${reason})`,
@@ -548,5 +558,50 @@ export class BillingService {
     const normalized = value.trim().toLowerCase().replace(/[^a-z0-9:_-]+/g, '_');
     if (!normalized) return null;
     return normalized.slice(0, 120);
+  }
+
+  private async sendPostUpgradeActivationEmail(
+    organizationId: string,
+    organizationName: string,
+    previousPlan: WorkspacePlan,
+    updatedPlan: WorkspacePlan,
+  ) {
+    try {
+      const admins = await this.prisma.organizationMember.findMany({
+        where: {
+          organizationId,
+          role: { in: [UserRole.OWNER, UserRole.ADMIN] },
+        },
+        select: { user: { select: { email: true } } },
+      });
+      const recipients = [...new Set(
+        admins
+          .map((member) => member.user.email?.trim().toLowerCase())
+          .filter((email): email is string => Boolean(email)),
+      )];
+      if (!recipients.length) return;
+
+      await this.notifications.sendPlanUpgradeActivationEmail(
+        recipients,
+        organizationName,
+        this.formatPlanName(previousPlan),
+        this.formatPlanName(updatedPlan),
+      );
+    } catch (error: any) {
+      this.logger.warn(`Could not send post-upgrade activation email for org ${organizationId}: ${error?.message || error}`);
+    }
+  }
+
+  private formatPlanName(plan: WorkspacePlan) {
+    switch (plan) {
+      case 'starter':
+        return 'Starter';
+      case 'growth':
+        return 'Growth';
+      case 'scale':
+        return 'Scale';
+      default:
+        return 'Free';
+    }
   }
 }

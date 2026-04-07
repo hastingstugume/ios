@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { BillingController, BillingWebhookController } from './billing.controller';
 import { BillingService } from './billing.service';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, NotificationsModule],
   controllers: [BillingController, BillingWebhookController],
   providers: [BillingService],
 })
