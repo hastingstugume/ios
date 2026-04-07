@@ -6,7 +6,7 @@ const mockPrisma: any = {
   organization: { findUnique: jest.fn() },
   organizationMember: { count: jest.fn() },
   invitation: { count: jest.fn() },
-  source: { count: jest.fn() },
+  source: { count: jest.fn(), findFirst: jest.fn() },
   keyword: { count: jest.fn() },
   alertRule: { count: jest.fn() },
 };
@@ -52,5 +52,30 @@ describe('EntitlementsService', () => {
     mockPrisma.organization.findUnique.mockResolvedValue(null);
 
     await expect(service.getWorkspaceEntitlements('missing')).rejects.toThrow(NotFoundException);
+  });
+
+  it('allows free workspace fetch-now when no source has fetched yet', async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({ plan: 'free' });
+    mockPrisma.source.findFirst.mockResolvedValue(null);
+
+    await expect(service.assertCanFetchNow('org_1')).resolves.toEqual(
+      expect.objectContaining({ plan: 'free' }),
+    );
+  });
+
+  it('throttles free workspace fetch-now when recently fetched', async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({ plan: 'free' });
+    mockPrisma.source.findFirst.mockResolvedValue({ lastFetchedAt: new Date() });
+
+    await expect(service.assertCanFetchNow('org_1')).rejects.toThrow(ForbiddenException);
+  });
+
+  it('allows starter workspace fetch-now without cooldown', async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({ plan: 'starter' });
+
+    await expect(service.assertCanFetchNow('org_1')).resolves.toEqual(
+      expect.objectContaining({ plan: 'starter' }),
+    );
+    expect(mockPrisma.source.findFirst).not.toHaveBeenCalled();
   });
 });

@@ -1,11 +1,25 @@
 'use client';
+import Link from 'next/link';
 import { useState, useCallback } from 'react';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { signalsApi, keywordsApi, sourcesApi, organizationsApi } from '@/lib/api';
 import { SignalCard } from '@/components/signals/SignalCard';
 import { CATEGORY_META, STAGE_META } from '@/lib/utils';
-import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, Zap, Bookmark, Target, Clock, ShieldCheck, Siren } from 'lucide-react';
+import {
+  AlertTriangle,
+  Bookmark,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Search,
+  ShieldCheck,
+  Siren,
+  SlidersHorizontal,
+  Target,
+  X,
+  Zap,
+} from 'lucide-react';
 
 const CATEGORIES = [
   { value: '', label: 'All categories' },
@@ -88,11 +102,13 @@ function QuickFilterChip({
 
 export default function FeedPage() {
   const { currentOrgId } = useAuth();
+  const qc = useQueryClient();
   const [filters, setFilters] = useState({
     search: '', category: '', status: '', stage: '', minConfidence: '',
     sourceId: '', keywordId: '', assigneeId: '', page: 1,
   });
   const [showFilters, setShowFilters] = useState(false);
+  const [fetchFeedback, setFetchFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
 
   const setFilter = useCallback((key: string, value: string | number) => {
     setFilters((f) => ({ ...f, [key]: value, page: 1 }));
@@ -134,6 +150,19 @@ export default function FeedPage() {
     enabled: !!currentOrgId,
   });
 
+  const fetchNow = useMutation({
+    mutationFn: (sourceId: string) => sourcesApi.fetchNow(currentOrgId!, sourceId),
+    onSuccess: () => {
+      setFetchFeedback({ tone: 'success', message: 'Fetch queued. We will refresh once new signals land.' });
+      qc.invalidateQueries({ queryKey: ['signals', currentOrgId] });
+      qc.invalidateQueries({ queryKey: ['sources', currentOrgId] });
+      qc.invalidateQueries({ queryKey: ['dashboard', currentOrgId] });
+    },
+    onError: (error: Error) => {
+      setFetchFeedback({ tone: 'error', message: error.message });
+    },
+  });
+
   const activeFilterCount = [filters.category, filters.status, filters.stage, filters.minConfidence, filters.sourceId, filters.keywordId, filters.assigneeId]
     .filter(Boolean).length;
 
@@ -142,6 +171,17 @@ export default function FeedPage() {
   const highConfidenceCount = data?.data?.filter((signal) => (signal.confidenceScore ?? 0) >= 85).length ?? 0;
   const inProgressCount = data?.data?.filter((signal) => ['IN_PROGRESS', 'OUTREACH', 'QUALIFIED'].includes(signal.stage)).length ?? 0;
   const trustedSourceCount = data?.data?.filter((signal) => signal.sourceProfile?.supportStatus === 'production_ready').length ?? 0;
+  const allSources = sources || [];
+  const activeSources = allSources.filter((source) => source.status === 'ACTIVE');
+  const erroredSources = allSources.filter((source) => source.status === 'ERROR' || !!source.errorMessage);
+  const likelyCredentialBlockedSources = activeSources.filter(
+    (source) => !source.lastFetchedAt && !source.errorMessage && ['REDDIT', 'REDDIT_SEARCH', 'WEB_SEARCH'].includes(source.type),
+  );
+  const activeKeywords = (keywords || []).filter((keyword) => keyword.isActive);
+  const primarySource = activeSources[0] ?? null;
+  const hasNoActiveSources = activeSources.length === 0;
+  const hasNoActiveKeywords = activeKeywords.length === 0;
+  const noSignalsYet = signalCount === 0;
 
   return (
     <div className="page-shell animate-fade-in">
@@ -269,20 +309,99 @@ export default function FeedPage() {
           ))}
         </div>
       ) : !data?.data?.length ? (
-        <div className="section-card px-6 py-16 text-center">
-          <Zap className="w-10 h-10 text-muted-foreground/30 mx-auto mb-4" />
-          <h3 className="text-base font-medium text-foreground mb-1">No signals found</h3>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            Try adjusting your filters or add more keywords and sources to discover opportunities.
-          </p>
-          {activeFilterCount > 0 && (
-            <button
-              onClick={() => setFilters({ search: '', category: '', status: '', stage: '', minConfidence: '', sourceId: '', keywordId: '', assigneeId: '', page: 1 })}
-              className="mt-4 text-sm text-primary hover:underline"
-            >
-              Clear filters
-            </button>
-          )}
+        <div className="section-card px-6 py-10">
+          <div className="mx-auto max-w-3xl space-y-4">
+            <div className="text-center">
+              <Zap className="mx-auto mb-3 h-9 w-9 text-muted-foreground/30" />
+              <h3 className="text-base font-medium text-foreground">No signals yet</h3>
+              <p className="mx-auto mt-1 max-w-xl text-sm text-muted-foreground">
+                Let&apos;s unblock your first high-intent opportunities. Use these quick checks:
+              </p>
+            </div>
+
+            {fetchFeedback ? (
+              <div
+                className={`rounded-lg border px-3 py-2 text-sm ${
+                  fetchFeedback.tone === 'success'
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
+                    : 'border-destructive/30 bg-destructive/10 text-destructive'
+                }`}
+              >
+                {fetchFeedback.message}
+              </div>
+            ) : null}
+
+            <div className="space-y-2.5">
+              {activeFilterCount > 0 ? (
+                <div className="flex flex-col gap-3 rounded-lg border border-border bg-secondary/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-500" />
+                    <p className="text-sm text-foreground">Your current filters may be hiding matching signals.</p>
+                  </div>
+                  <button
+                    onClick={() =>
+                      setFilters({ search: '', category: '', status: '', stage: '', minConfidence: '', sourceId: '', keywordId: '', assigneeId: '', page: 1 })
+                    }
+                    className="rounded-md border border-border px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-accent"
+                  >
+                    Clear filters
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="flex flex-col gap-3 rounded-lg border border-border bg-secondary/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-foreground">
+                  {hasNoActiveSources
+                    ? 'Connect at least one active source to start collecting buyer-demand posts.'
+                    : `${activeSources.length} active source${activeSources.length === 1 ? '' : 's'} connected.`}
+                </p>
+                <Link href="/sources" className="rounded-md border border-border px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-accent">
+                  {hasNoActiveSources ? 'Add source' : 'Manage sources'}
+                </Link>
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-lg border border-border bg-secondary/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-foreground">
+                  {hasNoActiveKeywords
+                    ? 'Add a few intent-heavy keywords so matching posts can be classified.'
+                    : `${activeKeywords.length} active keyword${activeKeywords.length === 1 ? '' : 's'} tracking demand.`}
+                </p>
+                <Link href="/keywords" className="rounded-md border border-border px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-accent">
+                  {hasNoActiveKeywords ? 'Add keywords' : 'Refine keywords'}
+                </Link>
+              </div>
+
+              {noSignalsYet && primarySource ? (
+                <div className="flex flex-col gap-3 rounded-lg border border-border bg-secondary/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-foreground">
+                    Run a fresh pull on <span className="font-medium">{primarySource.name}</span> to generate your first results faster.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setFetchFeedback(null);
+                      fetchNow.mutate(primarySource.id);
+                    }}
+                    disabled={fetchNow.isPending}
+                    className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+                  >
+                    {fetchNow.isPending ? 'Queuing…' : 'Fetch now'}
+                  </button>
+                </div>
+              ) : null}
+
+              {erroredSources.length > 0 ? (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  {erroredSources.length} source{erroredSources.length === 1 ? '' : 's'} need attention. Open Sources and resolve connection errors.
+                </div>
+              ) : null}
+
+              {likelyCredentialBlockedSources.length > 0 ? (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+                  Some sources have never fetched. If using Reddit or web-search connectors, verify provider credentials in your backend environment.
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
       ) : (
         <div className="grid gap-3">

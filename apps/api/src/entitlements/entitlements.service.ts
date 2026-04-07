@@ -57,6 +57,8 @@ const PLAN_ENTITLEMENTS: Record<WorkspacePlan, WorkspaceEntitlements> = {
   },
 };
 
+const FREE_FETCH_NOW_COOLDOWN_MINUTES = 15;
+
 @Injectable()
 export class EntitlementsService {
   constructor(private prisma: PrismaService) {}
@@ -125,10 +127,30 @@ export class EntitlementsService {
 
   async assertCanFetchNow(orgId: string) {
     const entitlements = await this.getWorkspaceEntitlements(orgId);
-    if (entitlements.plan === 'free') {
-      throw new ForbiddenException('Fetch now is available on Starter and above. Upgrade to run sources on demand.');
+    if (entitlements.plan !== 'free') {
+      return entitlements;
     }
-    return entitlements;
+
+    const latestSourceFetch = await this.prisma.source.findFirst({
+      where: {
+        organizationId: orgId,
+        lastFetchedAt: { not: null },
+      },
+      orderBy: { lastFetchedAt: 'desc' },
+      select: { lastFetchedAt: true },
+    });
+
+    if (!latestSourceFetch?.lastFetchedAt) return entitlements;
+
+    const nextAllowedAt = new Date(
+      latestSourceFetch.lastFetchedAt.getTime() + FREE_FETCH_NOW_COOLDOWN_MINUTES * 60 * 1000,
+    );
+    if (nextAllowedAt <= new Date()) return entitlements;
+
+    const minutesRemaining = Math.max(1, Math.ceil((nextAllowedAt.getTime() - Date.now()) / (60 * 1000)));
+    throw new ForbiddenException(
+      `Free plan can run Fetch now every ${FREE_FETCH_NOW_COOLDOWN_MINUTES} minutes. Try again in about ${minutesRemaining} minute${minutesRemaining === 1 ? '' : 's'}. Starter and above can run sources on demand without cooldown.`,
+    );
   }
 
   private async assertResourceLimit(

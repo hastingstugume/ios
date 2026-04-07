@@ -192,6 +192,38 @@ const SOURCE_TYPE_SUPPORT: Record<string, {
   },
 };
 
+const FREE_FETCH_NOW_COOLDOWN_MINUTES = 15;
+
+function getFreeFetchCooldown(lastFetchedAt: string | null | undefined, nowMs: number) {
+  if (!lastFetchedAt) {
+    return {
+      isCoolingDown: false,
+      minutesRemaining: 0,
+    };
+  }
+
+  const fetchedAtMs = new Date(lastFetchedAt).getTime();
+  if (Number.isNaN(fetchedAtMs)) {
+    return {
+      isCoolingDown: false,
+      minutesRemaining: 0,
+    };
+  }
+
+  const nextEligibleMs = fetchedAtMs + FREE_FETCH_NOW_COOLDOWN_MINUTES * 60 * 1000;
+  if (nextEligibleMs <= nowMs) {
+    return {
+      isCoolingDown: false,
+      minutesRemaining: 0,
+    };
+  }
+
+  return {
+    isCoolingDown: true,
+    minutesRemaining: Math.max(1, Math.ceil((nextEligibleMs - nowMs) / (60 * 1000))),
+  };
+}
+
 export default function SourcesPage() {
   const { currentOrgId, currentOrg } = useAuth();
   const router = useRouter();
@@ -206,6 +238,7 @@ export default function SourcesPage() {
   const [previewFeedback, setPreviewFeedback] = useState<string | null>(null);
   const [deleteCandidate, setDeleteCandidate] = useState<{ id: string; name: string } | null>(null);
   const [fetchingSourceId, setFetchingSourceId] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const installedTemplate = searchParams.get('installed');
   const installedCreated = searchParams.get('created');
@@ -223,8 +256,12 @@ export default function SourcesPage() {
     router.replace(query ? `/sources?${query}` : '/sources');
   }, [installedTemplate, installedCreated, installedSkipped, installedNote, router, searchParams]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const normalizedPlan = normalizeWorkspacePlan(currentOrg?.plan);
-  const canFetchNow = normalizedPlan !== 'free';
   const nextPlan = getNextPlan(normalizedPlan);
   const {
     redirectingPlan,
@@ -496,11 +533,11 @@ export default function SourcesPage() {
         </section>
       ) : null}
 
-      {!canFetchNow ? (
+      {normalizedPlan === 'free' ? (
         <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-amber-800 dark:text-amber-200">
-              Free workspaces run on schedule only. Upgrade to {nextPlan ? WORKSPACE_PLAN_MAP[nextPlan].label : 'a paid plan'} for on-demand fetches and faster iteration.
+              Free plan includes on-demand fetch with a short cooldown. Need faster iteration? Upgrade to {nextPlan ? WORKSPACE_PLAN_MAP[nextPlan].label : 'a paid plan'} for unlimited on-demand fetches.
             </p>
             <div className="flex flex-wrap gap-2">
               <Link
@@ -1029,6 +1066,20 @@ export default function SourcesPage() {
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(360px,1fr))]">
           {filteredSources.map((src) => {
             const typeMeta = SOURCE_TYPE_META[src.type] || { label: src.type, icon: '🔗' };
+            const freeFetchCooldown = normalizedPlan === 'free' ? getFreeFetchCooldown(src.lastFetchedAt, nowMs) : null;
+            const fetchOnCooldown = !!freeFetchCooldown?.isCoolingDown;
+            const fetchDisabled = fetchNow.isPending || src.status === 'PAUSED' || fetchOnCooldown;
+            const fetchTitle = src.status === 'PAUSED'
+              ? 'Resume this source before fetching'
+              : fetchOnCooldown
+                ? `Next manual fetch available in about ${freeFetchCooldown?.minutesRemaining}m`
+                : 'Fetch now';
+            const lastFetchLabel = src.lastFetchedAt ? `Last fetch ${formatDate(src.lastFetchedAt)}` : 'Never fetched';
+            const freePlanFetchStateLabel = normalizedPlan === 'free'
+              ? fetchOnCooldown
+                ? `Next fetch in ${freeFetchCooldown?.minutesRemaining}m`
+                : 'Fetch now available'
+              : null;
             const configSummary = src.type === 'REDDIT'
               ? `r/${src.config?.subreddit || 'unknown'}`
               : src.type === 'REDDIT_SEARCH'
@@ -1071,19 +1122,17 @@ export default function SourcesPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 self-start">
-                          {canFetchNow ? (
-                            <button
-                              onClick={() => fetchNow.mutate(src.id)}
-                              disabled={fetchNow.isPending || src.status === 'PAUSED'}
-                              className="rounded-lg border border-border px-2.5 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
-                              title={src.status === 'PAUSED' ? 'Resume this source before fetching' : 'Fetch now'}
-                            >
-                              <span className="inline-flex items-center gap-1.5">
-                                <RefreshCw className={`h-4 w-4 ${fetchingSourceId === src.id ? 'animate-spin' : ''}`} />
-                                {fetchingSourceId === src.id ? 'Queuing…' : 'Fetch now'}
-                              </span>
-                            </button>
-                          ) : null}
+                          <button
+                            onClick={() => fetchNow.mutate(src.id)}
+                            disabled={fetchDisabled}
+                            className="rounded-lg border border-border px-2.5 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                            title={fetchTitle}
+                          >
+                            <span className="inline-flex items-center gap-1.5">
+                              <RefreshCw className={`h-4 w-4 ${fetchingSourceId === src.id ? 'animate-spin' : ''}`} />
+                              {fetchingSourceId === src.id ? 'Queuing…' : fetchOnCooldown ? `Ready in ${freeFetchCooldown?.minutesRemaining}m` : 'Fetch now'}
+                            </span>
+                          </button>
                           <button
                             onClick={() => {
                               create.reset();
@@ -1163,7 +1212,10 @@ export default function SourcesPage() {
                         {src.status === 'ERROR' ? (
                           <span className="flex items-center gap-1.5 rounded-full border border-destructive/20 bg-destructive/10 px-3 py-1.5 text-xs text-destructive"><AlertCircle className="w-3.5 h-3.5" />{src.errorMessage?.slice(0, 80)}</span>
                         ) : src.status === 'ACTIVE' ? (
-                          <span className="flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs text-emerald-300"><CheckCircle2 className="w-3.5 h-3.5" />Active · Last fetch {formatDate(src.lastFetchedAt)}</span>
+                          <span className="flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs text-emerald-300">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Active · {lastFetchLabel}{freePlanFetchStateLabel ? ` · ${freePlanFetchStateLabel}` : ''}
+                          </span>
                         ) : (
                           <span className="rounded-full border border-border bg-secondary px-3 py-1.5 text-xs text-muted-foreground">Paused</span>
                         )}
