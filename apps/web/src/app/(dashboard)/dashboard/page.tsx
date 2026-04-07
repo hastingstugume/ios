@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
-import { dashboardApi } from '@/lib/api';
+import { dashboardApi, organizationsApi } from '@/lib/api';
 import { getNextPlan, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
 import { CATEGORY_META, STAGE_META, getConfidenceColor, formatDate } from '@/lib/utils';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -37,6 +37,12 @@ export default function DashboardPage() {
   const [showAllStats, setShowAllStats] = useState(false);
   const currentPlan = normalizeWorkspacePlan(currentOrg?.plan);
   const nextPlan = getNextPlan(currentPlan);
+  const usageQuery = useQuery({
+    queryKey: ['workspace-usage', currentOrgId],
+    queryFn: () => organizationsApi.usage(currentOrgId!),
+    enabled: !!currentOrgId,
+    refetchInterval: 60_000,
+  });
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', currentOrgId],
     queryFn: () => dashboardApi.summary(currentOrgId!),
@@ -54,6 +60,7 @@ export default function DashboardPage() {
   );
 
   const s = data?.stats || {};
+  const usage = usageQuery.data;
   const activation = data?.activation;
   const statCards = [
     { label: 'New Today', value: s.newToday ?? 0, icon: Clock, sub: 'signals discovered', color: 'text-blue-400' },
@@ -70,6 +77,67 @@ export default function DashboardPage() {
   const activationItems = activation?.items || [];
   const pendingActivationItems = activationItems.filter((item: any) => !item.completed);
   const nextActions = pendingActivationItems.slice(0, 2);
+  const workflowSignals = (s.inProgress ?? 0) + (s.outreach ?? 0) + (s.qualified ?? 0) + (s.won ?? 0);
+  const outcomeTargets = currentPlan === 'starter'
+    ? { sources: 3, keywords: 15, alerts: 1, workflow: 3 }
+    : currentPlan === 'growth'
+      ? { sources: 8, keywords: 40, alerts: 2, workflow: 8 }
+      : currentPlan === 'scale'
+        ? { sources: 15, keywords: 80, alerts: 4, workflow: 15 }
+        : null;
+  const sourceTarget = outcomeTargets
+    ? usage?.resources.sources.limit === null
+      ? outcomeTargets.sources
+      : Math.min(outcomeTargets.sources, Math.max(1, usage?.resources.sources.limit || outcomeTargets.sources))
+    : 0;
+  const keywordTarget = outcomeTargets
+    ? usage?.resources.keywords.limit === null
+      ? outcomeTargets.keywords
+      : Math.min(outcomeTargets.keywords, Math.max(1, usage?.resources.keywords.limit || outcomeTargets.keywords))
+    : 0;
+  const alertTarget = outcomeTargets
+    ? usage?.resources.alerts.limit === null
+      ? outcomeTargets.alerts
+      : Math.min(outcomeTargets.alerts, Math.max(1, usage?.resources.alerts.limit || outcomeTargets.alerts))
+    : 0;
+  const outcomeSteps = outcomeTargets
+    ? [
+      {
+        id: 'sources',
+        label: `Activate ${sourceTarget} source${sourceTarget > 1 ? 's' : ''}`,
+        description: 'More channels increase discovery volume quickly.',
+        done: (usage?.resources.sources.used ?? 0) >= sourceTarget,
+        href: '/sources',
+        progress: `${usage?.resources.sources.used ?? 0}/${sourceTarget}`,
+      },
+      {
+        id: 'keywords',
+        label: `Track ${keywordTarget} keyword${keywordTarget > 1 ? 's' : ''}`,
+        description: 'Sharper intent filters reduce noise and boost relevance.',
+        done: (usage?.resources.keywords.used ?? 0) >= keywordTarget,
+        href: '/keywords',
+        progress: `${usage?.resources.keywords.used ?? 0}/${keywordTarget}`,
+      },
+      {
+        id: 'alerts',
+        label: `Enable ${alertTarget} alert rule${alertTarget > 1 ? 's' : ''}`,
+        description: 'Alerts prevent high-intent requests from going stale.',
+        done: (usage?.resources.alerts.used ?? 0) >= alertTarget,
+        href: '/alerts',
+        progress: `${usage?.resources.alerts.used ?? 0}/${alertTarget}`,
+      },
+      {
+        id: 'pipeline',
+        label: `Move ${outcomeTargets.workflow} signals into pipeline`,
+        description: 'Turn discovery into active conversations this week.',
+        done: workflowSignals >= outcomeTargets.workflow,
+        href: '/feed?status=NEW',
+        progress: `${workflowSignals}/${outcomeTargets.workflow}`,
+      },
+    ]
+    : [];
+  const completedOutcomeSteps = outcomeSteps.filter((step) => step.done).length;
+  const outcomeProgress = outcomeSteps.length ? Math.round((completedOutcomeSteps / outcomeSteps.length) * 100) : 0;
 
   return (
     <div className="page-shell animate-fade-in">
@@ -96,6 +164,65 @@ export default function DashboardPage() {
               className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               See upgrade options
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
+      {currentPlan !== 'free' && outcomeTargets ? (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">
+                7-day outcome sprint for {WORKSPACE_PLAN_MAP[currentPlan].label}
+              </h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Complete these actions this week to convert your plan into faster qualified pipeline.
+              </p>
+            </div>
+            <div className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+              {completedOutcomeSteps}/{outcomeSteps.length} complete
+            </div>
+          </div>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-secondary">
+            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${outcomeProgress}%` }} />
+          </div>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {outcomeSteps.map((step) => (
+              <Link
+                key={step.id}
+                href={step.href}
+                className="rounded-lg border border-border bg-card/70 px-3 py-2 transition-colors hover:border-primary/30 hover:bg-card"
+              >
+                <div className="flex items-start gap-2">
+                  {step.done ? (
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-400" />
+                  ) : (
+                    <Circle className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                  )}
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-foreground">{step.label}</p>
+                      <span className="text-xs text-muted-foreground">{step.progress}</span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{step.description}</p>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              href="/feed"
+              className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+            >
+              Work the feed
+            </Link>
+            <Link
+              href="/feed?stage=IN_PROGRESS"
+              className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              Review in-progress pipeline
             </Link>
           </div>
         </div>

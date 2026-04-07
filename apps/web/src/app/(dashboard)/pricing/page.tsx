@@ -115,8 +115,31 @@ export default function PricingPage() {
             </div>
           ) : null}
           {checkoutState === 'success' ? (
-            <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-              Checkout completed. Your workspace plan will update in-app in a few moments.
+            <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3">
+              <p className="text-sm font-medium text-emerald-200">Upgrade confirmed. Activate value in the next 10 minutes.</p>
+              <p className="mt-1 text-xs text-emerald-300/90">
+                Your workspace plan is syncing now. To get immediate ROI, connect another source, tighten keywords, and run your feed.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link
+                  href="/dashboard"
+                  className="inline-flex items-center justify-center rounded-md border border-emerald-300/30 bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-100 transition-colors hover:bg-emerald-400/25"
+                >
+                  Open dashboard sprint
+                </Link>
+                <Link
+                  href="/sources"
+                  className="inline-flex items-center justify-center rounded-md border border-emerald-300/20 px-3 py-1.5 text-xs font-medium text-emerald-200 transition-colors hover:bg-emerald-400/15"
+                >
+                  Add sources
+                </Link>
+                <Link
+                  href="/keywords"
+                  className="inline-flex items-center justify-center rounded-md border border-emerald-300/20 px-3 py-1.5 text-xs font-medium text-emerald-200 transition-colors hover:bg-emerald-400/15"
+                >
+                  Refine keywords
+                </Link>
+              </div>
             </div>
           ) : null}
           {checkoutState === 'cancelled' ? (
