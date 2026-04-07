@@ -649,7 +649,7 @@ export class IngestionService {
         if (lastNetworkError && !response) {
           continue;
         }
-        if (response.ok || response.status !== 404) {
+        if (response && (response.ok || response.status !== 404)) {
           break;
         }
       }
