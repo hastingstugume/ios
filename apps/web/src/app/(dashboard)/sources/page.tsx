@@ -17,9 +17,6 @@ import { SOURCE_QUERY_TEMPLATES } from '@/lib/sourcePresets';
 import {
   Database,
   Plus,
-  Trash2,
-  PauseCircle,
-  PlayCircle,
   AlertCircle,
   CheckCircle2,
   Search,
@@ -904,35 +901,28 @@ export default function SourcesPage() {
 
   return (
     <div className="page-shell space-y-6 animate-fade-in">
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-4">
+      <section className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-2">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-              Sources
+              Data Sources
             </h1>
-            <p className="mt-2 text-base text-muted-foreground">
-              Configure where to discover signals.
+            <p className="mt-1.5 text-base text-muted-foreground">
+              Manage the inputs powering lead discovery.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-sm sm:flex sm:flex-wrap">
-            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground">
-              <span className="font-medium text-foreground">
-                {activeSources}
-              </span>{' '}
-              active
-            </div>
-            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground">
-              <span className="font-medium text-foreground">
-                {totalSignals}
-              </span>{' '}
-              total signals
-            </div>
-            <div className="col-span-2 rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground sm:col-span-1">
-              <span className="font-medium text-foreground">
-                {errorSources}
-              </span>{' '}
-              need attention
-            </div>
+          <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+            <span>
+              <span className="font-medium text-foreground">{activeSources}</span> active
+            </span>
+            <span>
+              <span className="font-medium text-foreground">{totalSignals}</span> signals
+            </span>
+            {errorSources > 0 ? (
+              <span>
+                <span className="font-medium text-foreground">{errorSources}</span> need attention
+              </span>
+            ) : null}
           </div>
         </div>
         <button
@@ -964,17 +954,14 @@ export default function SourcesPage() {
       ) : null}
 
       {normalizedPlan === 'free' ? (
-        <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-amber-800 dark:text-amber-200">
-              Free plan includes on-demand fetch with a short cooldown. Need
-              faster iteration? Upgrade to{' '}
-              {nextPlan ? WORKSPACE_PLAN_MAP[nextPlan].label : 'a paid plan'}{' '}
-              for unlimited on-demand fetches.
+        <section className="rounded-xl border border-border/70 bg-card/60 px-4 py-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Free plan has limited fetch throughput.
             </p>
             <Link
               href="/pricing"
-              className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
+              className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
             >
               Upgrade
             </Link>
@@ -996,65 +983,30 @@ export default function SourcesPage() {
         </section>
       ) : null}
 
-      <section className="section-card p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-              <BrainCircuit className="h-3.5 w-3.5" />
-              AI source intelligence
-            </div>
-            <h2 className="text-xl font-semibold tracking-tight text-foreground">
-              What to scale, fix, or tune this week
-            </h2>
-            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-              {sourceIntelligence?.summary ||
-                'Analyzing source health and outcome quality to suggest next actions.'}
-            </p>
+      {sourceIntelligence?.recommendations?.length || sourceIntelligence?.globalActions?.length ? (
+        <section className="text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setShowIntelligencePanel((value) => !value)}
+              className="inline-flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <BrainCircuit className="h-4 w-4" />
+              {showIntelligencePanel ? 'Hide suggestions' : 'View suggestions'}
+              <ChevronDown
+                className={`h-3.5 w-3.5 transition-transform ${showIntelligencePanel ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {sourceIntelligence?.coverage ? (
+              <span className="text-xs text-muted-foreground">
+                {sourceIntelligence.coverage.highPriorityActions > 0
+                  ? `${sourceIntelligence.coverage.highPriorityActions} priority item${sourceIntelligence.coverage.highPriorityActions === 1 ? '' : 's'}`
+                  : 'No urgent source actions'}
+              </span>
+            ) : null}
           </div>
-          <div className="grid grid-cols-2 gap-2 text-sm sm:flex sm:flex-wrap">
-            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground">
-              Goal{' '}
-              <span className="font-medium text-foreground">
-                {sourceIntelligence?.weeklySignalGoal ?? '—'}
-              </span>
-              /week
-            </div>
-            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground">
-              Strong{' '}
-              <span className="font-medium text-foreground">
-                {sourceIntelligence?.coverage.strongSources ?? 0}
-              </span>
-            </div>
-            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground">
-              Needs fix{' '}
-              <span className="font-medium text-foreground">
-                {sourceIntelligence?.coverage.errorSources ?? 0}
-              </span>
-            </div>
-            <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground">
-              High priority{' '}
-              <span className="font-medium text-foreground">
-                {sourceIntelligence?.coverage.highPriorityActions ?? 0}
-              </span>
-            </div>
-          </div>
-        </div>
-        <div className="mt-4">
-          <button
-            type="button"
-            onClick={() => setShowIntelligencePanel((value) => !value)}
-            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            {showIntelligencePanel
-              ? 'Hide detailed recommendations'
-              : 'Show detailed recommendations'}
-            <ChevronDown
-              className={`h-3.5 w-3.5 transition-transform ${showIntelligencePanel ? 'rotate-180' : ''}`}
-            />
-          </button>
-        </div>
 
-        {showIntelligencePanel ? (
+          {showIntelligencePanel ? (
           <>
             {sourceIntelligence?.recommendations?.length ? (
               <div className="mt-4 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
@@ -1130,8 +1082,9 @@ export default function SourcesPage() {
               </div>
             ) : null}
           </>
-        ) : null}
-      </section>
+          ) : null}
+        </section>
+      ) : null}
 
       {showEmptySourceState ? (
         <section className="section-card p-6 md:p-8">
@@ -1181,10 +1134,13 @@ export default function SourcesPage() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by source name or config..."
+                placeholder="Search data sources..."
                 className="w-full rounded-lg border border-border bg-secondary py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
+            <p className="text-xs text-muted-foreground lg:mr-auto">
+              These are your discovery inputs, not the main workflow.
+            </p>
             <button
               type="button"
               onClick={() => router.push('/sources/templates')}
@@ -1811,7 +1767,7 @@ export default function SourcesPage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(360px,1fr))]">
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(340px,1fr))]">
           {filteredSources.map((src) => {
             const typeMeta = SOURCE_TYPE_META[src.type] || {
               label: src.type,
@@ -1874,36 +1830,36 @@ export default function SourcesPage() {
                                       : 'Manual source';
 
             return (
-              <div key={src.id} className="section-card px-4 py-3">
+              <div key={src.id} className="rounded-xl border border-border/70 bg-card/70 px-4 py-3">
                 <div className="space-y-3">
                   <div className="flex items-start gap-4">
-                    <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-secondary text-xl">
+                    <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-secondary text-lg">
                       {typeMeta.icon}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span
-                              className={`text-base font-semibold ${src.status === 'PAUSED' ? 'text-muted-foreground' : 'text-foreground'}`}
+                              className={`text-sm font-semibold ${src.status === 'PAUSED' ? 'text-muted-foreground' : 'text-foreground'}`}
                             >
                               {src.name}
                             </span>
-                            <span className="rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                            <span className="rounded-full border border-border/70 bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                               {typeMeta.label}
                             </span>
                             {src._count?.signals ? (
-                              <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
-                                {src._count.signals} signals
+                              <span className="rounded-full border border-primary/15 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                                {src._count.signals} leads
                               </span>
                             ) : null}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 self-start">
+                        <div className="flex flex-wrap items-center gap-1.5 self-start">
                           <button
                             onClick={() => fetchNow.mutate(src.id)}
                             disabled={fetchDisabled}
-                            className="rounded-lg border border-border px-2.5 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                            className="rounded-lg border border-border px-2.5 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
                             title={fetchTitle}
                           >
                             <span className="inline-flex items-center gap-1.5">
@@ -1914,9 +1870,63 @@ export default function SourcesPage() {
                                 ? 'Queuing…'
                                 : fetchOnCooldown
                                   ? `Ready in ${freeFetchCooldown?.minutesRemaining}m`
-                                  : 'Fetch now'}
+                                : 'Fetch now'}
                             </span>
                           </button>
+                          <button
+                            onClick={() => toggleSourceDetails(src.id)}
+                            className="rounded-lg border border-border px-2.5 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                          >
+                            {isExpanded ? 'Hide' : 'Inspect'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="min-w-0">
+                      <p
+                        className="truncate text-sm leading-6 text-muted-foreground"
+                        title={configSummary}
+                      >
+                        {configSummary}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {src.status === 'ERROR' ? (
+                          <span className="flex items-center gap-1.5 rounded-full border border-destructive/20 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            {src.errorMessage?.slice(0, 80)}
+                          </span>
+                        ) : src.status === 'ACTIVE' ? (
+                          <span className="flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs text-emerald-300">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Active
+                            {src.lastFetchedAt ? ` · ${lastFetchLabel}` : ''}
+                            {freePlanFetchStateLabel
+                              ? ` · ${freePlanFetchStateLabel}`
+                              : ''}
+                          </span>
+                        ) : (
+                          <span className="rounded-full border border-border bg-secondary px-3 py-1.5 text-xs text-muted-foreground">
+                            Paused
+                          </span>
+                        )}
+                        {isSamNoDataState ? (
+                          <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1.5 text-xs text-amber-300">
+                            {isRecentFetch ? 'No opportunities matched from recent fetch' : 'No opportunities matched yet'}
+                          </span>
+                        ) : null}
+                      </div>
+                      {isSamNoDataState ? (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Try a broader query, 90-day window, and remove strict agency/NAICS filters.
+                        </p>
+                      ) : null}
+                    </div>
+                    {isExpanded ? (
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap gap-2">
                           <button
                             onClick={() => {
                               create.reset();
@@ -2043,9 +2053,9 @@ export default function SourcesPage() {
                                 ),
                               });
                             }}
-                            className="rounded-lg border border-border px-2.5 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                            className="rounded-lg border border-border px-2.5 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                           >
-                            Edit
+                            Edit source
                           </button>
                           <button
                             onClick={() =>
@@ -2055,14 +2065,10 @@ export default function SourcesPage() {
                                   src.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE',
                               })
                             }
-                            className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                            className="rounded-lg border border-border px-2.5 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                             title={src.status === 'ACTIVE' ? 'Pause' : 'Resume'}
                           >
-                            {src.status === 'ACTIVE' ? (
-                              <PauseCircle className="w-5 h-5" />
-                            ) : (
-                              <PlayCircle className="w-5 h-5 text-green-400" />
-                            )}
+                            {src.status === 'ACTIVE' ? 'Pause source' : 'Resume source'}
                           </button>
                           <button
                             onClick={() => {
@@ -2072,62 +2078,11 @@ export default function SourcesPage() {
                                 name: src.name,
                               });
                             }}
-                            className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                            className="rounded-lg border border-border px-2.5 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                           >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => toggleSourceDetails(src.id)}
-                            className="rounded-lg border border-border px-2.5 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                          >
-                            {isExpanded ? 'Less' : 'Details'}
+                            Delete source
                           </button>
                         </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="min-w-0">
-                      <p
-                        className="truncate text-sm leading-6 text-muted-foreground"
-                        title={configSummary}
-                      >
-                        {configSummary}
-                      </p>
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        {src.status === 'ERROR' ? (
-                          <span className="flex items-center gap-1.5 rounded-full border border-destructive/20 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
-                            <AlertCircle className="w-3.5 h-3.5" />
-                            {src.errorMessage?.slice(0, 80)}
-                          </span>
-                        ) : src.status === 'ACTIVE' ? (
-                          <span className="flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs text-emerald-300">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            Active · {lastFetchLabel}
-                            {freePlanFetchStateLabel
-                              ? ` · ${freePlanFetchStateLabel}`
-                              : ''}
-                          </span>
-                        ) : (
-                          <span className="rounded-full border border-border bg-secondary px-3 py-1.5 text-xs text-muted-foreground">
-                            Paused
-                          </span>
-                        )}
-                        {isSamNoDataState ? (
-                          <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1.5 text-xs text-amber-300">
-                            {isRecentFetch ? 'No opportunities matched from recent fetch' : 'No opportunities matched yet'}
-                          </span>
-                        ) : null}
-                      </div>
-                      {isSamNoDataState ? (
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          Try a broader query, 90-day window, and remove strict agency/NAICS filters.
-                        </p>
-                      ) : null}
-                    </div>
-                    {isExpanded ? (
-                      <div className="space-y-3">
                         {src.sourceProfile ? (
                           <div className="rounded-xl border border-border bg-background px-3 py-3">
                             <div className="flex flex-wrap items-center gap-2">

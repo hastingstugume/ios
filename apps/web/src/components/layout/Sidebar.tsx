@@ -5,14 +5,14 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { cn, formatPlanName } from '@/lib/utils';
 import { getNextPlan, normalizeWorkspacePlan, WORKSPACE_PLAN_MAP } from '@/lib/plans';
-import { Radar, LayoutDashboard, Zap, Tag, Database, Bell, Settings, LogOut, ChevronDown, Building2, Check, Loader2, CreditCard, LifeBuoy, ArrowUpCircle } from 'lucide-react';
+import { Radar, LayoutDashboard, Zap, Tag, Database, Bell, Settings, LogOut, ChevronDown, Building2, Check, Loader2, CreditCard, LifeBuoy, ArrowUpCircle, Target } from 'lucide-react';
 
 const NAV = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/feed', label: 'Opportunity Feed', icon: Zap, badge: 'live' },
-  { href: '/keywords', label: 'Keywords', icon: Tag },
-  { href: '/sources', label: 'Sources', icon: Database },
+  { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
+  { href: '/leads', label: 'Leads', icon: Target, badge: 'live' },
   { href: '/alerts', label: 'Alerts', icon: Bell },
+  { href: '/sources', label: 'Data Sources', icon: Database },
+  { href: '/keywords', label: 'Intent Rules', icon: Tag },
 ];
 
 export function Sidebar({ className = '', onNavigate }: { className?: string; onNavigate?: () => void }) {

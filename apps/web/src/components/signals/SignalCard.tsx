@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Signal, signalsApi } from '@/lib/api';
 import { CATEGORY_META, SOURCE_TYPE_META, STAGE_META, getConfidenceColor, getConfidenceBg, formatDate, cn } from '@/lib/utils';
-import { Bookmark, EyeOff, Check, ExternalLink, MessageSquare, ChevronRight, UserRound, Workflow, Sparkles, Flame, Reply, Clock3, SendHorizonal, Copy } from 'lucide-react';
+import { Bookmark, EyeOff, Check, ExternalLink, MessageSquare, ChevronRight, UserRound, Workflow, Sparkles, Flame, Reply, Clock3, SendHorizontal, Copy } from 'lucide-react';
 
 interface SignalCardProps {
   signal: Signal;
@@ -73,7 +73,7 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
           <span className={cn('text-xl font-bold tabular-nums leading-none', getConfidenceColor(signal.confidenceScore))}>
             {signal.confidenceScore ?? '—'}
           </span>
-          <span className="text-[9px] text-muted-foreground mt-1 uppercase tracking-wide">score</span>
+          <span className="text-[9px] text-muted-foreground mt-1 uppercase tracking-wide">fit</span>
         </div>
 
         <div className="flex-1 min-w-0">
@@ -88,6 +88,24 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
               <span className="inline-flex items-center gap-1 rounded border border-primary/15 bg-primary/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary">
                 <Flame className="h-3 w-3" />
                 {signal.freshnessLabel}
+              </span>
+            ) : null}
+          </div>
+
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+            {signal.accountHint ? (
+              <span className="rounded-full border border-primary/15 bg-primary/5 px-2.5 py-1 text-primary">
+                Prospect: {signal.accountHint}
+              </span>
+            ) : null}
+            {signal.serviceHint ? (
+              <span className="rounded-full border border-border bg-secondary px-2.5 py-1">
+                {signal.serviceHint}
+              </span>
+            ) : null}
+            {signal.locationHint ? (
+              <span className="rounded-full border border-border bg-secondary px-2.5 py-1">
+                {signal.locationHint}
               </span>
             ) : null}
           </div>
@@ -124,21 +142,6 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
           </p>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            {signal.serviceHint ? (
-              <span className="rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1 text-[11px] text-primary">
-                Service: {signal.serviceHint}
-              </span>
-            ) : null}
-            {signal.locationHint ? (
-              <span className="rounded-lg border border-border bg-secondary px-2.5 py-1 text-[11px] text-muted-foreground">
-                Location: {signal.locationHint}
-              </span>
-            ) : null}
-            {signal.accountHint ? (
-              <span className="rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1 text-[11px] text-primary">
-                Account hint: {signal.accountHint}
-              </span>
-            ) : null}
             {signal.linkedDomain && signal.linkedDomain !== signal.accountHint ? (
               <span className="rounded-lg border border-border bg-secondary px-2.5 py-1 text-[11px] text-muted-foreground">
                 Domain: {signal.linkedDomain}
@@ -179,7 +182,7 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1 rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1.5 text-[11px] font-medium text-primary">
               <Sparkles className="h-3.5 w-3.5" />
-              Priority {priorityScore}
+              Lead priority {priorityScore}
             </span>
             {(signal.rankingReasons || []).slice(0, 2).map((reason) => (
               <span key={reason} className="rounded-lg border border-border bg-secondary px-2.5 py-1.5 text-[11px] text-muted-foreground">
@@ -190,14 +193,14 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
 
           {signal.whyItMatters && (
             <div className="mt-3 bg-primary/5 border border-primary/10 rounded-lg px-3 py-2">
-              <p className="text-[11px] font-medium text-primary uppercase tracking-wide mb-1">Intent clarity</p>
+              <p className="text-[11px] font-medium text-primary uppercase tracking-wide mb-1">Why this lead matters</p>
               <p className="text-sm text-foreground/80 leading-6 line-clamp-2">{signal.whyItMatters}</p>
             </div>
           )}
 
           {signal.painPoint ? (
             <div className="mt-3 rounded-lg border border-border bg-background px-3 py-2">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">Pain point</p>
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">Top issue</p>
               <p className="text-sm text-foreground/80 leading-6 line-clamp-2">{signal.painPoint}</p>
             </div>
           ) : null}
@@ -205,7 +208,7 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
           {signal.suggestedReply ? (
             <div className="mt-3 rounded-lg border border-emerald-400/15 bg-emerald-400/5 px-3 py-2">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-300">Suggested reply</p>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-300">Suggested opener</p>
                 <button
                   type="button"
                   onClick={copySuggestedReply}
@@ -299,8 +302,8 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
                 onClick={() => updateWorkflow.mutate('OUTREACH')}
                 className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2.5 py-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15 disabled:opacity-50"
               >
-                <SendHorizonal className="w-3.5 h-3.5" />
-                Move to outreach
+                <SendHorizontal className="w-3.5 h-3.5" />
+                Start outreach
               </button>
             ) : null}
             {signal.suggestedReply ? (
@@ -336,7 +339,7 @@ export function SignalCard({ signal, orgId, queryKey }: SignalCardProps) {
               href={`/signals/${signal.id}`}
               className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-primary"
             >
-              Details
+              Open lead
               <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           </div>
